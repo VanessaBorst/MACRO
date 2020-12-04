@@ -1,0 +1,11 @@
+WFDB (Dx, overall_count, first_label_count, name)                ====> CPSC (Name, Label)
+--------------------------------------------------------------------------------------------------------------------
+426783006, 918   , 918,     sinus rhythm (SNR)                   ====> Normal                                       , 1
+164889003, 1221  , 1221,    atrial fibrillation (AF)             ====> Atrial fibrillation (AF)                     , 2
+270492004, 722   , 722,     1st degree av block (IAVB)           ====> First-degree atrioventricular block (I-AVB)  , 3
+164909002, 236   , 199,     left bundle branch block (LBBB)      ====> Left bundle branch block (LBBB)              , 4
+59118001,  1857  , 1675,    right bundle branch block (RBBB)     ====> Right bundle branch block (RBBB)             , 5
+284470004, 616   , 544,     premature atrial contraction (PAC)   ====> Premature atrial contraction (PAC)           , 6
+164884008, 700   , 627,     ventricular ectopics (VEB)           ====> Premature ventricular contraction (PVC)???   , 7
+429622005, 869   , 786,     st depression (STD)                  ====> ST-segment depression (STD)                  , 8
+164931005, 220   , 185,     st elevation (STE)                   ====> ST-segment elevated (STE)                    , 9
