@@ -23,3 +23,5 @@ TODO:
 - Konfigurierbare Modelle erstellen; Parameter nicht hard-coden!
     * Für Hyperparam-Studie ist es besser, die Werte in die Config zu packen und nur dort zu ändern
     * Es sollte möglich sein, den Kontext nur anhand der Config wiederherstellen zu können
+
+- Set number of workers in the config.json to a higher number (e.g. 2) after finishing the debugging

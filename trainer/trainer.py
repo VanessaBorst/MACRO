@@ -35,7 +35,8 @@ class Trainer(BaseTrainer):
         Training logic for an epoch
 
         :param epoch: Integer, current training epoch.
-        :return: A log that contains average loss and metric in this epoch.
+        :return: A log (as dict) that contains average loss and metrics in this epoch.
+            Example: {'loss': 0.6532998728738012, 'accuracy': 0.7919082176709545, 'top_k_acc': 0.9288835054163845}
         """
         self.model.train()
         self.train_metrics.reset()
@@ -58,6 +59,7 @@ class Trainer(BaseTrainer):
                     epoch,
                     self._progress(batch_idx),
                     loss.item()))
+                # cpu() moves the tensor to the CPU, because some operations cannot be performed on cuda tensors
                 self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
 
             if batch_idx == self.len_epoch:
@@ -66,7 +68,7 @@ class Trainer(BaseTrainer):
 
         if self.do_validation:
             val_log = self._valid_epoch(epoch)
-            log.update(**{'val_'+k : v for k, v in val_log.items()})
+            log.update(**{'val_'+k : v for k, v in val_log.items()})    # Extends the dict by the val loss and metrics
 
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()

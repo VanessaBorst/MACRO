@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 dirname = os.path.dirname(__file__)
-input_directory = os.path.join(dirname, '../data/CPSC/raw/Training_WFDB')
+input_directory_wfdb = os.path.join(dirname, '../data/CPSC/raw/Training_WFDB')
 
 
 def load_12ECG_data(input_directory):
@@ -28,7 +28,7 @@ def load_12ECG_data(input_directory):
     lengths = []
 
     for i in range(num_files):
-        recording, header = load_challenge_data(header_files[i])
+        recording, header = _load_challenge_data(header_files[i])
         lengths.append(len(recording[0]))
         recordings.append(recording)
         headers.append(header)
@@ -61,7 +61,13 @@ def load_12ECG_data(input_directory):
 
 
 # Load challenge data.
-def load_challenge_data(header_file):
+def _load_challenge_data(header_file):
+    """
+            :param header_file: full path to the header file
+
+            :return recording: ndarray of size (12xnumSamples) containing the record data
+            :return header: list with each element representing one line of the .hea file
+    """
     with open(header_file, 'r') as f:
         header = f.readlines()
     mat_file = header_file.replace('.hea', '.mat')
@@ -83,7 +89,12 @@ def get_classes(filenames):
     return sorted(classes)
 
 
-def _extract_leads_from_header(header_file_name):
+def _extract_lead_names_from_header(header_file_name):
+    """
+        :param file name, e.g. "A0011.hea"
+
+        :return list containing the lead names for the record
+    """
     with open(os.path.join(input_directory_wfdb, header_file_name), 'r') as f:
         header = f.readlines()
     # Extract the lead names in the right order
@@ -95,49 +106,6 @@ def _extract_leads_from_header(header_file_name):
     return leads
 
 
-load_12ECG_data(input_directory=input_directory)
-
-# Plot the first lead of the A001 record in the wfdb dataset
-input_directory_wfdb = os.path.join(dirname, '../data/CPSC/raw/Training_WFDB')
-# x_wfdb = loadmat(os.path.join(input_directory_wfdb, 'A0001.mat'))
-# x_wfdb = np.asarray(x_wfdb['val'], dtype=np.float64)
-# plt.figure(1)
-# plt.plot(x_wfdb[0])
-# plt.title("Lead I, A001, wfdb")
-#
-# # Plot the first lead of the A001 record in the original cpsc dataset
-# input_directory_cpsc = os.path.join(dirname, '../data/CPSC/raw/TrainingSet1')
-# x_cpsc = loadmat(os.path.join(input_directory_cpsc, 'A0001.mat'))
-# x_cpsc= x_cpsc['ECG']['data'][0][0]
-# plt.figure(2)
-# plt.plot(x_cpsc[0])
-# plt.title("Lead I, A001, cpsc")
-#
-# plt.show()
-
-
-# Plot all leads of the  A0011 record in the interval [1s,10s], based on the wfdb dataset
-x_wfdb = loadmat(os.path.join(input_directory_wfdb, 'A0011.mat'))
-x_wfdb = np.asarray(x_wfdb['val'], dtype=np.float64)[:,500:5000]
-leads = _extract_leads_from_header('A0011.hea')
-
-# input_directory_cpsc = os.path.join(dirname, '../data/CPSC/raw/TrainingSet1')
-# x_cpsc = loadmat(os.path.join(input_directory_cpsc, 'A0011.mat'))
-# x_cpsc= x_cpsc['ECG']['data'][0][0]
-
-fig, axs = plt.subplots(6, 2, figsize=(15,15))
-fig.suptitle("Record A0011")
-axis_0 = 0
-axis_1 = 0
-for i in range(len(x_wfdb)):
-    lead = x_wfdb[i]
-    axs[axis_0,axis_1].plot(lead)
-    axs[axis_0,axis_1].set_title(leads[i])
-    axis_0 = (axis_0+1) % 6
-    if axis_0 == 0:
-        axis_1 +=1
-plt.savefig('Record A0011 - First 10s.pdf')
-plt.show()
-pass
-
+if __name__ == "__main__":
+    load_12ECG_data(input_directory=input_directory_wfdb)
 

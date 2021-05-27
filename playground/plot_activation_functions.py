@@ -15,7 +15,7 @@ def plot(func, yaxis=(-1.4, 1.4), title=""):
     plt.grid(alpha=0.4, ls='-.')
     plt.box(on=None)
     plt.plot(x, func(x), c='r', lw=3)
-    f.savefig(title + ".pdf", bbox_inches='tight')
+    f.savefig("plots/" + title + ".pdf", bbox_inches='tight')
     plt.show()
 
 

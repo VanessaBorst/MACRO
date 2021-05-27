@@ -6,7 +6,7 @@ def accuracy(output, target):
         pred = torch.argmax(output, dim=1)
         assert pred.shape[0] == len(target)
         correct = 0
-        correct += torch.sum(pred == target).item()
+        correct += torch.sum(pred == target).item()  # Counts number of equal entries + converts the tensor to an number
     return correct / len(target)
 
 

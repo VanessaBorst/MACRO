@@ -5,6 +5,7 @@ data/
 logs/
 saved/
 .idea/
+/playground/plots/
 
 
 ### JetBrains template
@@ -219,4 +220,5 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
 
