@@ -5,7 +5,8 @@ from abc import abstractmethod
 
 class BaseModel(nn.Module):
     """
-    Base class for all models
+    Base class for all models:
+    Provides basic model summary
     """
     @abstractmethod
     def forward(self, *inputs):

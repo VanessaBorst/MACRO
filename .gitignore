@@ -3,6 +3,8 @@
 ### Additional Stuff Vanessa
 data/
 logs/
+saved/
+.idea/
 
 
 ### JetBrains template

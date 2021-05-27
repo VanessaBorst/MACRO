@@ -6,7 +6,8 @@ from torch.utils.data.sampler import SubsetRandomSampler
 
 class BaseDataLoader(DataLoader):
     """
-    Base class for all data loaders
+    Base class for all data loaders:
+    Handles batch generation, data shuffling, and validation data splitting.
     """
     def __init__(self, dataset, batch_size, shuffle, validation_split, num_workers, collate_fn=default_collate):
         self.validation_split = validation_split

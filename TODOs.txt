@@ -1,0 +1,25 @@
+TODO:
+
+- Mehr Metriken wegspeichern, nicht nur Loss und die Accuracy:
+    * So viele wie möglich  -> Acc, Precision, Recall, F1, AUC/ROC, 4 Felder für jede Klasse (FP, FN, TP, TN)
+                            -> Weitere, eigene Ideen: PR-Curve
+    * Beim Testen für den jeweilgen Datensatz, welche WK er für welche Klasse vorhersagt (nicht beim Validieren, einmal am Ende)
+
+- Mapping von Orderstruktur in /saved auf mehr Informationen, damit es auch in Monaten noch nachvollziehbar ist
+    * Neues Dokument im Cherrytree anlegen und dort das Mapping erstellen
+    * Dazu schreiben, was man da speziell gemacht hat -> Coderiung überlegen, wie man einzelne Läufe anhand des Namens erkennt
+    * Beispielsweise enthält die Codierung von Robert folgende Elemente (teils als Zahlencode):
+      Modellname, Pretrain oder FineTune, Datensatz, Modelltyp, feine Aenderung
+
+- Daten nach der Vorverarbeitung plotten und anschauen
+    * Passt das so, wie es aus dem Dataset kommt?
+    * Ist bei der Vorverarbeitung was schief gegangen? Fehlen Werte?
+
+- In der _save_checkpoint Methode des BaseTrainers  wird nur der Klassenname gespeichert, der Code hinter dem Modell
+  muss aber auch gespeichert werden, da er sich mit der Zeit ändert:
+    * Mgl. 1: Modelle unterschiedlich benennen und mit Copy&Paste arbeiten -> wird schnell unübersichtlich
+    * Mgl. 2: Wie Robert pro Modell ein eigenen Branch im Git eröffnen und immer darauf arbeiten bzw. hin und her switchen
+
+- Konfigurierbare Modelle erstellen; Parameter nicht hard-coden!
+    * Für Hyperparam-Studie ist es besser, die Werte in die Config zu packen und nur dort zu ändern
+    * Es sollte möglich sein, den Kontext nur anhand der Config wiederherstellen zu können

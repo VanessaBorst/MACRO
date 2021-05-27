@@ -1,17 +1,4 @@
 import torch
-import collections
-import matplotlib.pyplot as plt
-
-
-def _get_max_length(x):
-    return len(max(x, key=len))
-
-
-def _pad_sequence(seq):
-    def _pad(_it, _max_len):
-        return [0] * (_max_len - len(_it)) + _it
-
-    return [_pad(it, _get_max_length(seq)) for it in seq]
 
 
 def _custom_collate(batch):
