@@ -5,6 +5,8 @@ TODO:
                             -> Weitere, eigene Ideen: PR-Curve
     * Beim Testen für den jeweilgen Datensatz, welche WK er für welche Klasse vorhersagt (nicht beim Validieren, einmal am Ende)
 
+- Mit Tensorboard und den zur Verfügung stehenden Visualisierung befassen; Zusammenspiel mit Framework verstehen
+
 - Mapping von Orderstruktur in /saved auf mehr Informationen, damit es auch in Monaten noch nachvollziehbar ist
     * Neues Dokument im Cherrytree anlegen und dort das Mapping erstellen
     * Dazu schreiben, was man da speziell gemacht hat -> Coderiung überlegen, wie man einzelne Läufe anhand des Namens erkennt

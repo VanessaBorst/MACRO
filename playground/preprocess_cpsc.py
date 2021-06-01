@@ -11,67 +11,77 @@ import pickle as pk
 from multiprocessing import Pool
 
 
-def _compute(sampling, file, path):
-    values = loadmat(os.path.join(path, file))
+def _parse_and_downsample_record(src_path, file, target_path, sampling):
+    """
+    The method is called for each record separately
+    It preprocess the record and stores the result as pickle dump
+    @param sampling: DateOffset, Timedelta or str -> offset string or object representing target conversion.
+    """
+    values = loadmat(os.path.join(src_path, file))
     # Reads the values into a dataframe, transposes the matrix (one column per lead) and sorts the dataframe
     # by the column labels
     df = pd.DataFrame(values["val"]).T.sort_index(axis=1)
 
     # Sets the column labels to the lead names retrieved from the header file
-    header = wfdb.rdheader(os.path.join(path, file))
+    header = wfdb.rdheader(os.path.join(src_path, file))
     df.columns = header.sig_name
 
     # Reads the meta data contained in the header into a dictionary; example (A1655):
     # {'age': '46', 'sex': 'Male', 'dx': '426783006', 'rx': 'Unknown', 'hx': 'Unknown', 'sx': 'Unknown'}
     meta = {key.lower(): val for key, val in (h.split(": ") for h in header.comments)}
 
-    # A timedelta object represents a duration, the difference between two dates or times
-    # ==> An list of timedeltas is passed to the TimedeltaIndex method which uses this to construct the index with
-    # After this step, the row labels are the TimedeltaIndices
-    df.index = pd.TimedeltaIndex([timedelta(seconds=i / 500) for i in df.index], unit="ms")
+    if sampling is not None:
+        """Downsampling"""
+        # A timedelta object represents a duration, the difference between two dates or times
+        # ==> An list of timedeltas is passed to the TimedeltaIndex method which uses this to construct the index with
+        # After this step, the row labels are the TimedeltaIndices
+        df.index = pd.TimedeltaIndex([timedelta(seconds=i / 500) for i in df.index], unit="ms")
 
-    # Downsampling
-    # resample() is a time-based groupby, followed by a reduction method on each of its groups.
-    # Groups together the values contained in time-spans of "sampling" (offset string), e.g. within "20ms" intervals
-    # and takes the mean to aggregate them to a single value
-    # Example:
-    # 500 Hz -> 6000 Samples -> 12 sec record
-    # delta_t between two timestamps: 2ms for 500 Hz
-    # For sampling="20ms" + 500Hz:  20/2=10 values are merged   -> 6000/10= 600 Samples for 12 sec   -> 50 Hz
-    # For sampling="4ms" + 500Hz:   4/2=2 values are merged     -> 600/2= 3000 Samples for 12 sec    -> 250 Hz
-    df = df.resample(sampling).mean()
-    df.index = np.arange(0, df.shape[0])    # return to numbers as row index (0-#samples)
-
-    # Normalize with mean normalization
-    # df.mean() and df.std() operate on all columns, i.e. leads, separately
-    # df - df.mean(): For each col, the mean of the col is subtracted from each element in the respective col
-    # df = (df - df.mean()) / df.std()
-
-    # Vanessa: Min-Max-Normalization it would be the following (Pandas automatically applies colomn-wise function):
-    # df=(df-df.min())/(df.max()-df.min())
-
-    pk.dump((df, meta), open(f"data_dir/cpsc/{sampling}/{file}.pk", "wb"))
+        # Downsampling
+        # resample() is a time-based groupby, followed by a reduction method on each of its groups.
+        # Groups together the values contained in time-spans of "sampling" (offset string), e.g. within "20ms" intervals
+        # and takes the mean to aggregate them to a single value
+        # Example:
+        # 500 Hz -> 6000 Samples -> 12 sec record
+        # delta_t between two timestamps: 2ms for 500 Hz
+        # For sampling="20ms" + 500Hz:  20/2=10 values are merged   -> 6000/10= 600 Samples for 12 sec   -> 50 Hz
+        # For sampling="4ms" + 500Hz:   4/2=2 values are merged     -> 600/2= 3000 Samples for 12 sec    -> 250 Hz
+        df = df.resample(sampling).mean()
+        df.index = np.arange(0, df.shape[0])  # return to numbers as row index (0-#samples)
 
 
-def read(sampling, path):  # 4ms = 250Hz
-    # for file in [f.split(".")[0] for f in os.listdir(path) if f.endswith("mat")]:
-    #     _compute(sampling, file, path)
+    pk.dump((df, meta), open(f"{target_path}/{file}.pk", "wb"))
 
+
+def _read_records(src_path, target_path, sampling):  # 4ms = 250Hz
     with Pool(6) as pool:
-        for file in [f.split(".")[0] for f in os.listdir(path) if f.endswith("mat")]:
-            pool.apply_async(_compute, (sampling, file, path), error_callback=lambda x: print(x))
+        for file in [f.split(".")[0] for f in os.listdir(src_path) if f.endswith("mat")]:
+            pool.apply_async(_parse_and_downsample_record, (src_path, file, target_path, sampling),
+                             error_callback=lambda x: print(x))
         pool.close()
         pool.join()
 
 
-def run(sampling="20ms", path="data_dir/CPSC_dataset"):
-    if not os.path.exists(f"data_dir/cpsc/{sampling}"):
-        os.makedirs(f"data_dir/cpsc/{sampling}")
-
-    read(sampling, path)
+def run_basic_preprocessing(src_path="data/CinC_CPSC/raw/", target_path="data/CinC_CPSC/preprocessed/", sampling=None):
+    full_target_path = f"{target_path}{sampling}" if sampling is not None else f"{target_path}without_sampling"
+    if not os.path.exists(full_target_path):
+        os.makedirs(full_target_path)
+    # if sampling is not None:
+    #     if not os.path.exists(f"{target_path}{sampling}"):
+    #         os.makedirs(f"{target_path}{sampling}")
+    #     # if not os.path.exists(f"data/cpsc/{sampling}"):
+    #     #     os.makedirs(f"data/cpsc/{sampling}")
+    # else:
+    #     if not os.path.exists(f"{target_path}without_sampling"):
+    #         os.makedirs(f"{target_path}without_sampling")
+    _read_records(src_path, full_target_path, sampling)
 
 
 def min_max_scaling(path):
+
+    # Vanessa: For Min-Max-Normalization it would be the following (Pandas automatically applies column-wise function):
+    # df=(df-df.min())/(df.max()-df.min())
+
     scaler = MinMaxScaler()
 
     g_max = pd.DataFrame()
@@ -133,11 +143,18 @@ def normalize(path):
             continue
         df, meta = pk.load(open(os.path.join(path, file), "rb"))
 
+        # Normalize with mean normalization
+        # df.mean() and df.std() operate on all columns, i.e. leads, separately
+        # df - df.mean(): For each col, the mean of the col is subtracted from each element in the respective col
         df = (df - df.mean()) / df.std()
         pk.dump((df, meta), open(os.path.join(path, "normalized", file), "wb"))
 
 
 def show(path):
+    """
+    The method creates a plot for each .pk file stored under the respective path
+    -> Lead I is plotted for each record
+    """
     for file in os.listdir(path):
         if file.endswith(".pk"):
             df, meta = pk.load(open(os.path.join(path, file), "rb"))
@@ -147,8 +164,21 @@ def show(path):
 
 
 def clean_meta(path):
-    classes = pd.read_csv("data/dx_classes.csv").set_index("SNOMED CT Code")
+    """
+        This method appends the meta information for each .pk record under the given path
+        To this end, two additional entries are added to the meta dictionary of the record
+        1) meta["classes_encoded"]: Pandas Series containing a 1 if the class applies to the record and a 0 otherwise
+        2) meta["classes"]: List of integers encoding the classes that apply to the record
+                            (the integers are in the range between 0 and N-1, with N being the number of classes
+                            existing amongst the record under the given path)
 
+        ==> The method only operates on the meta information and keeps the actual data unchanged
+    """
+
+    # Reads in the csv and converts the snomed CT code column to row index
+    classes = pd.read_csv("data/CinC_CPSC/dx_classes.csv").set_index("SNOMED CT Code")
+
+    #Creates an empty dataframe with one column per class/CT code
     metas = pd.DataFrame(columns=classes.index)
 
     for file in os.listdir(path):
@@ -156,27 +186,44 @@ def clean_meta(path):
             p = os.path.join(path, file)
             df, meta = pk.load(open(p, "rb"))
 
+            # Read the meta information of the record and store the codes as list
             dx = meta["dx"].split(",")
             for d in dx:
+                # Appends a row in the new dataframe with the record path as row index
+                # Sets a 1 in each CT code column that is class of the record
                 metas.loc[p, d] = 1
 
+    # Deletes all columns, i.e. CT codes, that are not present in none of the records
+    # Hence, only the codes, which are the class for at least one record, are maintained
     metas = metas.dropna(axis=1, how="all")
+    # Instead of the long codes, the classes are just numbered from 0 to N-1
     metas.columns = list(range(len(metas.columns)))
 
+    # Iterate through the records (one row in metas per record) and update its meta information
     for p, classes in metas.iterrows():
         df, meta = pk.load(open(str(p), "rb"))
+        # Appends to additional entries to the dict
+        # The first is a Series containing a 1 if the class applies to the record and a 0 otherwise
+        # The second is list of integers encoding the classes that apply to the record
         meta["classes_encoded"] = classes.replace(np.nan, 0)
         meta["classes"] = classes.dropna().keys().to_list()
         pk.dump((df, meta), open(str(p), "wb"))
 
 
 if __name__ == "__main__":
-    path = "data_dir/CPSC_dataset"
-    run("20ms",path)
+    # Uncomment for applying basic preprocessing
+    # Reads the .mat files, possibly downsamples the data, extracts meta data and writes everything to pickle dumps
+    src_path = "data/CinC_CPSC/raw/"
+    target_path = "data/CinC_CPSC/preprocessed/"
+    run_basic_preprocessing(src_path, target_path, sampling=None)
+    # Extend the meta information by encoded classes
+    clean_meta(src_path)
 
-#  path = "data_dir/cpsc/50ms/"
-#
-# # show(path + "minmax")
-#  min_max_scaling(path=path)
-#  clean_meta(path + "minmax")
-#  #normalize(path+"50ms/")
+    # Uncomment for applying further preproccssing like normalization or padding
+    # src_path = "data/CinC_CPSC/preprocessed/without_sampling/"
+    # show(src_path)
+
+    # show(src_path + "minmax")
+    # min_max_scaling(path=path)
+    # clean_meta(src_path)
+    # normalize(path+"50ms/")
