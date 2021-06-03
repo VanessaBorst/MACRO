@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, List
 import numpy as np
 from scipy.io import loadmat
 
@@ -6,13 +6,59 @@ from torch.utils.data import Dataset
 import os
 import torch
 
+import pickle as pk
+import pandas as pd
 from utils import get_project_root
 
 
 class ECGDataset(Dataset):
     """
     ECG dataset
-    Read the record names in __init__ but leaves the reading of actual data images to __getitem__.
+    Read the record names in __init__ but leaves the reading of actual data to __getitem__.
+    This is memory efficient because all the records are not stored in the memory at once but read as required.
+    """
+
+    def __init__(self, input_dir, transform=None):
+        """
+        Args:
+            input_dir (Path): Path to the directory containing the preprocessed pickle files for each record
+            transform (callable, optional): Optional transform(s) to be applied on a sample.
+        """
+
+        records = []
+        for file in os.listdir(input_dir):
+            if ".pk" not in file:
+                continue
+            records.append(file)
+
+        self._input_dir = input_dir
+        self.records = records
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.records)
+
+    def __getitem__(self, idx) -> Tuple[pd.DataFrame, List[int], int, str]:
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
+        record_name = self.records[idx]
+        # record is a df, meta a dict
+        record, meta = pk.load(open(os.path.join(self._input_dir, record_name), "rb"))
+        classes = meta["classes"]
+        classes_encoded = meta["classes_encoded"]
+
+        if self.transform:
+            record = self.transform(record)
+
+        # record.values statt df, dann gibt er es als tensor aus
+        return record, classes, len(record.index), record_name
+
+
+class ECGDataset_Old(Dataset):
+    """
+    ECG dataset
+    Read the record names in __init__ but leaves the reading of actual data to __getitem__.
     This is memory efficient because all the records are not stored in the memory at once but read as required.
     """
 

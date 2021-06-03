@@ -1,19 +1,20 @@
 {
   "_comment": "All paths need to be defined relative to the root directory. If the project is moved to another location, the root_directory method in util.py needs to be adapted ",
-  "name": "CPSC_ChallengeBestModel",
+  "name": "CPSC_BaselineModel",
   "n_gpu": 1,
   "arch": {
-    "type": "ChallengeBestModel",
+    "type": "BaselineModel",
     "args": {}
   },
   "data_loader": {
     "type": "ECGDataLoader",
     "args": {
-      "data_dir": "data/CPSC/raw/Training_WFDB/",
+      "data_dir": "data/CinC_CPSC/preprocessed/without_sampling/",
       "batch_size": 4,
       "shuffle": true,
       "validation_split": 0.1,
-      "num_workers": 2
+      "num_workers": 1,
+      "seq_len": 72000
     }
   },
   "optimizer": {

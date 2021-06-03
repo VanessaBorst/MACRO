@@ -9,7 +9,7 @@ TODO:
 
 - Mapping von Orderstruktur in /saved auf mehr Informationen, damit es auch in Monaten noch nachvollziehbar ist
     * Neues Dokument im Cherrytree anlegen und dort das Mapping erstellen
-    * Dazu schreiben, was man da speziell gemacht hat -> Coderiung überlegen, wie man einzelne Läufe anhand des Namens erkennt
+    * Dazu schreiben, was man da speziell gemacht hat -> Codierung überlegen, wie man einzelne Läufe anhand des Namens erkennt
     * Beispielsweise enthält die Codierung von Robert folgende Elemente (teils als Zahlencode):
       Modellname, Pretrain oder FineTune, Datensatz, Modelltyp, feine Aenderung
 
@@ -27,3 +27,11 @@ TODO:
     * Es sollte möglich sein, den Kontext nur anhand der Config wiederherstellen zu können
 
 - Set number of workers in the config.json to a higher number (e.g. 2) after finishing the debugging
+
+
+NEXT STEPS:
+- Logging verstehen
+- Metriken erweitern
+- Tensorboard verstehen und ggf erweitern
+- Verwaltung, Sichern und Laden verschiedener Architekturen
+- DataLoader und Dataset für neues Preprocessing anpassen

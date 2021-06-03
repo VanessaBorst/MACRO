@@ -19,6 +19,8 @@ gru_output = torch.tensor([[[1,2,3],[4,5,6]],[[1,2,3],[4,5,6]],[[7,8,9],[10,11,1
 attention_weights = torch.tensor([[[0.2],[0.8]],[[0.2],[0.8]],[[0.45],[0.55]]])
 print("Intermediate output after element-wise mulitplication:")
 print(gru_output*attention_weights)
+print("Alternative with mul():")
+print(torch.mul(gru_output, attention_weights))
 attention_out = (gru_output*attention_weights).sum(axis=1)
 print("Output:")
 print(attention_out)

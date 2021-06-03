@@ -68,8 +68,9 @@ class BaselineModel(BaseModel):
             nn.Dropout(0.2)
         )
 
-        self._contextual_attention = nn.Sequential(
-            ContextualAttention(gru_dimension=12, attention_dimension=24, return_att_weights=False),
+        self._contextual_attention = ContextualAttention(gru_dimension=12, attention_dimension=24)
+
+        self._batchNorm = nn.Sequential(
             # The batch normalization layer has 24*2=48 trainable and 24*2=48 non-trainable parameters
             nn.BatchNorm1d(24),
             nn.LeakyReLU(0.3),
@@ -93,9 +94,10 @@ class BaselineModel(BaseModel):
         x = x.permute(0, 2, 1)  # switch seq_length and feature_size for the BiGRU
         x, last_hidden_state = self._biGRU(x)
         x = self._biGru_activation_do(x)
-        attention_output, attention_weights = self._contextual_attention(x)
-        x = self._fcn(attention_output)
-        return x  # F.log_softmax(x, dim=1)
+        x, attention_weights = self._contextual_attention(x)
+        x = self._batchNorm(x)
+        x = self._fcn(x)
+        return F.log_softmax(x, dim=1)  # log_softmax needed when used in combination with nll loss
 
 
 if __name__ == "__main__":

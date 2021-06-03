@@ -1,29 +1,37 @@
+import math
+import pandas as pd
+
+
+#  collate_fn receives a list of tuples if your __getitem__ function from a Dataset subclass returns a tuple
 import torch
 
 
-def _custom_collate(batch):
+def _collate_pad_or_truncate(batch, seq_len):
     """
     Pads records with a smaller amount of samples with zeros
-    :param batch: List[Tuple[Record, Classes, Length]], where Record is a ndarray,  Classes a list and Length an int
+    Cuts records that exceed seq_len from both sides and only uses values in the middle
+    :param batch: List[Tuple[Record, Classes, Length, Record_name]],
+            where Record is a dataframe,  classes a list of ints, length an int and record name a string
     :return:
     """
     records, labels, lengths, record_names = zip(*batch)
-    max_length = max(lengths)
+    # Pad records shorter than seq_len with 0, clip longer ones
+    seq_len_records = []
+    for df_record in records:
+        record_len = len(df_record.index)
+        diff = seq_len - record_len
+        if diff > 0:
+            # Pad the record to the maximum length of the batch
+            df_zeros = pd.DataFrame([[0] * df_record.shape[1]] * diff, columns=df_record.columns)
+            df_record = pd.concat([df_zeros, df_record], axis=0, ignore_index=True)
+        elif diff < 0:
+            # Cut the record to have length seq_len (if possible, cut the equal amount of values from both sides)
+            # If the diff is not even, cut one value more from the beginning
+            df_record = df_record.iloc[math.ceil(-diff/2):record_len-math.floor(-diff/2)]
 
-    # Convert numpy arrays to tensors and pad shorter records with 0
-    records = [torch.from_numpy(record) for record in records]
-    padded_records = []
-    for record in records:
-        target = torch.zeros(12, max_length)
-        target[:, :len(record[0])] = record
-        padded_records.append(target)
+        # Convert the df to a numpy array before appending it to the list
+        # Like this, the conversion to tensors is automatically handled by the dataloader
+        seq_len_records.append(df_record.values)
 
-        # Plot visualization for the first lead
-        # fig, axs = plt.subplots(2, 1, figsize=(15,15))
-        # axs[0].plot(record[0].numpy())
-        # axs[0].set_title("Unpadded first lead")
-        # axs[1].plot(target[0].numpy())
-        # axs[1].set_title("Padded first lead")
-        # plt.show()
-
-    return torch.stack(padded_records), labels, lengths, record_names
+    # TODO DEAL WITH MULTI_LABEL CASE, at the moment only the first label is used per record
+    return torch.tensor(seq_len_records).float(), torch.tensor([label[0] for label in labels]), lengths, record_names

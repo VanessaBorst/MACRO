@@ -3,7 +3,7 @@ import collections
 
 import matplotlib.pyplot as plt
 
-import data_loader.ecg_data_loader as ecg_loader
+import data_loader.data_loaders as module_data_loader
 from parse_config import ConfigParser
 
 
@@ -13,7 +13,7 @@ def _test_dataloader(config_parser):
     # ecg_data_loader = ECGDataLoader(input_directory, 4, True)
 
     # setup data_loader instance
-    ecg_data_loader = config_parser.init_obj('data_loader', ecg_loader)
+    ecg_data_loader = config_parser.init_obj('data_loader', module_data_loader)
 
     for batch_num, batch_data in enumerate(ecg_data_loader):
         # padded_records, labels, lengths, record_names = zip(*batch_data)

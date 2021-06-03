@@ -5,9 +5,9 @@ from base import BaseTrainer
 from utils import inf_loop, MetricTracker
 
 
-class Trainer(BaseTrainer):
+class MnistTrainer(BaseTrainer):
     """
-    Trainer class
+    MnistTrainer class
     """
     def __init__(self, model, criterion, metric_ftns, optimizer, config, device,
                  data_loader, valid_data_loader=None, lr_scheduler=None, len_epoch=None):
@@ -40,12 +40,10 @@ class Trainer(BaseTrainer):
         """
         self.model.train()
         self.train_metrics.reset()
-        for batch_idx, (padded_records, labels, lengths, record_names) in enumerate(self.data_loader):
-            data, target = padded_records.to(self.device), labels.to(self.device)
-            data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)
+        for batch_idx, (data, target) in enumerate(self.data_loader):
+            data, target = data.to(self.device), target.to(self.device)
 
             self.optimizer.zero_grad()
-            # data has shape [batch_size, 12, seq_len]
             output = self.model(data)
             loss = self.criterion(output, target)
             loss.backward()
@@ -112,5 +110,3 @@ class Trainer(BaseTrainer):
             current = batch_idx
             total = self.len_epoch
         return base.format(current, total, 100.0 * current / total)
-
-

@@ -15,6 +15,7 @@ def ensure_dir(dirname):
     if not dirname.is_dir():
         dirname.mkdir(parents=True, exist_ok=False)
 
+
 def read_json(path_to_file):
     file_path = Path(path_to_file)
     with file_path.open('rt') as handle:
@@ -26,10 +27,12 @@ def write_json(content, path_to_file):
     with file_path.open('wt') as handle:
         json.dump(content, handle, indent=4, sort_keys=False)
 
+
 def inf_loop(data_loader):
     ''' wrapper function for endless data loader. '''
     for loader in repeat(data_loader):
         yield from loader
+
 
 def prepare_device(n_gpu_use):
     """
@@ -47,6 +50,7 @@ def prepare_device(n_gpu_use):
     device = torch.device('cuda:0' if n_gpu_use > 0 else 'cpu')
     list_ids = list(range(n_gpu_use))
     return device, list_ids
+
 
 class MetricTracker:
     def __init__(self, *keys, writer=None):

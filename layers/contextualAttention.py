@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -24,11 +25,12 @@ class ContextualAttention(nn.Module):
         in addition to the final output vector of the layer
         The attention weights have a shape of [batch_size, seq_len, 1]
     """
-    # TODO: Initalization of the values may differ from the original paper by Tsai-Min et al.
-    def __init__(self, gru_dimension=12, attention_dimension=24, use_bias=True, return_att_weights=False):
+    # TODO: Check Initalization, Values may differ from the original paper by Tsai-Min et al.
+    # TODO: CHECK attention weights and their development during training
+    #  See init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+    def __init__(self, gru_dimension=12, attention_dimension=24, use_bias=True):
         super().__init__()
         self._use_bias = use_bias
-        self._return_att_weights = return_att_weights
 
         # The input dimension will be twice the number of units of a single GRU (since it is a BiGRU)
         # This layer calculates a hidden representation of the incoming values for which attention weights are needed
@@ -81,17 +83,18 @@ class ContextualAttention(nn.Module):
 
         # Finally, the output of the attention layer is calculated as weighted sum of the BiGRU's hidden states
         # The '*' operator is an element-wise multiplication in Python
-        attention_output = (biGRU_outputs * attention_weights).sum(axis=1)
+        # Alternatively, mul() can be used
+        # attention_output = (biGRU_outputs * attention_weights).sum(axis=1)
+        attention_output = torch.mul(biGRU_outputs, attention_weights).sum(axis=1)
 
-        if self._return_att_weights:
-            return attention_output, attention_weights
-        else:
-            return attention_output
+        return attention_output, attention_weights
+
         # OLD
         # x = biGRU_outputs
         # u_in = F.tanh(F.add(F.dot(x, self._W), self._b)) if self._bias else F.tanh(F.dot(x, self._W))
         # a = F.softmax(F.dot(u_in, self._u))
         # return x[:, -1, :]  # For testing, just pass through/choose the last hidden state for each element of the batch
+
 
 
 

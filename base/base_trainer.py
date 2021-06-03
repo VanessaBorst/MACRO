@@ -109,9 +109,9 @@ class BaseTrainer:
         :param save_best: if True, rename the saved checkpoint to 'model_best.pth'
         """
         arch = type(self.model).__name__
-        # TODO: Hier wird nur der Klasenname gespeichert, Code hinter dem Modell muss gespeichert werden,
-        # da er sich mit der Zeit ändert
-        # Oder wie Robert: Pro Modell ein Branch und immer darauf arbeiten
+        # TODO: Hier wird nur der Klassenname gespeichert, Code hinter dem Modell muss gespeichert werden,
+        #  da er sich mit der Zeit ändert
+        #  Oder wie Robert: Pro Modell ein Branch und immer darauf arbeiten
         state = {
             'arch': arch,
             'epoch': epoch,

@@ -11,7 +11,7 @@ def nll_loss(output, target):
         Per entry, the log-probabilities of each class should be contained,
         obtaining log-probabilities is achieved by adding a LogSoftmax layer in the last layer of the network
      :param target: dimension= (N)
-        Per entry, a class index in the range [0, C-1]
+        Per entry, a class index in the range [0, C-1] as integer
 
     Comments
     ----------
@@ -30,6 +30,7 @@ def cross_entropy_loss(output,target):
          :param output: dimension=(minibatch,C);
             Per entry, the raw, unnormalized scores for each class should be contained
          :param target: dimension= (N)
-            Per entry, a class index in the range [0, C-1]
+            Per entry, a class index in the range [0, C-1] as integer
         """
     return F.cross_entropy(output, target)
+

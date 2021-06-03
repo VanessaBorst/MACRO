@@ -66,22 +66,29 @@ def run_basic_preprocessing(src_path="data/CinC_CPSC/raw/", target_path="data/Ci
     full_target_path = f"{target_path}{sampling}" if sampling is not None else f"{target_path}without_sampling"
     if not os.path.exists(full_target_path):
         os.makedirs(full_target_path)
-    # if sampling is not None:
-    #     if not os.path.exists(f"{target_path}{sampling}"):
-    #         os.makedirs(f"{target_path}{sampling}")
-    #     # if not os.path.exists(f"data/cpsc/{sampling}"):
-    #     #     os.makedirs(f"data/cpsc/{sampling}")
-    # else:
-    #     if not os.path.exists(f"{target_path}without_sampling"):
-    #         os.makedirs(f"{target_path}without_sampling")
+
     _read_records(src_path, full_target_path, sampling)
 
 
 def min_max_scaling(path):
-
-    # Vanessa: For Min-Max-Normalization it would be the following (Pandas automatically applies column-wise function):
+    """
+        The method applies min-max-scaling to each record under the given path
+        It uses the global min and max for the normalization, not the local ones per record
+    """
+    # Vanessa:
+    # For Min-Max-Normalization with local min() and max() per record,
+    # it would be the following (Pandas automatically applies column-wise function):
     # df=(df-df.min())/(df.max()-df.min())
 
+    # The scaler internally maintains some attributes, which can be iteratively trained when using partial_fit
+    # Attributes:
+    # min_,: ndarray of shape (n_features,) -> per feature adjustment for minimum.
+    # scale_,: ndarray of shape (n_features,) -> per feature relative scaling of the data
+    # data_min_: ndarray of shape (n_features,) -> per feature minimum seen in the data
+    # data_max_: ndarray of shape (n_features,) -> per feature maximum seen in the data
+    # data_range_ ndarray of shape (n_features,) -> per feature range (data_max_ - data_min_) seen in the data
+    # n_samples_seen_:  The number of samples processed by the estimator.
+    #                   It will be reset on new calls to fit, but increments across partial_fit calls.
     scaler = MinMaxScaler()
 
     g_max = pd.DataFrame()
@@ -94,8 +101,12 @@ def min_max_scaling(path):
 
         df, meta = pk.load(open(os.path.join(path, file), "rb"))
 
+        # Adds the max value for each lead of the record to a new row of the dataframe (the columns are again the leads)
         g_max = g_max.append(df.max(), ignore_index=True)
 
+    # Sets a threshold for the max value per lead that valid records can contain
+    # If this threshold is exceeded, the record is considered invalid
+    # Again, the operations are applied column-wise, i.e. for each lead separately
     g_max_threshold = g_max.median() + (g_max.std() * 2.5)
 
     file_list = []
@@ -107,19 +118,23 @@ def min_max_scaling(path):
 
         valid = True
         for col in df.columns:
+            # df.loc[:, col] selects all values contained in the given column
+            # In this case, it returns all values of the current lead for the given record
             if df.loc[:, col].max() > g_max_threshold.loc[col] \
                     or abs(df.loc[:, col].min()) > g_max_threshold.loc[col]:
                 valid = False
                 invalid_files.append(file)
 
-                # df.loc[:, col].plot()
-                # plt.show()
+                df.loc[:, col].plot()
+                plt.show()
 
                 break
 
         if valid:
             file_list.append(file)
 
+            # Partial_fit ==> Online computation of min and max on X for later scaling.
+            # Needed for training the scaler iteratively; with the fit() method the previous training would be discarded
             scaler = scaler.partial_fit(df)
 
     if not os.path.exists(os.path.join(path, "minmax")):
@@ -128,6 +143,7 @@ def min_max_scaling(path):
     for file in file_list:
         df, meta = pk.load(open(os.path.join(path, file), "rb"))
 
+        # Scales the features of the dataframe according to the desired feature_range, which is (0,1) by default
         df.loc[:, :] = scaler.transform(df)
         pk.dump((df, meta), open(os.path.join(path, "minmax", file), "wb"))
 
@@ -211,19 +227,20 @@ def clean_meta(path):
 
 
 if __name__ == "__main__":
-    # Uncomment for applying basic preprocessing
-    # Reads the .mat files, possibly downsamples the data, extracts meta data and writes everything to pickle dumps
-    src_path = "data/CinC_CPSC/raw/"
-    target_path = "data/CinC_CPSC/preprocessed/"
-    run_basic_preprocessing(src_path, target_path, sampling=None)
-    # Extend the meta information by encoded classes
+    # # Uncomment for applying basic preprocessing
+    # # Reads the .mat files, possibly downsamples the data, extracts meta data and writes everything to pickle dumps
+    # src_path = "data/CinC_CPSC/raw/"
+    # target_path = "data/CinC_CPSC/preprocessed/"
+    # run_basic_preprocessing(src_path, target_path, sampling=None)
+
+    # Uncomment to Extend the meta information by encoded classes
+    src_path = "data/CinC_CPSC/preprocessed/without_sampling/"
     clean_meta(src_path)
 
-    # Uncomment for applying further preproccssing like normalization or padding
-    # src_path = "data/CinC_CPSC/preprocessed/without_sampling/"
-    # show(src_path)
+    # Uncomment for applying further preproccssing like normalization or padding (padding not yet implemented)
+    src_path = "data/CinC_CPSC/preprocessed/without_sampling/"
+    # normalize(src_path)
+    # show(src_path + "normalized")
 
+    # min_max_scaling(path=src_path)
     # show(src_path + "minmax")
-    # min_max_scaling(path=path)
-    # clean_meta(src_path)
-    # normalize(path+"50ms/")
