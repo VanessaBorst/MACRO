@@ -9,9 +9,9 @@ class ECGDataLoader(BaseDataLoader):
     """
     ECG data loading using BaseDataLoader
     """
-    def __init__(self, data_dir, batch_size, shuffle=True, validation_split=0.0, num_workers=1, seq_len=72000):
+    def __init__(self, data_dir, batch_size, shuffle=True, validation_split=0.0, num_workers=1, seq_len=72000, training=True):
         self.data_dir = data_dir
-        self.dataset = ECGDataset(self.data_dir)
+        self.dataset = ECGDataset(self.data_dir, training=training)
         super().__init__(self.dataset, batch_size, shuffle, validation_split, num_workers,
                          collate_fn=partial(_collate_pad_or_truncate, seq_len=seq_len))
 

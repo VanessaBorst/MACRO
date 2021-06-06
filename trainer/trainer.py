@@ -2,7 +2,8 @@ import numpy as np
 import torch
 from torchvision.utils import make_grid
 from base import BaseTrainer
-from utils import inf_loop, MetricTracker
+from utils import inf_loop
+from utils.tracker import MetricTracker
 
 
 class Trainer(BaseTrainer):
@@ -52,6 +53,10 @@ class Trainer(BaseTrainer):
             self.optimizer.step()
 
             self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
+            # Iteratively update the loss and the metrics with the MetricTracker
+            # To this end, the Tracker internally maintains a dataframe containing the following thee columns:
+            # columns=['total', 'counts', 'average']
+            # The loss and each metric are updated in a separate row for each of them
             self.train_metrics.update('loss', loss.item())
             for met in self.metric_ftns:
                 self.train_metrics.update(met.__name__, met(output, target))
@@ -62,7 +67,7 @@ class Trainer(BaseTrainer):
                     self._progress(batch_idx),
                     loss.item()))
                 # cpu() moves the tensor to the CPU, because some operations cannot be performed on cuda tensors
-                self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
+                # self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
 
             if batch_idx == self.len_epoch:
                 break
@@ -81,13 +86,16 @@ class Trainer(BaseTrainer):
         Validate after training an epoch
 
         :param epoch: Integer, current training epoch.
-        :return: A log that contains information about validation
+        :return: A log that contains information about validation (as dictionary)
         """
         self.model.eval()
         self.valid_metrics.reset()
+        print("Validation started, epoch " + str(epoch))
         with torch.no_grad():
-            for batch_idx, (data, target) in enumerate(self.valid_data_loader):
-                data, target = data.to(self.device), target.to(self.device)
+            for batch_idx, (padded_records, labels, lengths, record_names) in enumerate(self.valid_data_loader):
+                print("Batchid " + str(batch_idx))
+                data, target = padded_records.to(self.device), labels.to(self.device)
+                data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)
 
                 output = self.model(data)
                 loss = self.criterion(output, target)

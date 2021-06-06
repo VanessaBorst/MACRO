@@ -27,7 +27,7 @@ class ContextualAttention(nn.Module):
     """
     # TODO: Check Initalization, Values may differ from the original paper by Tsai-Min et al.
     # TODO: CHECK attention weights and their development during training
-    #  See init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+    # See init.kaiming_uniform_(self.weight, a=math.sqrt(5))
     def __init__(self, gru_dimension=12, attention_dimension=24, use_bias=True):
         super().__init__()
         self._use_bias = use_bias
@@ -50,7 +50,15 @@ class ContextualAttention(nn.Module):
         # W and b are used to transform the incoming features from the biGRU
         self._W = nn.Parameter(torch.Tensor(in_shape[-1], in_shape[-1]))
         if self._bias:
-            self._b = nn.Parameter(torch.Tensor(in_shape[-1]))
+            self._b = nn.Parameter(toself._hidden_rep = nn.Sequential(
+            nn.Linear(in_features=2 * gru_dimension, out_features=attention_dimension, bias=self._use_bias),
+            nn.Tanh()
+        )
+
+        # Apply the attention scoring function (dot-product) between the values and the query vector u
+        # Here u is represented as dense layer without bias: u has shape (attention_dimension x 1)
+        # Hence, the attention scoring function calculates a dot product as follows: u ° tanh(W h +b)
+        self._attn_scoring_fn = nn.Linear(attention_dimension, 1, bias=False)rch.Tensor(in_shape[-1]))
 
         # The vector u serves as query of the attention mechanism
         self._u = nn.Parameter(torch.Tensor(in_shape[-1]))

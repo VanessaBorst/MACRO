@@ -18,7 +18,7 @@ class ECGDataset(Dataset):
     This is memory efficient because all the records are not stored in the memory at once but read as required.
     """
 
-    def __init__(self, input_dir, transform=None):
+    def __init__(self, input_dir, training=True, transform=None):
         """
         Args:
             input_dir (Path): Path to the directory containing the preprocessed pickle files for each record
