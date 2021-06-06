@@ -1,9 +1,7 @@
-import json
-import torch
+import matplotlib.pyplot as plt
+import seaborn as sns
 import pandas as pd
-from pathlib import Path
-from itertools import repeat
-from collections import OrderedDict
+from torch.utils.tensorboard import SummaryWriter
 
 from model.metric import get_confusion_matrix, get_class_wise_confusion_matrix
 
@@ -68,10 +66,6 @@ class ClassificationTracker:
         :param upd_class_wise_cms: List of dataframes, one per class,
                 the class which is represented in each dataframe should be contained as name of axis 1 (columns)
         """
-
-        #if self.writer is not None:
-        #    self.writer.add_scalar(key, value)
-
         # Assert the df indices and columns match
         assert all(upd_cm.columns == self._cm.columns), \
             "The two given confusion matrices have different columns"
@@ -86,11 +80,34 @@ class ClassificationTracker:
             assert upd_class_wise_cms[idx].columns.name == self._classwise_cms[idx].columns.name
             self._classwise_cms[idx] = self._classwise_cms[idx].add(upd_class_wise_cms[idx])
 
+        # Plot the global confusion matrix and send it to the writer
+        if self.writer is not None:
+            plt.figure(figsize=(10, 7))
+            plt.title("Overall confusion matrix")
+            fig_ = sns.heatmap(self._cm, annot=True, cmap='Spectral').get_figure()
+            # plt.show()
+            plt.close(fig_)  # close the curren figure
+
+            # Params of SummaryWriter.add_image:
+            #   tag (string): Data identifier
+            #   img_tensor (torch.Tensor, numpy.array, or string/blobname): Image data
+            #   global_step (int): Global step value to record
+            self.writer.add_figure("Overall confusion matrix", fig_)
+
+            for idx in range(len(self._classwise_cms)):
+                class_cm = self._classwise_cms[idx]
+                plt.figure(figsize=(10, 7))
+                plt.title("Confusion matrix for class " + str(class_cm.columns.name))
+                fig_ = sns.heatmap(class_cm, annot=True, cmap='Spectral').get_figure()
+                # plt.show()
+                plt.close(fig_)  # close the curren figure
+                self.writer.add_figure("Confusion matrix for class " + str(class_cm.columns.name), fig_)
+
 
 if __name__ == '__main__':
     output = [0,2,5,6]
     target = [1,8,7,6]
     cm = get_confusion_matrix(output,target,[0,1,2,3,4,5,6,7,8])
     class_wise_cms = get_class_wise_confusion_matrix(output,target,[0,1,2,3,4,5,6,7,8])
-    tracker = ClassificationTracker(*[0,1,2,3,4,5,6,7,8])
+    tracker = ClassificationTracker(*[0,1,2,3,4,5,6,7,8], writer=SummaryWriter(log_dir="saved/tmp"))
     tracker.update_cms(cm, class_wise_cms)
