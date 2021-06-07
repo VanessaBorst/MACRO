@@ -11,6 +11,11 @@ class BaseDataLoader(DataLoader):
     """
     def __init__(self, dataset, batch_size, shuffle, validation_split, num_workers, collate_fn=default_collate,
                  single_batch=False):
+        """
+        single_batch: If set to True, this reduces the training set to a single batch and turns off the validation set.
+        Training on a single batch should quickly overfit and reach accuracy 1.0.
+        This is a recommended step for debugging networks, see https://twitter.com/karpathy/status/1013244313327681536
+        """
         self.validation_split = validation_split
         self.shuffle = shuffle
 
