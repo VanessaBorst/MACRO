@@ -52,13 +52,21 @@ class ClassificationTracker:
         # Create a dataframe containing the classification results (rows: Ground Truth, cols: Predictions)
         self._cm = pd.DataFrame(0, index=keys, columns=keys).astype('int64')
         # Create a list of dataframes, one per class
-        self._classwise_cms = [pd.DataFrame([[0, 0], [0, 0]]).astype('int64').rename_axis(key, axis=1) for key in keys]
+        self._class_wise_cms = [pd.DataFrame([[0, 0], [0, 0]]).astype('int64').rename_axis(key, axis=1) for key in keys]
         self.reset()
+
+    @property
+    def cm(self):
+        return self._cm
+
+    @property
+    def class_wise_cms(self):
+        return self._class_wise_cms
 
     def reset(self):
         for col in self._cm.columns:
             self._cm[col].values[:] = 0
-        for df in self._classwise_cms:
+        for df in self._class_wise_cms:
             for col in df.columns:
                 df[col].values[:] = 0
 
@@ -80,11 +88,11 @@ class ClassificationTracker:
         self._cm = self._cm.add(upd_cm)
 
         # Assert that the number of class_wise cms is correct and the labels are the same
-        assert len(upd_class_wise_cms) == len(self._classwise_cms), \
+        assert len(upd_class_wise_cms) == len(self._class_wise_cms), \
             "The number of class_wise confusion matrices doesn't match"
         for idx in range(0, len(upd_class_wise_cms)):
-            assert upd_class_wise_cms[idx].columns.name == self._classwise_cms[idx].columns.name
-            self._classwise_cms[idx] = self._classwise_cms[idx].add(upd_class_wise_cms[idx])
+            assert upd_class_wise_cms[idx].columns.name == self._class_wise_cms[idx].columns.name
+            self._class_wise_cms[idx] = self._class_wise_cms[idx].add(upd_class_wise_cms[idx])
 
         # Plot the global confusion matrix and send it to the writer
         # if self.writer is not None:
@@ -130,8 +138,8 @@ class ClassificationTracker:
             #   global_step (int): Global step value to record
             self.writer.add_figure("Overall confusion matrix", fig_, global_step=epoch)
 
-            for idx in range(len(self._classwise_cms)):
-                class_cm = self._classwise_cms[idx]
+            for idx in range(len(self._class_wise_cms)):
+                class_cm = self._class_wise_cms[idx]
                 plt.figure(figsize=(10, 7))
                 plt.title("Confusion matrix for class " + str(class_cm.columns.name))
                 fig_ = sns.heatmap(class_cm, annot=True, cmap='Spectral').get_figure()

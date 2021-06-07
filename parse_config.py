@@ -87,7 +87,8 @@ class ConfigParser:
         `object = module.name(a, b=1)`
         """
         module_name = self[name]['type']  # e.g., MnistDataLoader
-        module_args = dict(self[name]['args'])  # e.g., <module 'data_loader.data_loaders'>
+        module_args = dict(self[name]['args'])  # e.g., {'data_dir': 'data/', 'batch_size': 4, ..., 'seq_len': 72000}
+        # kwargs, i.e., single_batch for the data_loader
         assert all([k not in module_args for k in kwargs]), 'Overwriting kwargs given in config file is not allowed'
         module_args.update(kwargs)
         # Gets a named attribute (here named "module_name") from an object (here from the given data-loader module)

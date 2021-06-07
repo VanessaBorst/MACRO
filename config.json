@@ -10,7 +10,7 @@
     "type": "ECGDataLoader",
     "args": {
       "data_dir": "data/CinC_CPSC/preprocessed/without_sampling/",
-      "batch_size": 4,
+      "batch_size": 30,
       "shuffle": true,
       "validation_split": 0.1,
       "num_workers": 1,
@@ -39,12 +39,13 @@
     }
   },
   "trainer": {
-    "epochs": 10,
+    "epochs": 100,
     "save_dir": "saved/",
     "save_period": 1,
     "verbosity": 2,
     "monitor": "min val_loss",
     "early_stop": 10,
+    "overfit_single_batch": true,
     "tensorboard": true
   }
 }

@@ -9,20 +9,20 @@ class BaseTrainer:
     Base class for all trainers:
     Handles checkpoint saving/resuming, training process logging, and more (including early stopping)
     """
-    def __init__(self, model, criterion, metric_ftns, optimizer, config):
+    def __init__(self, model, criterion, optimizer, config):
         self.config = config
         # create a logger with name "trainer" and the verbosity specified in the config.json
         self.logger = config.get_logger('trainer', config['trainer']['verbosity'])
 
         self.model = model
         self.criterion = criterion
-        self.metric_ftns = metric_ftns
         self.optimizer = optimizer
 
         cfg_trainer = config['trainer']
         self.epochs = cfg_trainer['epochs']
         self.save_period = cfg_trainer['save_period']
         self.monitor = cfg_trainer.get('monitor', 'off')   # 'off' is returned if the key doesn't exist in the dict
+        self.overfit_single_batch = cfg_trainer.get('overfit_single_batch', False)
 
         # configuration to monitor model performance and save best
         if self.monitor == 'off':

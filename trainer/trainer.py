@@ -11,11 +11,13 @@ class Trainer(BaseTrainer):
     """
     Trainer class
     """
+
     def __init__(self, model, criterion, metric_ftns, optimizer, config, device,
                  data_loader, valid_data_loader=None, lr_scheduler=None, len_epoch=None):
-        super().__init__(model, criterion, metric_ftns, optimizer, config)
+        super().__init__(model, criterion, optimizer, config)
         self.config = config
         self.device = device
+        self.metric_ftns = metric_ftns
         self.data_loader = data_loader
         if len_epoch is None:
             # epoch-based training
@@ -74,7 +76,7 @@ class Trainer(BaseTrainer):
             upd_cm = get_confusion_matrix(output=output, log_probs=True, target=target,
                                           labels=self.data_loader.dataset.class_labels)
             upd_class_wise_cms = get_class_wise_confusion_matrix(output=output, log_probs=True, target=target,
-                                          labels=self.data_loader.dataset.class_labels)
+                                                                 labels=self.data_loader.dataset.class_labels)
             self.train_cms.update_cms(upd_cm, upd_class_wise_cms)
 
             if batch_idx % self.log_step == 0:
@@ -85,7 +87,7 @@ class Trainer(BaseTrainer):
                 # cpu() moves the tensor to the CPU, because some operations cannot be performed on cuda tensors
                 # self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
 
-            if batch_idx == self.len_epoch:
+            if batch_idx == self.len_epoch or self.overfit_single_batch:
                 break
 
         # At the end of each epoch, explicitly send the confusion matrices to the SummaryWriter/TensorboardWriter
@@ -93,9 +95,16 @@ class Trainer(BaseTrainer):
 
         log = self.train_metrics.result()
 
+        # Also log the confusion matrix-related information to the dict
+        cm_information = dict({"overall_cm": "\n" + str(self.train_cms.cm)},
+                              **{"Confusion matrix for class " + str(class_cm.columns.name): "\n" + str(class_cm)
+                                 for _, class_cm in enumerate(self.train_cms.class_wise_cms)})
+        log.update(cm_information)
+
         if self.do_validation:
+            log.update({'Note': '-------------Start of Validation-------------'})
             val_log = self._valid_epoch(epoch)
-            log.update(**{'val_'+k : v for k, v in val_log.items()})    # Extends the dict by the val loss and metrics
+            log.update(**{'val_' + k: v for k, v in val_log.items()})  # Extends the dict by the val loss and metrics
 
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
@@ -127,7 +136,6 @@ class Trainer(BaseTrainer):
                 self.valid_metrics.update('loss', loss.item())
                 for met in self.metric_ftns:
                     self.valid_metrics.update(met.__name__, met(output, target))
-                self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
 
                 # Update the confusion matrices maintained by the ClassificationTracker
                 upd_cm = get_confusion_matrix(output=output, log_probs=True, target=target,
@@ -142,7 +150,16 @@ class Trainer(BaseTrainer):
         # add histogram of model parameters to the tensorboard
         for name, p in self.model.named_parameters():
             self.writer.add_histogram(name, p, bins='auto')
-        return self.valid_metrics.result()
+
+        valid_log = self.valid_metrics.result()
+
+        # Also log the confusion matrix-related information to the valid log
+        valid_cm_information = dict({"overall_cm": "\n" + str(self.valid_cms.cm)},
+                                    **{"Confusion matrix for class " + str(class_cm.columns.name): "\n" + str(class_cm)
+                                       for _, class_cm in enumerate(self.valid_cms.class_wise_cms)})
+        valid_log.update(valid_cm_information)
+
+        return valid_log
 
     def _progress(self, batch_idx):
         base = '[{}/{} ({:.0f}%)]'
@@ -153,5 +170,3 @@ class Trainer(BaseTrainer):
             current = batch_idx
             total = self.len_epoch
         return base.format(current, total, 100.0 * current / total)
-
-
