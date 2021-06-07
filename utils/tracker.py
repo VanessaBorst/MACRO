@@ -11,6 +11,7 @@ class MetricTracker:
     Internally keeps track of the loss and the metrics by means of a dataframe
     If specified, each update of the metrics is also passed to the TensorboardWriter
     """
+
     def __init__(self, *keys, writer=None):
         self.writer = writer
         # Create a dataframe containing one row per key (e.g. one per metric and another one for the loss)
@@ -37,11 +38,16 @@ class MetricTracker:
 
 class ClassificationTracker:
     """
-        Internally keeps track of the confusion matrix and the class-wise confusion matrices by means dataframes
+        Internally keeps track of the confusion matrix and the class-wise confusion matrices by means of dataframes
         If specified, each update of the metrics is also passed to the TensorboardWriter
     """
 
     def __init__(self, *keys, writer=None):
+        """
+        Initializes the internal dataframes
+        :param keys: labels of the classes that exist in the data
+        :param writer: a SummaryWriter or TensorboardWriter
+        """
         self.writer = writer
         # Create a dataframe containing the classification results (rows: Ground Truth, cols: Predictions)
         self._cm = pd.DataFrame(0, index=keys, columns=keys).astype('int64')
@@ -81,6 +87,36 @@ class ClassificationTracker:
             self._classwise_cms[idx] = self._classwise_cms[idx].add(upd_class_wise_cms[idx])
 
         # Plot the global confusion matrix and send it to the writer
+        # if self.writer is not None:
+        #     plt.figure(figsize=(10, 7))
+        #     plt.title("Overall confusion matrix")
+        #     fig_ = sns.heatmap(self._cm, annot=True, cmap='Spectral').get_figure()
+        #     # plt.show()
+        #     plt.close(fig_)  # close the curren figure
+        #
+        #     # Params of SummaryWriter.add_image:
+        #     #   tag (string): Data identifier
+        #     #   img_tensor (torch.Tensor, numpy.array, or string/blobname): Image data
+        #     #   global_step (int): Global step value to record
+        #     self.writer.add_figure("Overall confusion matrix", fig_)
+        #
+        #     for idx in range(len(self._classwise_cms)):
+        #         class_cm = self._classwise_cms[idx]
+        #         plt.figure(figsize=(10, 7))
+        #         plt.title("Confusion matrix for class " + str(class_cm.columns.name))
+        #         fig_ = sns.heatmap(class_cm, annot=True, cmap='Spectral').get_figure()
+        #         # plt.show()
+        #         plt.close(fig_)  # close the curren figure
+        #         self.writer.add_figure("Confusion matrix for class " + str(class_cm.columns.name), fig_)
+
+    def send_cms_to_writer(self, epoch):
+        """
+            Sends the internal confusion matrix to the SummaryWriter/TensorboardWriter
+            and should be called at the end of each training/validation epoch
+            (not for each batch separately as the results look confusing then)
+        """
+
+        # Plot the global confusion matrix and send it to the writer
         if self.writer is not None:
             plt.figure(figsize=(10, 7))
             plt.title("Overall confusion matrix")
@@ -92,7 +128,7 @@ class ClassificationTracker:
             #   tag (string): Data identifier
             #   img_tensor (torch.Tensor, numpy.array, or string/blobname): Image data
             #   global_step (int): Global step value to record
-            self.writer.add_figure("Overall confusion matrix", fig_)
+            self.writer.add_figure("Overall confusion matrix", fig_, global_step=epoch)
 
             for idx in range(len(self._classwise_cms)):
                 class_cm = self._classwise_cms[idx]
@@ -101,13 +137,14 @@ class ClassificationTracker:
                 fig_ = sns.heatmap(class_cm, annot=True, cmap='Spectral').get_figure()
                 # plt.show()
                 plt.close(fig_)  # close the curren figure
-                self.writer.add_figure("Confusion matrix for class " + str(class_cm.columns.name), fig_)
+                self.writer.add_figure("Confusion matrix for class " + str(class_cm.columns.name),
+                                       fig_, global_step=epoch)
 
 
 if __name__ == '__main__':
-    output = [0,2,5,6]
-    target = [1,8,7,6]
-    cm = get_confusion_matrix(output,target,[0,1,2,3,4,5,6,7,8])
-    class_wise_cms = get_class_wise_confusion_matrix(output,target,[0,1,2,3,4,5,6,7,8])
-    tracker = ClassificationTracker(*[0,1,2,3,4,5,6,7,8], writer=SummaryWriter(log_dir="saved/tmp"))
+    output = [0, 2, 5, 6]
+    target = [1, 8, 7, 6]
+    cm = get_confusion_matrix(output, False, target, [0, 1, 2, 3, 4, 5, 6, 7, 8])
+    class_wise_cms = get_class_wise_confusion_matrix(output, False, target, [0, 1, 2, 3, 4, 5, 6, 7, 8])
+    tracker = ClassificationTracker(*[0, 1, 2, 3, 4, 5, 6, 7, 8], writer=SummaryWriter(log_dir="saved/tmp"))
     tracker.update_cms(cm, class_wise_cms)

@@ -18,7 +18,7 @@ class ECGDataset(Dataset):
     This is memory efficient because all the records are not stored in the memory at once but read as required.
     """
 
-    def __init__(self, input_dir, training=True, transform=None):
+    def __init__(self, input_dir, transform=None):
         """
         Args:
             input_dir (Path): Path to the directory containing the preprocessed pickle files for each record
@@ -33,6 +33,9 @@ class ECGDataset(Dataset):
 
         self._input_dir = input_dir
         self.records = records
+        # Save list of classes occurring in the dataset
+        _, meta = pk.load(open(os.path.join(self._input_dir, records[0]), "rb"))
+        self.class_labels = meta["classes_encoded"].index.values
         self.transform = transform
 
     def __len__(self):
@@ -45,14 +48,14 @@ class ECGDataset(Dataset):
         record_name = self.records[idx]
         # record is a df, meta a dict
         record, meta = pk.load(open(os.path.join(self._input_dir, record_name), "rb"))
-        classes = meta["classes"]
+        # Ensure that the record is not containing any unknown class label
+        assert all(label in self.class_labels for label in meta["classes"])
         classes_encoded = meta["classes_encoded"]
 
         if self.transform:
             record = self.transform(record)
 
-        # record.values statt df, dann gibt er es als tensor aus
-        return record, classes, len(record.index), record_name
+        return record, meta["classes"], len(record.index), record_name
 
 
 class ECGDataset_Old(Dataset):

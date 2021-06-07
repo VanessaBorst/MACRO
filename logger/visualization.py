@@ -33,13 +33,16 @@ class TensorboardWriter:
 
         self.tb_writer_ftns = {
             'add_scalar', 'add_scalars', 'add_image', 'add_images', 'add_audio',
-            'add_text', 'add_histogram', 'add_pr_curve', 'add_embedding'
+            'add_text', 'add_histogram', 'add_pr_curve', 'add_embedding', 'add_figure'
         }
         self.tag_mode_exceptions = {'add_histogram', 'add_embedding'}
         self.timer = datetime.now()
 
-    def set_step(self, step, mode='train'):
+    def set_mode(self, mode):
+        # mode should either be 'train' or valid'
         self.mode = mode
+
+    def set_step(self, step):
         self.step = step
         if step == 0:
             self.timer = datetime.now()
@@ -66,7 +69,11 @@ class TensorboardWriter:
                     # add mode(train/valid) tag
                     if name not in self.tag_mode_exceptions:
                         tag = '{}/{}'.format(tag, self.mode)
-                    add_data(tag, data, self.step, *args, **kwargs)
+                    # If step is explicitly provided, use this instead of the internal maintained counter
+                    if 'global_step' in kwargs:
+                        add_data(tag, data, *args, **kwargs)
+                    else:
+                        add_data(tag, data, self.step, *args, **kwargs)
             return wrapper
         else:
             # default action for returning methods defined in this class, set_step() for instance.

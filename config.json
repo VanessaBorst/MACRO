@@ -15,7 +15,8 @@
       "validation_split": 0.1,
       "num_workers": 1,
       "seq_len": 72000
-    }
+    },
+    "test_dir": "data/CinC_CPSC/preprocessed/without_sampling/ReaddLater"
   },
   "optimizer": {
     "type": "Adam",
@@ -27,8 +28,8 @@
   },
   "loss": "nll_loss",
   "metrics": [
-    "accuracy",
-    "top_k_acc"
+    "old_accuracy",
+    "old_top_k_acc"
   ],
   "lr_scheduler": {
     "type": "StepLR",
@@ -38,7 +39,7 @@
     }
   },
   "trainer": {
-    "epochs": 5,
+    "epochs": 10,
     "save_dir": "saved/",
     "save_period": 1,
     "verbosity": 2,
