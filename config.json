@@ -10,7 +10,7 @@
     "type": "ECGDataLoader",
     "args": {
       "data_dir": "data/CinC_CPSC/preprocessed/without_sampling/",
-      "batch_size": 30,
+      "batch_size": 2,
       "shuffle": true,
       "validation_split": 0.1,
       "num_workers": 1,
@@ -21,7 +21,7 @@
   "optimizer": {
     "type": "Adam",
     "args": {
-      "lr": 0.001,
+      "lr": 0.0001,
       "weight_decay": 0,
       "amsgrad": true
     }
@@ -39,13 +39,13 @@
     }
   },
   "trainer": {
-    "epochs": 100,
+    "epochs": 10,
     "save_dir": "saved/",
     "save_period": 1,
     "verbosity": 2,
     "monitor": "min val_loss",
     "early_stop": 10,
-    "overfit_single_batch": true,
+    "overfit_single_batch": false,
     "tensorboard": true
   }
 }

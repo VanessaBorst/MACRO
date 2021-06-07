@@ -84,8 +84,6 @@ class Trainer(BaseTrainer):
                     epoch,
                     self._progress(batch_idx),
                     loss.item()))
-                # cpu() moves the tensor to the CPU, because some operations cannot be performed on cuda tensors
-                # self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
 
             if batch_idx == self.len_epoch or self.overfit_single_batch:
                 break

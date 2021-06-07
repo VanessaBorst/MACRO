@@ -68,7 +68,7 @@ class BaseTrainer:
             log = {'epoch': epoch}
             log.update(result)
 
-            # print logged informations to the screen
+            # print logged information to the screen and store them to log files if handlers are specified
             for key, value in log.items():
                 self.logger.info('    {:15s}: {}'.format(str(key), value))
 
