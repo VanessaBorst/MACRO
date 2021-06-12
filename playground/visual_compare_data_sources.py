@@ -2,11 +2,11 @@ import numpy as np, os, sys, joblib
 from scipy.io import loadmat
 import matplotlib.pyplot as plt
 
-from playground.read_data import _extract_lead_names_from_header
+from playground.read_data import _extract_leads_from_header
 
 dirname = os.path.dirname(__file__)
-input_directory_wfdb = os.path.join(dirname, '../data/CPSC/raw/Training_WFDB')
-input_directory_cpsc = os.path.join(dirname, '../data/CPSC/raw/TrainingSet1')
+input_directory_wfdb = os.path.join(dirname, '../data/CinC_CPSC/raw/')
+input_directory_cpsc = os.path.join(dirname, '../data/CPSC/raw/')
 
 # Plot the first lead of the A001 record in the wfdb dataset
 x_wfdb = loadmat(os.path.join(input_directory_wfdb, 'A0001.mat'))
@@ -30,7 +30,7 @@ x_wfdb = np.asarray(x_wfdb['val'], dtype=np.float64)[:, 500:5000]
 x_cpsc = loadmat(os.path.join(input_directory_cpsc, 'A0011.mat'))
 x_cpsc = x_cpsc['ECG']['data'][0][0][:, 500:5000]
 
-leads = _extract_lead_names_from_header('A0011.hea')
+leads = _extract_leads_from_header('A0011.hea')
 
 for i in range(0, 2):
     data_src = x_wfdb if i == 0 else x_cpsc

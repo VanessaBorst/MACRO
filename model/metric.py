@@ -21,7 +21,7 @@ def _convert_logprob_to_prediction(logprob_output):
     return torch.argmax(logprob_output, dim=1)
 
 
-def _f1(output, log_probs, target, labels, average):
+def _f1(output, target, log_probs, labels, average):
     """
     Compute the F1 score, also known as balanced F-score or F-measure.
     In the multi-class and multi-label case, this is the average of the F1 score of each class with
@@ -55,7 +55,7 @@ def _f1(output, log_probs, target, labels, average):
         return f1_score(y_true=target, y_pred=pred, labels=labels, average=average)
 
 
-def _roc_auc(output, log_probs, target, labels, average, multi_class_cfg, ):
+def _roc_auc(output, target, log_probs, labels, average, multi_class_cfg, ):
     """
     The following parameter description applies for the multiclass case
     :param output: dimension=(N,C)
@@ -153,42 +153,47 @@ def top_k_acc(output, target, labels, k=3):
         return top_k_accuracy_score(y_true=target, y_score=output, k=k, labels=labels)
 
 
-def mirco_f1(output, log_probs, target, labels):
+def mirco_f1(output, target, log_probs, labels):
     """See documentation for _f1 """
-    return _f1(output, log_probs, target, labels, "micro")
+    return _f1(output, target, log_probs, labels, "micro")
 
 
-def macro_f1(output, log_probs, target, labels):
+def macro_f1(output, target, log_probs, labels):
     """See documentation for _f1 """
-    return _f1(output, log_probs, target, labels, "macro")
+    return _f1(output, target, log_probs, labels, "macro")
 
 
-def weighted_f1(output, log_probs, target, labels):
+def weighted_f1(output, target, log_probs, labels):
     """See documentation for _f1 """
-    return _f1(output, log_probs, target, labels, "weighted")
+    return _f1(output, target, log_probs, labels, "weighted")
 
 
-def macro_roc_auc_ovo(output, log_probs, target, labels):
+def class_wise_f1(output, target, log_probs, labels):
+    """See documentation for _f1 """
+    return _f1(output, target, log_probs, labels, None)
+
+
+def macro_roc_auc_ovo(output, target, log_probs, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, log_probs, target, labels, "macro", "ovo")
+    return _roc_auc(output, target, log_probs, labels, "macro", "ovo")
 
 
-def weighted_roc_auc_ovo(output, log_probs, target, labels):
+def weighted_roc_auc_ovo(output, target, log_probs, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, log_probs, target, labels, "weighted", "ovo")
+    return _roc_auc(output, target, log_probs, labels, "weighted", "ovo")
 
 
-def macro_roc_auc_ovr(output, log_probs, target, labels):
+def macro_roc_auc_ovr(output, target, log_probs, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, log_probs, target, labels, "macro", "ovr")
+    return _roc_auc(output, target, log_probs, labels, "macro", "ovr")
 
 
-def weighted_roc_auc_ovr(output, log_probs, target, labels):
+def weighted_roc_auc_ovr(output, target, log_probs, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, log_probs, target, labels, "weighted", "ovr")
+    return _roc_auc(output, target, log_probs, labels, "weighted", "ovr")
 
 
-def get_confusion_matrix(output, log_probs, target, labels):
+def get_confusion_matrix(output, target, log_probs, labels):
     """
         Creates a num_labels x num_labels sized confusion matrix whose i-th row and j-th column entry indicates
         the number of samples with true label being i-th class and predicted label being j-th class
@@ -208,7 +213,7 @@ def get_confusion_matrix(output, log_probs, target, labels):
         return df_cm
 
 
-def get_class_wise_confusion_matrix(output, log_probs, target, labels):
+def get_class_wise_confusion_matrix(output, target, log_probs, labels):
     """
     Creates a 2x2 confusion matrix per class contained in labels
     CM(0,0) -> TN, CM(1,0) -> FN, CM(0,1) -> FP, CM(1,1) -> TP

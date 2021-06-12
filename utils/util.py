@@ -4,6 +4,7 @@ import pandas as pd
 from pathlib import Path
 from itertools import repeat
 from collections import OrderedDict
+import matplotlib.pyplot as plt
 
 
 def get_project_root() -> Path:
@@ -50,3 +51,20 @@ def prepare_device(n_gpu_use):
     device = torch.device('cuda:0' if n_gpu_use > 0 else 'cpu')
     list_ids = list(range(n_gpu_use))
     return device, list_ids
+
+
+def plot_record_from_df(record_name, df_record, preprocesed=False):
+    print(record_name)
+    fig, axs = plt.subplots(6, 2, figsize=(15, 15), constrained_layout=True)
+    title = "Record " + record_name + " after padding" if preprocesed else "Record " + record_name + " before padding"
+    fig.suptitle(title)
+    axis_0 = 0
+    axis_1 = 0
+    for lead in df_record.columns:
+        lead_data = df_record[lead].to_list()
+        axs[axis_0, axis_1].plot(lead_data)
+        axs[axis_0, axis_1].set_title(lead)
+        axis_0 = (axis_0 + 1) % 6
+        if axis_0 == 0:
+            axis_1 += 1
+    plt.show()

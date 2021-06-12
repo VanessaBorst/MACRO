@@ -1,1 +1,1 @@
-from .trainer import *
+from .ecg_trainer import *

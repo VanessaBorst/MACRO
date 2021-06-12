@@ -9,14 +9,14 @@
   "data_loader": {
     "type": "ECGDataLoader",
     "args": {
-      "data_dir": "data/CinC_CPSC/preprocessed/without_sampling/",
+      "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/",
       "batch_size": 2,
       "shuffle": true,
       "validation_split": 0.25,
       "num_workers": 1,
       "seq_len": 72000
     },
-    "test_dir": "data/CinC_CPSC/preprocessed/without_sampling/ReaddLater"
+    "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/"
   },
   "optimizer": {
     "type": "Adam",
@@ -26,10 +26,11 @@
       "amsgrad": true
     }
   },
-  "loss": "cross_entropy_loss",
+  "loss": "nll_loss",
   "metrics": [
     "old_accuracy",
-    "old_top_k_acc"
+    "old_top_k_acc",
+    "class_wise_f1"
   ],
   "lr_scheduler": {
     "type": "StepLR",

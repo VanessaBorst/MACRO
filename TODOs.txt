@@ -1,5 +1,7 @@
 TODO:
 
+- Multi-Label Training und Evaluation umsetzen
+
 - Mehr Metriken wegspeichern, nicht nur Loss und die Accuracy:
     * So viele wie möglich  -> Acc, Precision, Recall, F1, AUC/ROC, 4 Felder für jede Klasse (FP, FN, TP, TN)
                             -> Weitere, eigene Ideen: PR-Curve

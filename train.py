@@ -5,7 +5,6 @@ import numpy as np
 import data_loader.data_loaders as module_data_loader
 import model.loss as module_loss
 import model.metric as module_metric
-# import model.model as module_arch
 import model.baseline_model as module_arch
 from parse_config import ConfigParser
 from trainer.ecg_trainer import ECGTrainer
@@ -43,7 +42,7 @@ def main(config):
 
     # Get function handles of loss and metrics
     # Important: The method config['loss'] must exist in the loss module (<module 'model.loss' >)
-    # Equivalently, all metrics specified in the context must exist in the metrics moduel
+    # Equivalently, all metrics specified in the context must exist in the metrics modul
     criterion = getattr(module_loss, config['loss'])
     metrics = [getattr(module_metric, met) for met in config['metrics']]
 

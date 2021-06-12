@@ -77,10 +77,8 @@ class BaselineModel(BaseModel):
             nn.Dropout(0.2)
         )
 
-        self._fcn = nn.Sequential(
-            nn.Linear(in_features=24, out_features=num_classes),
-            nn.Sigmoid()
-        )
+        self._fcn  =nn.Linear(in_features=24, out_features=num_classes)
+        #self._final_activation = nn.Sigmoid()
 
     def forward(self, x):
         x = self._conv_block1(x)
@@ -97,6 +95,7 @@ class BaselineModel(BaseModel):
         x, attention_weights = self._contextual_attention(x)
         x = self._batchNorm(x)
         x = self._fcn(x)
+        # return self._final_activation(x)
         return F.log_softmax(x, dim=1)  # log_softmax needed when used in combination with nll loss
 
 

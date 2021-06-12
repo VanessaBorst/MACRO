@@ -42,7 +42,7 @@ class ECGTrainer(BaseTrainer):
         Training logic for an epoch
 
         :param epoch: Integer, current training epoch.
-        :return: A log (as dict) that contains average loss and metrics in this epoch.
+        :return: A log (as dict) that contains average loss, netrics and confusion matrices of this epoch.
             Example: {'loss': 0.6532998728738012, 'accuracy': 0.7919082176709545, 'top_k_acc': 0.9288835054163845}
         """
         self.model.train()
@@ -52,7 +52,7 @@ class ECGTrainer(BaseTrainer):
         # Set the writer object to training mode
         self.writer.set_mode('train')
 
-        for batch_idx, (padded_records, labels, lengths, record_names) in enumerate(self.data_loader):
+        for batch_idx, (padded_records, labels, labels_one_hot, lengths, record_names) in enumerate(self.data_loader):
             data, target = padded_records.to(self.device), labels.to(self.device)
             data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)
 
@@ -133,7 +133,7 @@ class ECGTrainer(BaseTrainer):
                 self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx)
                 self.valid_metrics.update('loss', loss.item())
                 for met in self.metric_ftns:
-                    self.valid_metrics.update(met.__name__, met(output, target))
+                    self.valid_metrics.update(met.__name__, met(output, target), n=output.shape[0])
 
                 # Update the confusion matrices maintained by the ClassificationTracker
                 upd_cm = get_confusion_matrix(output=output, log_probs=True, target=target,

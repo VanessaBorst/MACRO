@@ -324,7 +324,7 @@ if __name__ == "__main__":
     src_path = "data/CinC_CPSC/test/preprocessed/no_sampling/"
     clean_meta(src_path)
 
-    # Uncomment for applying further preproccssing like normalization or padding (padding not yet implemented)
+    # Uncomment for applying further preprocessing like normalization or padding (padding not yet implemented)
     # src_path = "data/CinC_CPSC/train/preprocessed/without_sampling/"
     # normalize(src_path)
     # show(src_path + "normalized")
