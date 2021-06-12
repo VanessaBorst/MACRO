@@ -49,13 +49,13 @@ class ECGDataset(Dataset):
         # record is a df, meta a dict
         record, meta = pk.load(open(os.path.join(self._input_dir, record_name), "rb"))
         # Ensure that the record is not containing any unknown class label
-        assert all(label in self.class_labels for label in meta["classes"])
-        classes_encoded = meta["classes_encoded"]
+        assert all(label in self.class_labels for label in meta["classes_encoded"])
+        classes_one_hot = meta["classes_one_hot"]
 
         if self.transform:
             record = self.transform(record)
 
-        return record, meta["classes"], len(record.index), record_name
+        return record, meta["classes_encoded"], len(record.index), record_name
 
 
 class ECGDataset_Old(Dataset):

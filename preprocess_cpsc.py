@@ -1,5 +1,9 @@
+import csv
+import shutil
+
 import pandas as pd
 from matplotlib import pyplot as plt
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 import wfdb
 import os
@@ -9,6 +13,7 @@ from datetime import timedelta
 from scipy.io import loadmat
 import pickle as pk
 from multiprocessing import Pool
+from bidict import bidict
 
 
 def _parse_and_downsample_record(src_path, file, target_path, sampling):
@@ -49,7 +54,6 @@ def _parse_and_downsample_record(src_path, file, target_path, sampling):
         df = df.resample(sampling).mean()
         df.index = np.arange(0, df.shape[0])  # return to numbers as row index (0-#samples)
 
-
     pk.dump((df, meta), open(f"{target_path}/{file}.pk", "wb"))
 
 
@@ -60,14 +64,134 @@ def _read_records(src_path, target_path, sampling):  # 4ms = 250Hz
                              error_callback=lambda x: print(x))
         pool.close()
         pool.join()
+    print("Basic preprocessing finished for " + src_path + ".")
 
 
-def run_basic_preprocessing(src_path="data/CinC_CPSC/raw/", target_path="data/CinC_CPSC/preprocessed/", sampling=None):
-    full_target_path = f"{target_path}{sampling}" if sampling is not None else f"{target_path}without_sampling"
+def split_train_test(src_path, dest_path, test_ratio=0.2):
+    """
+    Splits the given data into train and test with the given ratio
+    Before, multi-labeled
+    """
+    file_names = []
+    for file in [f.split(".")[0] for f in sorted(os.listdir(src_path)) if f.endswith("mat")]:
+        # header = wfdb.rdheader(os.path.join(src_path, file))
+        # meta = {key.lower(): val for key, val in (h.split(": ") for h in header.comments)}
+        # labels = meta['dx'].split(',')
+        file_names.append(file)
+
+    train_files, test_files = train_test_split(file_names, test_size=test_ratio, random_state=42, shuffle=True)
+
+    # Copy the train and validation files into a dedicated folder
+    dest_path_train = os.path.join(dest_path, "train/")
+    if not os.path.exists(dest_path_train):
+        os.makedirs(dest_path_train)
+    for file_name in train_files:
+        for file_ext in [".mat", ".hea"]:
+            full_file_name = os.path.join(src_path, file_name + file_ext)
+            if os.path.isfile(full_file_name):
+                shutil.copy(full_file_name, dest_path_train)
+
+    # Copy the test files into a dedicated folder
+    dest_path_test = os.path.join(dest_path, "test/")
+    if not os.path.exists(dest_path_test):
+        os.makedirs(dest_path_test)
+    for file_name in test_files:
+        for file_ext in [".mat", ".hea"]:
+            full_file_name = os.path.join(src_path, file_name + file_ext)
+            if os.path.isfile(full_file_name):
+                shutil.copy(full_file_name, dest_path_test)
+
+    print("Split finished.")
+
+
+def run_basic_preprocessing(src_path, target_path, sampling=None):
+    full_target_path = f"{target_path}{sampling}" if sampling is not None else f"{target_path}no_sampling"
     if not os.path.exists(full_target_path):
         os.makedirs(full_target_path)
 
     _read_records(src_path, full_target_path, sampling)
+
+
+def clean_meta(path):
+    """
+        This method appends the meta information for each .pk record under the given path
+        To this end, two additional entries are added to the meta dictionary of the record
+        1) meta["classes_one_hot"]: Pandas Series containing a 1 if the class applies to the record and a 0 otherwise
+        2) meta["classes_encoded"]: List of integers encoding the classes that apply to the record
+                            (the integers are in the range between 0 and N-1, with N being the number of classes
+                            existing amongst the record under the given path)
+
+        However, before that, the order of multi-labeled records is changed to match the one of the orig CPSC dataset
+        For this purpose, the already existing meta["dx"] information is updated if needed to adapt the order
+
+        ==> The method only operates on the meta information and keeps the actual time series data unchanged
+    """
+    # Read in the REFERENCES.csv provided by the official CPSC
+    cpsc_labels = pd.read_csv("info/csv/REFERENCE_cpsc.csv").set_index("Recording")
+
+    # Get the mapping between the classes and push them in a dict
+    mapping_df= pd.read_csv("info/csv/mapping_cpsc_CinC.csv").drop(["type","abbreviation_cpsc","abbreviation_wfdb"], axis=1)
+    mapping_dict = mapping_df.set_index('id_cpsc')['id_wfdb'].to_dict()
+
+    # Reads in the encoding csv provided by CinC and converts the snomed CT code column to the row index
+    cinc_classes = pd.read_csv("info/csv/dx_classes_CinC.csv").set_index("SNOMED CT Code")
+    cinc_classes.index = cinc_classes.index.map(str)
+
+    # Creates an empty dataframe with one column per class/CT code
+    metas = pd.DataFrame(columns=cinc_classes.index)
+
+    for file in os.listdir(path):
+        if file.endswith(".pk"):
+            p = os.path.join(path, file)
+            df, meta = pk.load(open(p, "rb"))
+
+            # Read the meta information of the record and store the codes as list
+            dx = meta["dx"].split(",")
+
+            # If it is multi-label record, ensure the order matches the one of the original CPSC dataset
+            if len(dx)>1:
+                new_dx = []
+                cspc_order = cpsc_labels.loc[os.path.splitext(file)[0]].dropna().astype('int64').to_list()
+                for label in cspc_order:
+                    assert str(mapping_dict[label]) in dx
+                    new_dx.append(str(mapping_dict[label]))
+                # dx now contains the same information as before, but potentially in a changed order
+                if not dx == new_dx:
+                    dx = new_dx
+                    # Save the changed order also to the meta information of the pickle object!
+                    meta["dx"] = ','.join(dx)  # convert list to comma separated string
+                    pk.dump((df, meta), open(str(p), "wb"))
+
+            for d in dx:
+                # Appends a row in the new dataframe with the record path as row index
+                # Sets a 1 in each CT code column that is class of the record
+                metas.loc[p, d] = 1
+
+    # Deletes all columns, i.e. CT codes, that are not present in none of the records
+    # Hence, only the codes, which are the class for at least one record, are maintained
+    metas = metas.dropna(axis=1, how="all")
+    # Instead of the long codes, the classes are just numbered from 0 to N-1 but the mapping is stored
+    keys = list(range(len(metas.columns)))
+    values = metas.columns.to_list()
+    own_wfdb_encoding = bidict(dict(zip(keys, values)))
+    pd.DataFrame.from_dict(data=own_wfdb_encoding, orient='index', columns=['label']).reset_index(level=0).\
+        to_csv('info/csv/own_encoding_CinC.csv', index=False)
+    metas.columns = list(range(len(metas.columns)))
+
+    # Iterate through the records (one row in metas per record) and update its meta information
+    for p, classes in metas.iterrows():
+        df, meta = pk.load(open(str(p), "rb"))
+        # Appends to additional entries to the dict
+        # The first is a Series containing a 1 if the class applies to the record and a 0 otherwise
+        # The second is list of integers encoding the classes that apply to the record
+        meta["classes_one_hot"] = classes.replace(np.nan, 0)
+        meta["classes_encoded"] = [own_wfdb_encoding.inverse[label] for label in meta["dx"].split(",")]
+        # The following potentially changes the order but can be used for integrity check
+        assert set(meta["classes_encoded"]) == set(classes.dropna().keys().to_list()), \
+            "Integrity check failed - check meta data cleaning during preprocessing"
+        pk.dump((df, meta), open(str(p), "wb"))
+
+    print("Finished meta data cleaning for " + src_path)
 
 
 def min_max_scaling(path):
@@ -179,68 +303,35 @@ def show(path):
             pass
 
 
-def clean_meta(path):
-    """
-        This method appends the meta information for each .pk record under the given path
-        To this end, two additional entries are added to the meta dictionary of the record
-        1) meta["classes_encoded"]: Pandas Series containing a 1 if the class applies to the record and a 0 otherwise
-        2) meta["classes"]: List of integers encoding the classes that apply to the record
-                            (the integers are in the range between 0 and N-1, with N being the number of classes
-                            existing amongst the record under the given path)
-
-        ==> The method only operates on the meta information and keeps the actual data unchanged
-    """
-
-    # Reads in the csv and converts the snomed CT code column to row index
-    classes = pd.read_csv("data/CinC_CPSC/dx_classes.csv").set_index("SNOMED CT Code")
-
-    #Creates an empty dataframe with one column per class/CT code
-    metas = pd.DataFrame(columns=classes.index)
-
-    for file in os.listdir(path):
-        if file.endswith(".pk"):
-            p = os.path.join(path, file)
-            df, meta = pk.load(open(p, "rb"))
-
-            # Read the meta information of the record and store the codes as list
-            dx = meta["dx"].split(",")
-            for d in dx:
-                # Appends a row in the new dataframe with the record path as row index
-                # Sets a 1 in each CT code column that is class of the record
-                metas.loc[p, d] = 1
-
-    # Deletes all columns, i.e. CT codes, that are not present in none of the records
-    # Hence, only the codes, which are the class for at least one record, are maintained
-    metas = metas.dropna(axis=1, how="all")
-    # Instead of the long codes, the classes are just numbered from 0 to N-1
-    metas.columns = list(range(len(metas.columns)))
-
-    # Iterate through the records (one row in metas per record) and update its meta information
-    for p, classes in metas.iterrows():
-        df, meta = pk.load(open(str(p), "rb"))
-        # Appends to additional entries to the dict
-        # The first is a Series containing a 1 if the class applies to the record and a 0 otherwise
-        # The second is list of integers encoding the classes that apply to the record
-        meta["classes_encoded"] = classes.replace(np.nan, 0)
-        meta["classes"] = classes.dropna().keys().to_list()
-        pk.dump((df, meta), open(str(p), "wb"))
-
-
 if __name__ == "__main__":
+    # src_path = "data/CinC_CPSC/raw/"
+    # dest_path = "data/CinC_CPSC/"
+    # split_train_test(src_path,dest_path, test_ratio=0.2)
+
     # # Uncomment for applying basic preprocessing
     # # Reads the .mat files, possibly downsamples the data, extracts meta data and writes everything to pickle dumps
-    # src_path = "data/CinC_CPSC/raw/"
-    # target_path = "data/CinC_CPSC/preprocessed/"
+    # src_path = "data/CinC_CPSC/train"
+    # target_path = "data/CinC_CPSC/train/preprocessed/"
+    # run_basic_preprocessing(src_path, target_path, sampling=None)
+    # src_path = "data/CinC_CPSC/test"
+    # target_path = "data/CinC_CPSC/test/preprocessed/"
     # run_basic_preprocessing(src_path, target_path, sampling=None)
 
-    # Uncomment to Extend the meta information by encoded classes
-    src_path = "data/CinC_CPSC/preprocessed/without_sampling/"
+    # Uncomment to extend the meta information by encoded classes
+    # More importantly, deal with multi-label-case to fix the order of labels to match the one of the original CPSC
+    src_path = "data/CinC_CPSC/train/preprocessed/no_sampling/"
+    clean_meta(src_path)
+    src_path = "data/CinC_CPSC/test/preprocessed/no_sampling/"
     clean_meta(src_path)
 
     # Uncomment for applying further preproccssing like normalization or padding (padding not yet implemented)
-    src_path = "data/CinC_CPSC/preprocessed/without_sampling/"
+    # src_path = "data/CinC_CPSC/train/preprocessed/without_sampling/"
     # normalize(src_path)
     # show(src_path + "normalized")
-
+    # min_max_scaling(path=src_path)
+    # show(src_path + "minmax")
+    # src_path = "data/CinC_CPSC/test/preprocessed/without_sampling/"
+    # normalize(src_path)
+    # show(src_path + "normalized")
     # min_max_scaling(path=src_path)
     # show(src_path + "minmax")

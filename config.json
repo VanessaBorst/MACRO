@@ -12,7 +12,7 @@
       "data_dir": "data/CinC_CPSC/preprocessed/without_sampling/",
       "batch_size": 2,
       "shuffle": true,
-      "validation_split": 0.1,
+      "validation_split": 0.25,
       "num_workers": 1,
       "seq_len": 72000
     },
@@ -26,7 +26,7 @@
       "amsgrad": true
     }
   },
-  "loss": "nll_loss",
+  "loss": "cross_entropy_loss",
   "metrics": [
     "old_accuracy",
     "old_top_k_acc"

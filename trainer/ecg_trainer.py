@@ -7,7 +7,7 @@ from utils import inf_loop
 from utils.tracker import MetricTracker, ClassificationTracker
 
 
-class Trainer(BaseTrainer):
+class ECGTrainer(BaseTrainer):
     """
     Trainer class
     """
