@@ -1,0 +1,28 @@
+WFDB (Dx, overall_count, first_label_count, name)                ====> CPSC (Name, Label)
+--------------------------------------------------------------------------------------------------------------------
+426783006, 918   , 918,     sinus rhythm (SNR)                   ====> Normal                                       , 1
+164889003, 1221  , 1221,    atrial fibrillation (AF)             ====> Atrial fibrillation (AF)                     , 2
+270492004, 722   , 722,     1st degree av block (IAVB)           ====> First-degree atrioventricular block (I-AVB)  , 3
+164909002, 236   , 199,     left bundle branch block (LBBB)      ====> Left bundle branch block (LBBB)              , 4
+59118001,  1857  , 1675,    right bundle branch block (RBBB)     ====> Right bundle branch block (RBBB)             , 5
+284470004, 616   , 544,     premature atrial contraction (PAC)   ====> Premature atrial contraction (PAC)           , 6
+164884008, 700   , 627,     ventricular ectopics (VEB)           ====> Premature ventricular contraction (PVC)???   , 7
+429622005, 869   , 786,     st depression (STD)                  ====> ST-segment depression (STD)                  , 8
+164931005, 220   , 185,     st elevation (STE)                   ====> ST-segment elevated (STE)                    , 9
+
+
+Data profile for the training set according to the ‘Frist label’ annotations.
+Type	                                    #recording	                Time length (s)
+                                                                Mean	SD	    Min	    Median	Max
+-----------------------------------------------------------------------------------------------
+Normal	                                    918	                15.43	7.61	10.00	13.00	60.00
+Atrial fibrillation (AF)	                1098	            15.01	8.39	9.00	11.00	60.00
+First-degree atrioventricular block (I-AVB)	704	                14.32	7.21	10.00	11.27	60.00
+Left bundle branch block (LBBB)	            207	                14.92	8.09	9.00	12.00	60.00
+Right bundle branch block (RBBB)	        1695	            14.42	7.60	10.00	11.19	60.00
+Premature atrial contraction (PAC)	        556	                19.46	12.36	9.00	14.00	60.00
+Premature ventricular contraction (PVC)	    672	                20.21	12.85	6.00	15.00	60.00
+ST-segment depression (STD)	                825	                15.13	6.82	8.00	12.78	60.00
+ST-segment elevated (STE)	                202	                17.15	10.72	10.00	11.89	60.00
+-----------------------------------------------------------------------------------------------
+Total	                                    6877	            15.79	9.04	6.00	12.00	60.00
