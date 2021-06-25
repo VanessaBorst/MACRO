@@ -2,6 +2,17 @@ TODO:
 
 - Multi-Label Training und Evaluation umsetzen
 
+- Verschiendene Losses Testen, siehe
+    - https://towardsdatascience.com/handling-class-imbalanced-data-using-a-loss-specifically-made-for-it-6e58fd65ffab
+    - https://pytorch.org/docs/stable/generated/torch.nn.MultiLabelSoftMarginLoss.html#torch.nn.MultiLabelSoftMarginLoss
+    - Hamming loss (minimiert die Hamming Distance): https://scikit-learn.org/stable/modules/model_evaluation.html#hamming-loss
+    - Class Balanced Loss: https://github.com/vandit15/Class-balanced-loss-pytorch/blob/master/class_balanced_loss.py
+
+- Hyperparameter-Tuning: Frameworks/Libs finden und für eine entscheiden
+    - Ray Tune: https://docs.ray.io/en/master/tune/index.html
+    - Optuna: https://github.com/optuna/optuna
+    - Hyperopt: https://github.com/hyperopt/hyperopt
+
 - Mehr Metriken wegspeichern, nicht nur Loss und die Accuracy:
     * So viele wie möglich  -> Acc, Precision, Recall, F1, AUC/ROC, 4 Felder für jede Klasse (FP, FN, TP, TN)
                             -> Weitere, eigene Ideen: PR-Curve
@@ -32,8 +43,36 @@ TODO:
 
 
 NEXT STEPS:
-- Logging verstehen
+- Logging verstehen: DONE
 - Metriken erweitern
 - Tensorboard verstehen und ggf erweitern
 - Verwaltung, Sichern und Laden verschiedener Architekturen
-- DataLoader und Dataset für neues Preprocessing anpassen
+- DataLoader und Dataset für neues Preprocessing anpassen: DONE
+
+
+
+Fehlersuche:
+tensoren detachen und plotten (das, was das Netz bekommt im Forward)
+
+BiRNN + Attention rausnehmen, evtl Attention als Self-Attention
+
+
+Daten nach dem CNN - noch viele 0er an den Rändern?
+Evtl Probleme mit RNN, eugt nur wenn nicht richitg initialisiert
+
+
+Attention nochmal anschauen: Shapes der Attentionweights
+
+Attentionmatrix in Heatmap plotten - sollte nicht gleichverteilt sein
+
+
+Cardiologist level arrythmia detection with CNNs (Andrew Ng)
+
+Daten zwischen 0 und 1 skalieren,
+Daten auf Outlier filtern, sonst wird Skalierung zerhauen
+-> Robert Git Repo
+
+
+Shell Skript und Anleitung wie man Netz zum Laufen bekommt
+(requirements.txt)
+- Daten laden (aber kein aufäwndiges Skript), am besten einfach in die Nextcloud und dann einen Link, von wo man sie kopieren kann

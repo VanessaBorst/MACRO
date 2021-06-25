@@ -68,3 +68,17 @@ def plot_record_from_df(record_name, df_record, preprocesed=False):
         if axis_0 == 0:
             axis_1 += 1
     plt.show()
+
+
+def plot_record_from_np_array(record_data, num_rows=6, num_cols=2):
+    fig, axs = plt.subplots(num_rows, num_cols, figsize=(15, 15), constrained_layout=True)
+    axis_0 = 0
+    axis_1 = 0
+    for lead_idx in range(0, len(record_data)):
+        lead_data = record_data[lead_idx]
+        axs[axis_0, axis_1].plot(lead_data)
+        axs[axis_0, axis_1].set_title("Lead-ID: " + str(lead_idx))
+        axis_0 = (axis_0 + 1) % 6
+        if axis_0 == 0:
+            axis_1 += 1
+    plt.show()

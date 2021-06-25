@@ -4,6 +4,8 @@ from base import BaseModel
 from layers.contextualAttention import ContextualAttention
 from torchinfo import summary
 
+from utils import plot_record_from_np_array
+
 
 class BaselineModel(BaseModel):
     def __init__(self, num_classes=9, num_cnn_blocks=5):
@@ -78,14 +80,21 @@ class BaselineModel(BaseModel):
         )
 
         self._fcn  =nn.Linear(in_features=24, out_features=num_classes)
-        #self._final_activation = nn.Sigmoid()
+        self._final_activation = nn.Sigmoid()
 
     def forward(self, x):
+        # Plot the first sample from the batch
+        # plot_record_from_np_array(x[1].detach().numpy())
         x = self._conv_block1(x)
+        # plot_record_from_np_array(x[1].detach().numpy())
         x = self._conv_block2(x)
+        # plot_record_from_np_array(x[1].detach().numpy())
         x = self._conv_block3(x)
+        # plot_record_from_np_array(x[1].detach().numpy())
         x = self._conv_block4(x)
+        # plot_record_from_np_array(x[1].detach().numpy())
         x = self._conv_block5(x)
+        # plot_record_from_np_array(x[1].detach().numpy())
         # Do not use view() or reshape() to swap dimensions of tensors!
         # view() and reshape() nevertheless have their purpose, for example, to flatten tensors.
         # See:https://discuss.pytorch.org/t/for-beginners-do-not-use-view-or-reshape-to-swap-dimensions-of-tensors/75524
@@ -95,8 +104,8 @@ class BaselineModel(BaseModel):
         x, attention_weights = self._contextual_attention(x)
         x = self._batchNorm(x)
         x = self._fcn(x)
-        # return self._final_activation(x)
-        return F.log_softmax(x, dim=1)  # log_softmax needed when used in combination with nll loss
+        return self._final_activation(x), attention_weights
+        # return F.log_softmax(x, dim=1)  # log_softmax needed when used in combination with nll loss
 
 
 if __name__ == "__main__":

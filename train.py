@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import data_loader.data_loaders as module_data_loader
 import model.loss as module_loss
-import model.metric as module_metric
+import model.multi_label_metrics as module_metric
 import model.baseline_model as module_arch
 from parse_config import ConfigParser
 from trainer.ecg_trainer import ECGTrainer
@@ -27,7 +27,7 @@ def main(config):
 
     # setup data_loader instances
     data_loader = config.init_obj('data_loader', module_data_loader,
-                                  single_batch=config['trainer'].get('overfit_single_batch', False))
+                                  single_batch=config['data_loader'].get('overfit_single_batch', False))
     valid_data_loader = data_loader.split_validation()
 
     # build model architecture, then print to console
@@ -44,21 +44,28 @@ def main(config):
     # Important: The method config['loss'] must exist in the loss module (<module 'model.loss' >)
     # Equivalently, all metrics specified in the context must exist in the metrics modul
     criterion = getattr(module_loss, config['loss'])
-    metrics = [getattr(module_metric, met) for met in config['metrics']]
+    metrics_iter = [getattr(module_metric, met) for met in config['metrics']['per_iteration']]
+    metrics_epoch = [getattr(module_metric, met) for met in config['metrics']['per_epoch']]
+    metrics_epoch_class_wise = [getattr(module_metric, met) for met in config['metrics']['per_epoch_class_wise']]
 
     # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
     optimizer = config.init_obj('optimizer', torch.optim, trainable_params)
     lr_scheduler = config.init_obj('lr_scheduler', torch.optim.lr_scheduler, optimizer)
 
-    trainer = ECGTrainer(model, criterion, metrics, optimizer,
-                      config=config,
-                      device=device,
-                      data_loader=data_loader,
-                      valid_data_loader=valid_data_loader,
-                      lr_scheduler=lr_scheduler)
+    trainer = ECGTrainer(model=model,
+                         criterion=criterion,
+                         metric_ftns_iter=metrics_iter,
+                         metric_ftns_epoch=metrics_epoch,
+                         metric_ftns_epoch_class_wise=metrics_epoch_class_wise,
+                         optimizer=optimizer,
+                         config=config,
+                         device=device,
+                         data_loader=data_loader,
+                         valid_data_loader=valid_data_loader,
+                         lr_scheduler=lr_scheduler)
 
-    trainer.train()
+    log_best = trainer.train()
 
 
 if __name__ == '__main__':

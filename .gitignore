@@ -4,6 +4,7 @@
 data/
 logs/
 saved/
+saved_old/
 .idea/
 /playground/plots/
 
@@ -220,5 +221,3 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
-
-

@@ -7,9 +7,12 @@
         "datetime": {"format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"}
     },
     "filters": {
-        "skipInfosForConsole": {
-            "()": "logger.filters.FilterConsoleInfo",
+        "skipMultiLineInfosForConsole": {
+            "()": "logger.filters.FilterMultiLineInfo",
             "max_line_length": 1
+        },
+        "skipCMInfosForConsole": {
+            "()": "logger.filters.FilterConfusionMatricesInfo"
         }
     },
     "handlers": {
@@ -18,7 +21,7 @@
             "level": "DEBUG", 
             "formatter": "simple", 
             "stream": "ext://sys.stdout",
-            "filters": ["skipInfosForConsole"]
+            "filters": ["skipCMInfosForConsole"]
             }, 
         "info_file_handler": {
             "class": "logging.handlers.RotatingFileHandler", 

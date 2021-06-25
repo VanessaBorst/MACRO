@@ -14,6 +14,8 @@ class BaseTrainer:
         # create a logger with name "trainer" and the verbosity specified in the config.json
         self.logger = config.get_logger('trainer', config['trainer']['verbosity'])
 
+        self.multi_label_training = config['trainer']['multi_label_training']
+
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
@@ -22,7 +24,7 @@ class BaseTrainer:
         self.epochs = cfg_trainer['epochs']
         self.save_period = cfg_trainer['save_period']
         self.monitor = cfg_trainer.get('monitor', 'off')   # 'off' is returned if the key doesn't exist in the dict
-        self.overfit_single_batch = cfg_trainer.get('overfit_single_batch', False)
+        self.overfit_single_batch = config['data_loader'].get('overfit_single_batch', False)
 
         # configuration to monitor model performance and save best
         if self.monitor == 'off':
@@ -62,23 +64,17 @@ class BaseTrainer:
         """
         not_improved_count = 0
         for epoch in range(self.start_epoch, self.epochs + 1):
-            result = self._train_epoch(epoch)
-
-            # save logged informations into log dict
-            log = {'epoch': epoch}
-            log.update(result)
-
-            # print logged information to the screen and store them to log files if handlers are specified
-            for key, value in log.items():
-                self.logger.info('    {:15s}: {}'.format(str(key), value))
+            # train_log is a df
+            train_log = self._train_epoch(epoch)
+            log_mean = train_log['mean']
 
             # evaluate model performance according to configured metric, save best checkpoint as model_best
             best = False
             if self.mnt_mode != 'off':
                 try:
                     # check whether model performance improved or not, according to specified metric(mnt_metric)
-                    improved = (self.mnt_mode == 'min' and log[self.mnt_metric] <= self.mnt_best) or \
-                               (self.mnt_mode == 'max' and log[self.mnt_metric] >= self.mnt_best)
+                    improved = (self.mnt_mode == 'min' and log_mean[self.mnt_metric] <= self.mnt_best) or \
+                               (self.mnt_mode == 'max' and log_mean[self.mnt_metric] >= self.mnt_best)
                 except KeyError:
                     self.logger.warning("Warning: Metric '{}' is not found. "
                                         "Model performance monitoring is disabled.".format(self.mnt_metric))
@@ -86,7 +82,8 @@ class BaseTrainer:
                     improved = False
 
                 if improved:
-                    self.mnt_best = log[self.mnt_metric]
+                    self.mnt_best = log_mean[self.mnt_metric]
+                    log_best = log_mean
                     not_improved_count = 0
                     best = True
                 else:
@@ -98,7 +95,10 @@ class BaseTrainer:
                     break
 
             if epoch % self.save_period == 0:
+                self.logger.info("Best {}: {:.6f}".format(self.mnt_metric, self.mnt_best))
                 self._save_checkpoint(epoch, save_best=best)
+
+        return log_best
 
     def _save_checkpoint(self, epoch, save_best=False):
         """
