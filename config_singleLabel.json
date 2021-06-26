@@ -1,0 +1,72 @@
+{
+  "_comment": "All paths need to be defined relative to the root directory. If the project is moved to another location, the root_directory method in util.py needs to be adapted ",
+  "name": "CPSC_BaselineModel",
+  "n_gpu": 1,
+  "arch": {
+    "type": "BaselineModelWoRnnWoAttention",
+    "args": {}
+  },
+  "data_loader": {
+    "type": "ECGDataLoader",
+    "args": {
+      "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/minmax",
+      "batch_size": 8,
+      "shuffle": true,
+      "validation_split": 0.25,
+      "num_workers": 1,
+      "seq_len": 72000
+    },
+    "overfit_single_batch": false,
+    "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/minmax"
+  },
+  "optimizer": {
+    "type": "Adam",
+    "args": {
+      "lr": 0.0001,
+      "weight_decay": 0,
+      "amsgrad": true
+    }
+  },
+  "loss": "BCE",
+  "metrics": {
+    "per_iteration": [
+      "subset_accuracy"
+    ],
+    "per_epoch": [
+      "cpsc_score_adapted",
+      "mirco_f1",
+      "macro_f1",
+      "weighted_f1",
+      "macro_roc_auc_ovo",
+      "weighted_roc_auc_ovo",
+      "macro_roc_auc_ovr",
+      "weighted_roc_auc_ovr"
+    ],
+    "per_epoch_class_wise": [
+      "class_wise_f1",
+      "class_wise_roc_auc_ovr",
+      "class_wise_roc_auc_ovo"
+    ],
+    "additional_metrics_args": {
+      "sigmoid_probs": true,
+      "log_probs": false
+    }
+  },
+  "lr_scheduler": {
+    "type": "StepLR",
+    "args": {
+      "step_size": 50,
+      "gamma": 0.1
+    }
+  },
+  "trainer": {
+    "epochs": 500,
+    "save_dir": "saved/",
+    "save_period": 1,
+    "verbosity": 2,
+    "monitor": "min val_loss",
+    "early_stop": 10,
+    "multi_label_training": true,
+    "tensorboard": true
+  }
+}
