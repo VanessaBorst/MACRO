@@ -249,8 +249,8 @@ def min_max_scaling(path):
                 valid = False
                 invalid_files.append(file)
 
-                df.loc[:, col].plot()
-                plt.show()
+                # df.loc[:, col].plot()
+                # plt.show()
 
                 break
 
@@ -317,21 +317,22 @@ if __name__ == "__main__":
     # target_path = "data/CinC_CPSC/test/preprocessed/"
     # run_basic_preprocessing(src_path, target_path, sampling=None)
 
-    # Uncomment to extend the meta information by encoded classes
-    # More importantly, deal with multi-label-case to fix the order of labels to match the one of the original CPSC
-    src_path = "data/CinC_CPSC/train/preprocessed/no_sampling/"
-    clean_meta(src_path)
-    src_path = "data/CinC_CPSC/test/preprocessed/no_sampling/"
-    clean_meta(src_path)
+    # # Uncomment to extend the meta information by encoded classes
+    # # More importantly, deal with multi-label-case to fix the order of labels to match the one of the original CPSC
+    # src_path = "data/CinC_CPSC/train/preprocessed/no_sampling/"
+    # clean_meta(src_path)
+    # src_path = "data/CinC_CPSC/test/preprocessed/no_sampling/"
+    # clean_meta(src_path)
 
     # Uncomment for applying further preprocessing like normalization or padding (padding not yet implemented)
-    # src_path = "data/CinC_CPSC/train/preprocessed/without_sampling/"
-    # normalize(src_path)
-    # show(src_path + "normalized")
-    # min_max_scaling(path=src_path)
-    # show(src_path + "minmax")
-    # src_path = "data/CinC_CPSC/test/preprocessed/without_sampling/"
-    # normalize(src_path)
-    # show(src_path + "normalized")
-    # min_max_scaling(path=src_path)
-    # show(src_path + "minmax")
+    src_path = "data/CinC_CPSC/train/preprocessed/no_sampling/"
+    #normalize(src_path)
+    #show(src_path + "normalized")
+    min_max_scaling(path=src_path)
+    show(src_path + "minmax")
+    src_path = "data/CinC_CPSC/test/preprocessed/no_sampling/"
+    #normalize(src_path)
+    #show(src_path + "normalized")
+    min_max_scaling(path=src_path)
+    show(src_path + "minmax")
+    print("Finished")

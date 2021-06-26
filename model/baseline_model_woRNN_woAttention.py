@@ -7,7 +7,7 @@ from torchinfo import summary
 from utils import plot_record_from_np_array
 
 
-class BaselineModel(BaseModel):
+class BaselineModelWoRnnWoAttention(BaseModel):
     def __init__(self, num_classes=9, num_cnn_blocks=5):
         super().__init__()
         self._conv_block1 = nn.Sequential(
@@ -59,27 +59,14 @@ class BaselineModel(BaseModel):
             nn.Dropout(0.2)
         )
 
-        # Without last option the input would have to be (seq_len, batch, input_size)
-        # With batch_first it can be of the shape (batch, seq_len, input/feature_size)
-        # input_size = feature_size per timestamp outputted by the CNNs
-        # hidden_size = gru_hidden_dim
-        self._biGRU = nn.GRU(input_size=12, hidden_size=12, num_layers=1, bidirectional=True, batch_first=True)
-
-        self._biGru_activation_do = nn.Sequential(
-            nn.LeakyReLU(0.3),
-            nn.Dropout(0.2)
-        )
-
-        self._contextual_attention = ContextualAttention(gru_dimension=12, attention_dimension=24)
-
         self._batchNorm = nn.Sequential(
-            # The batch normalization layer has 24*2=48 trainable and 24*2=48 non-trainable parameters
-            nn.BatchNorm1d(24),
+            # The batch normalization layer has 12*2=24 trainable and 12*2=24 non-trainable parameters
+            nn.BatchNorm1d(12),
             nn.LeakyReLU(0.3),
             nn.Dropout(0.2)
         )
 
-        self._fcn  =nn.Linear(in_features=24, out_features=num_classes)
+        self._fcn = nn.Linear(in_features=2250*12, out_features=num_classes)
         self._final_activation = nn.Sigmoid()
 
     def forward(self, x):
@@ -95,19 +82,13 @@ class BaselineModel(BaseModel):
         # plot_record_from_np_array(x[1].detach().numpy())
         x = self._conv_block5(x)
         # plot_record_from_np_array(x[1].detach().numpy())
-        # Do not use view() or reshape() to swap dimensions of tensors!
-        # view() and reshape() nevertheless have their purpose, for example, to flatten tensors.
-        # See:https://discuss.pytorch.org/t/for-beginners-do-not-use-view-or-reshape-to-swap-dimensions-of-tensors/75524
-        x = x.permute(0, 2, 1)  # switch seq_length and feature_size for the BiGRU
-        x, last_hidden_state = self._biGRU(x)
-        x = self._biGru_activation_do(x)
-        x, attention_weights = self._contextual_attention(x)
+        # should be the same as x.flatten(start_dim=1)
         x = self._batchNorm(x)
+        x = x.reshape(x.size(0), -1)
         x = self._fcn(x)
-        return self._final_activation(x), attention_weights
-        # return F.log_softmax(x, dim=1)  # log_softmax needed when used in combination with nll loss
+        return self._final_activation(x)
 
 
 if __name__ == "__main__":
-    model = BaselineModel()
+    model = BaselineModelWoRnnWoAttention()
     summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "num_params"])

@@ -1,17 +1,21 @@
+import torch
 import torch.nn.functional as F
-from torch.nn import BCELoss, BCEWithLogitsLoss
+from torch.nn import BCELoss, BCEWithLogitsLoss, MultiLabelSoftMarginLoss
 
 
 # ------------------------- Multi-Label Classification Loss Function -------------------------
-def balanced_BCE(output, target, class_weights=None):
+def balanced_BCE(output, target, class_weights):
     # TODO set class weights correctly, e.g. weight=class_weight[target.long()]
-    # loss = BCELoss(weight=class_weight[target.long()])
-    loss = BCELoss(weight=class_weights)
+    loss = BCELoss(weight=torch.Tensor(class_weights))
+    return loss(output, target.float())
+
+
+def multi_label_soft_margin(output, target, class_weights):
+    loss = MultiLabelSoftMarginLoss(weight=torch.Tensor(class_weights))
     return loss(output, target)
 
 
-def BCE(output, target, class_weights=None):
-    # loss = BCELoss(weight=class_weight[target.long()])
+def BCE(output, target):
     loss = BCELoss()
     return loss(output, target.float())
 

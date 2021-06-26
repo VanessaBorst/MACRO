@@ -4,8 +4,6 @@ import torch
 import numpy as np
 import data_loader.data_loaders as module_data_loader
 import model.loss as module_loss
-import model.multi_label_metrics as module_metric
-import model.baseline_model as module_arch
 from parse_config import ConfigParser
 from trainer.ecg_trainer import ECGTrainer
 from utils import prepare_device
@@ -22,6 +20,20 @@ np.random.seed(SEED)
 
 
 def main(config):
+
+    # Conditional inputs depending on the config
+    if config['arch']['type']=='BaselineModelWoRnnWoAttentionSingleLabel':
+        import model.baseline_model_woRNN_woAttention_singleLabel as module_arch
+    elif config['arch']['type']=='BaselineModelWoRnnWoAttention':
+        import model.baseline_model_woRNN_woAttention as module_arch
+    else:
+        import model.baseline_model as module_arch
+
+    if config['trainer']['multi_label_training']:
+        import model.multi_label_metrics as module_metric
+    else:
+        import model.single_label_metrics as module_metric
+
     # config is of type parse_config.ConfigParser
     logger = config.get_logger('train')
 
@@ -51,7 +63,10 @@ def main(config):
     # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
     optimizer = config.init_obj('optimizer', torch.optim, trainable_params)
-    lr_scheduler = config.init_obj('lr_scheduler', torch.optim.lr_scheduler, optimizer)
+    if config['lr_scheduler']['active']:
+        lr_scheduler = config.init_obj('lr_scheduler', torch.optim.lr_scheduler, optimizer)
+    else:
+        lr_scheduler = None
 
     trainer = ECGTrainer(model=model,
                          criterion=criterion,

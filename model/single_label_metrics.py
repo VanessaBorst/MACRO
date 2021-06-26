@@ -87,7 +87,7 @@ def _roc_auc(output, target, log_probs, labels, average, multi_class_cfg, ):
         return roc_auc_score(y_true=target, y_score=pred, labels=labels, average=average, multi_class=multi_class_cfg)
 
 
-def accuracy(output, log_probs, target):
+def accuracy(output, target, log_probs):
     """
     Calculates the (TOP-1) accuracy for the multiclass case
 
@@ -110,7 +110,7 @@ def accuracy(output, log_probs, target):
         return accuracy_score(y_true=target, y_pred=pred)
 
 
-def balanced_accuracy(output, log_probs, target):
+def balanced_accuracy(output, target, log_probs):
     """
     Compute the balanced accuracy.
 
@@ -192,7 +192,6 @@ def weighted_roc_auc_ovr(output, target, log_probs, labels):
     """See documentation for _roc_auc """
     return _roc_auc(output, target, log_probs, labels, "weighted", "ovr")
 
-
 def overall_confusion_matrix(output, target, log_probs, labels):
     """
         Creates a num_labels x num_labels sized confusion matrix whose i-th row and j-th column entry indicates
@@ -236,6 +235,94 @@ def class_wise_confusion_matrices_single_label(output, target, log_probs, labels
         df_class_wise_cms = [pd.DataFrame(class_wise_cms[idx]).astype('int64').rename_axis(labels[idx], axis=1)
                              for idx in range(0, len(class_wise_cms))]
         return df_class_wise_cms
+
+
+def cpsc_score_adapted(output, target, log_probs):
+    '''
+    cspc2018_challenge score
+    Written by:  Xingyao Wang, Feifei Liu, Chengyu Liu
+                 School of Instrument Science and Engineering
+                 Southeast University, China
+                 chengyu@seu.edu.cns
+    Adapted by: Vanessa Borst
+    Output and Target are no longer csv file paths but arrays of size ()
+    '''
+
+    '''
+    Score the prediction answers by comparing answers.csv and REFERENCE.csv in validation_set folder,
+    The scoring uses a F1 measure, which is an average of the nine F1 values from each classification
+    type. The specific score rules will be found on http://www.icbeb.org/Challenge.html.
+    Matrix A follows the format as:
+                                         Predicted
+                          Normal  AF  I-AVB  LBBB  RBBB  PAC  PVC  STD  STE
+                   Normal  N11   N12   N13   N14   N15   N16  N17  N18  N19
+                   AF      N21   N22   N23   N24   N25   N26  N27  N28  N29
+                   I-AVB   N31   N32   N33   N34   N35   N36  N37  N38  N39
+                   LBBB    N41   N42   N43   N44   N45   N46  N47  N48  N49
+    Reference      RBBB    N51   N52   N53   N54   N55   N56  N57  N58  N59
+                   PAC     N61   N62   N63   N64   N65   N66  N67  N68  N69
+                   PVC     N71   N72   N73   N74   N75   N76  N77  N78  N79
+                   STD     N81   N82   N83   N84   N85   N86  N87  N88  N89
+                   STE     N91   N92   N93   N94   N95   N96  N97  N98  N99
+
+    For each of the nine types, F1 is defined as:
+    Normal: F11=2*N11/(N1x+Nx1) AF: F12=2*N22/(N2x+Nx2) I-AVB: F13=2*N33/(N3x+Nx3) LBBB: F14=2*N44/(N4x+Nx4) RBBB: F15=2*N55/(N5x+Nx5)
+    PAC: F16=2*N66/(N6x+Nx6)    PVC: F17=2*N77/(N7x+Nx7)    STD: F18=2*N88/(N8x+Nx8)    STE: F19=2*N99/(N9x+Nx9)
+
+    The final challenge score is defined as:
+    F1 = (F11+F12+F13+F14+F15+F16+F17+F18+F19)/9
+
+    In addition, we also calculate the F1 measures for each of the four sub-abnormal types:
+                AF: Faf=2*N22/(N2x+Nx2)                         Block: Fblock=2*(N33+N44+N55)/(N3x+Nx3+N4x+Nx4+N5x+Nx5)
+    Premature contraction: Fpc=2*(N66+N77)/(N6x+Nx6+N7x+Nx7)    ST-segment change: Fst=2*(N88+N99)/(N8x+Nx8+N9x+Nx9)
+
+    The static of predicted answers and the final score are saved to score.txt in local path.
+    '''
+    with torch.no_grad():
+        # ndarray of size (sample_num, )
+        answers = _convert_logprob_to_prediction(output).numpy() if log_probs else output.numpy()
+        # list of sample_num ndarrays of size (1, ) or (2, ) or (3,)
+        reference = [np.nonzero(sample_vec == 1)[0] for sample_vec in target.numpy()]
+
+        assert len(answers) == len(reference), "Answers and References should have equal length"
+
+        A = np.zeros((9, 9), dtype=np.float)
+
+        for sample_idx in range(0, len(answers)):
+            pred_class = answers[sample_idx]
+            reference_classes = reference[sample_idx]
+            if pred_class in reference_classes:
+                A[pred_class][pred_class] += 1
+            else:
+                A[reference_classes[0]][pred_class] += 1
+
+        F11 = 2 * A[0][0] / (np.sum(A[0, :]) + np.sum(A[:, 0]))
+        F12 = 2 * A[1][1] / (np.sum(A[1, :]) + np.sum(A[:, 1]))
+        F13 = 2 * A[2][2] / (np.sum(A[2, :]) + np.sum(A[:, 2]))
+        F14 = 2 * A[3][3] / (np.sum(A[3, :]) + np.sum(A[:, 3]))
+        F15 = 2 * A[4][4] / (np.sum(A[4, :]) + np.sum(A[:, 4]))
+        F16 = 2 * A[5][5] / (np.sum(A[5, :]) + np.sum(A[:, 5]))
+        F17 = 2 * A[6][6] / (np.sum(A[6, :]) + np.sum(A[:, 6]))
+        F18 = 2 * A[7][7] / (np.sum(A[7, :]) + np.sum(A[:, 7]))
+        F19 = 2 * A[8][8] / (np.sum(A[8, :]) + np.sum(A[:, 8]))
+
+        F1 = (F11 + F12 + F13 + F14 + F15 + F16 + F17 + F18 + F19) / 9
+
+        ## Following is calculating scores for 4 types: AF, Block, Premature contraction, ST-segment change.
+        # TODO adapt the indices of the formulas
+
+        # # Class AF -> 164889003 -> Index 1
+        # Faf = 2 * A[1][1] / (np.sum(A[1, :]) + np.sum(A[:, 1]))
+        # # Classes I-AVB, LBBB, RBBB -> 270492004, 164909002, 59118001 -> Indices 0, 2, 4
+        # Fblock = 2 * (A[2][2] + A[3][3] + A[4][4]) / (np.sum(A[2:5, :]) + np.sum(A[:, 2:5]))
+        # # Classes PAC, PVC -> 284470004, 164884008 -> Indices 3, 8
+        # Fpc = 2 * (A[5][5] + A[6][6]) / (np.sum(A[5:7, :]) + np.sum(A[:, 5:7]))
+        # # Classes STD, STE -> 429622005, 164931005 -> Indices 6, 7
+        # Fst = 2 * (A[7][7] + A[8][8]) / (np.sum(A[7:9, :]) + np.sum(A[:, 7:9]))
+
+        # print(A)
+        print('Total Record Number: ', np.sum(A))
+        return F1
 
 
 def old_accuracy(output, target, log_probs=True):

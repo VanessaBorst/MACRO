@@ -20,10 +20,6 @@ class ContextualAttention(nn.Module):
     use_bias:
         Bool specifying whether an bias should be used to retrieve the hidden representation for
         the hidden states of the BiGRU (which serve as values)
-    return_att_weights:
-        Bool specifying whether the derived attention weights should be outputted
-        in addition to the final output vector of the layer
-        The attention weights have a shape of [batch_size, seq_len, 1]
     """
     # TODO: Check Initalization, Values may differ from the original paper by Tsai-Min et al.
     # TODO: CHECK attention weights and their development during training

@@ -3,28 +3,30 @@
   "name": "CPSC_BaselineModel",
   "n_gpu": 1,
   "arch": {
-    "type": "BaselineModel",
+    "type": "BaselineModelWoRnnWoAttention",
     "args": {}
   },
   "data_loader": {
     "type": "ECGDataLoader",
     "args": {
-      "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/",
-      "batch_size": 9,
+      "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/minmax",
+      "batch_size": 8,
       "shuffle": true,
       "validation_split": 0.25,
       "num_workers": 1,
       "seq_len": 72000
     },
-    "overfit_single_batch": true,
-    "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/"
+    "overfit_single_batch": false,
+    "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/minmax"
   },
   "optimizer": {
     "type": "Adam",
     "args": {
       "lr": 0.0001,
+      "betas": [0.9,0.98],
+      "eps":1e-09,
       "weight_decay": 0,
-      "amsgrad": true
+      "amsgrad": false
     }
   },
   "loss": "BCE",
@@ -52,10 +54,8 @@
       "log_probs": false
     }
   },
-  "metrics_old": [
-    "accuracy"
-  ],
   "lr_scheduler": {
+    "active": false,
     "type": "StepLR",
     "args": {
       "step_size": 50,
@@ -63,7 +63,7 @@
     }
   },
   "trainer": {
-    "epochs": 300,
+    "epochs": 500,
     "save_dir": "saved/",
     "save_period": 1,
     "verbosity": 2,

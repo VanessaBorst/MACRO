@@ -7,7 +7,7 @@ from torchinfo import summary
 from utils import plot_record_from_np_array
 
 
-class BaselineModelWoRnnWoAttention(BaseModel):
+class BaselineModelWoRnnWoAttentionSingleLabel(BaseModel):
     def __init__(self, num_classes=9, num_cnn_blocks=5):
         super().__init__()
         self._conv_block1 = nn.Sequential(
@@ -67,7 +67,7 @@ class BaselineModelWoRnnWoAttention(BaseModel):
         )
 
         self._fcn = nn.Linear(in_features=2250*12, out_features=num_classes)
-        self._final_activation = nn.Sigmoid()
+        # self._final_activation = nn.Sigmoid()
 
     def forward(self, x):
         # Plot the first sample from the batch
@@ -86,9 +86,9 @@ class BaselineModelWoRnnWoAttention(BaseModel):
         x = self._batchNorm(x)
         x = x.reshape(x.size(0), -1)
         x = self._fcn(x)
-        return self._final_activation(x)
+        return F.log_softmax(x, dim=1)  # log_softmax needed when used in combination with nll loss
 
 
 if __name__ == "__main__":
-    model = BaselineModelWoRnnWoAttention()
+    model = BaselineModelWoRnnWoAttentionSingleLabel()
     summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "num_params"])

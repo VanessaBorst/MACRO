@@ -105,7 +105,6 @@ class BaselineModel(BaseModel):
         x = self._batchNorm(x)
         x = self._fcn(x)
         return self._final_activation(x), attention_weights
-        # return F.log_softmax(x, dim=1)  # log_softmax needed when used in combination with nll loss
 
 
 if __name__ == "__main__":

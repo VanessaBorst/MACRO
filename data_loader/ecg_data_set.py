@@ -78,6 +78,7 @@ class ECGDataset(Dataset):
                 # Only consider the first label
                 classes_one_hot[:] = 0
                 classes_one_hot[classes_encoded[0]] = 1
+                classes.append(classes_one_hot)
 
         target_sum = pd.DataFrame(classes).sum()
         # Get the weights as ndarray
@@ -86,7 +87,7 @@ class ECGDataset(Dataset):
 
     def get_inverse_class_frequency(self, idx_list, multi_labels=True):
         """
-        Can be used to determine the target classes distribution
+        Can be used to determine the inverse class frequencies
         :param idx_list: list of ids, should contain all ids contained in the train, valid or test set
         :return: Class distribution
         :param multi_labels: If set to False, only the first label is considered for determining the target dist.

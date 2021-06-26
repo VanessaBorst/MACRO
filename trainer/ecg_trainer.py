@@ -3,11 +3,10 @@ import time
 
 import numpy as np
 import torch
-from torchvision.utils import make_grid
 from base import BaseTrainer
 from model.multi_label_metrics import class_wise_confusion_matrices_multi_label
 from model.single_label_metrics import class_wise_confusion_matrices_single_label, overall_confusion_matrix
-from utils import inf_loop
+from utils import inf_loop, plot_grad_flow_lines, plot_grad_flow_bars
 from utils.tracker import MetricTracker, ConfusionMatrixTracker
 import pandas as pd
 import seaborn as sns
@@ -64,13 +63,18 @@ class ECGTrainer(BaseTrainer):
             "log_probs": config["metrics"]["additional_metrics_args"].get("log_probs", False),
             "train_class_weights": self.data_loader.dataset.get_target_distribution(
                 idx_list=self.data_loader.batch_sampler.sampler.indices, multi_labels=self.multi_label_training),
-            "val_class_weights": val_class_weights
+            "valid_class_weights": val_class_weights
         }
 
+        # print("Train Class Weights:")
+        # print(str(self._param_dict["train_class_weights"]))
+
         # confusion matrices
-        self.train_cms = ConfusionMatrixTracker(*self.data_loader.dataset.class_labels, writer=self.writer)
+        self.train_cms = ConfusionMatrixTracker(*self.data_loader.dataset.class_labels,
+                                                writer=self.writer, multi_label_training=self.multi_label_training)
         # The ECGDataset is the same for data_loader and valid_loader as it is realized with SubSamplers
-        self.valid_cms = ConfusionMatrixTracker(*self.data_loader.dataset.class_labels, writer=self.writer)
+        self.valid_cms = ConfusionMatrixTracker(*self.data_loader.dataset.class_labels, writer=self.writer,
+                                                multi_label_training=self.multi_label_training)
 
     def _train_epoch(self, epoch):
         """
@@ -87,20 +91,39 @@ class ECGTrainer(BaseTrainer):
         if len(self.metrics_epoch) > 0:
             outputs = torch.FloatTensor().to(self.device)
             targets = torch.FloatTensor().to(self.device)
+            if not self.multi_label_training:
+                targets_all_labels = torch.FloatTensor().to(self.device)
 
         # Set the writer object to training mode
         self.writer.set_mode('train')
 
+        # Create a figure for the average gradient flows of the epoch
+        fig_gradient_flow_lines = plt.figure(figsize=(8,8))
+        fig_gradient_flow_bars = plt.figure(figsize=(8, 8))
+
+
         start = time.time()
         for batch_idx, (padded_records, labels, labels_one_hot, lengths, record_names) in enumerate(self.data_loader):
-            data, target = padded_records.to(self.device), labels_one_hot.to(self.device)
+            if self.multi_label_training:
+                data, target = padded_records.to(self.device), labels_one_hot.to(self.device)
+            else:
+                # target contains the first GT label, target_all_labels contains all labels in 1-hot-encoding
+                data, target, target_all_labels = padded_records.to(self.device), labels.to(self.device), \
+                                                  labels_one_hot.to(self.device)
             data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)
 
             self.optimizer.zero_grad()
             # data has shape [batch_size, 12, seq_len]
             output = self.model(data)
 
-            if len(output) == 2:
+            # # Compute a dummy loss on last output sample of the batch and back-propagate
+            # output[-1].abs().sum().backward()
+            # # Check that gradient on samples i != -1 are zero!
+            # # sanity check: if this does not return 0, you have a bug!
+            # for i in range(len(output)-1):
+            #     assert data.grad[i].abs().sum().item()==0
+
+            if type(output) is tuple:
                 output, attention_weights = output
                 fig = sns.heatmap(data=attention_weights.detach().numpy()[:, :, 0], ).get_figure()
                 # plt.show()
@@ -111,9 +134,26 @@ class ECGTrainer(BaseTrainer):
             if len(self.metrics_epoch) > 0:
                 outputs = torch.cat((outputs, output))
                 targets = torch.cat((targets, target))
-            loss = self.criterion(output, target)
+                if not self.multi_label_training:
+                    targets_all_labels = torch.cat((targets_all_labels, target_all_labels))
+
+            args, _, _, _, _, _, _ = inspect.getfullargspec(self.criterion)
+            # Output and target are needed for all metrics!
+            additional_args = [arg for arg in args if arg not in ('output', 'target')]
+            additional_kwargs = {
+                param_name: self._param_dict[param_name] if not param_name == 'class_weights'
+                else self._param_dict['train_class_weights'] for param_name in additional_args
+            }
+            loss = self.criterion(target=target, output=output, **additional_kwargs)
             loss.backward()
+
+            # Add the average gradient of the current batch to the respective figure to
+            # record the average gradients per layer in every training iteration
+            plot_grad_flow_lines(self.model.named_parameters(), fig_gradient_flow_lines)
+            plot_grad_flow_bars(self.model.named_parameters(), fig_gradient_flow_bars)
+
             self.optimizer.step()
+
 
             self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
 
@@ -123,9 +163,10 @@ class ECGTrainer(BaseTrainer):
             # The loss and each metric are updated in a separate row for each of them
             self.train_metrics.iter_update('loss', loss.item(), n=output.shape[0])
             for met in self.metrics_iter:
-                args, _, _, _ = inspect.getargspec(met)
-                # Output and target are needed for all metrics!
-                additional_args = [arg for arg in args if arg not in ('output', 'target')]
+                args = inspect.signature(met).parameters.values()
+                # Output and target are needed for all metrics! Only consider other args WITHOUT default
+                additional_args = [arg.name for arg in args
+                                   if arg.name not in ('output', 'target') and arg.default is arg.empty]
                 additional_kwargs = {
                     param_name: self._param_dict[param_name] for param_name in additional_args
                 }
@@ -133,7 +174,6 @@ class ECGTrainer(BaseTrainer):
                                                n=output.shape[0])
 
             # Update the confusion matrices maintained by the ClassificationTracker
-            # TODO set log probs/sigmoid probs in config
             if not self.multi_label_training:
                 upd_cm = overall_confusion_matrix(output=output, target=target,
                                                   log_probs=self._param_dict['log_probs'],
@@ -155,35 +195,52 @@ class ECGTrainer(BaseTrainer):
                 metrics_debug = ", ".join(f"{key}: {value:.6f}" for key, value in current_metrics.items())
                 self.logger.debug(epoch_debug + metrics_debug)
 
-            if batch_idx == self.len_epoch: #or self.overfit_single_batch:
+            if batch_idx == self.len_epoch:  # or self.overfit_single_batch:
                 break
+
+        # Send the gradient flows of the current epoch to the TensorboardWriter
+        self.writer.add_figure("Gradient flow as lines", fig_gradient_flow_lines, global_step=epoch)
+        self.writer.add_figure("Gradient flow as bars", fig_gradient_flow_bars, global_step=epoch)
+        fig_gradient_flow_lines.clf()
+        fig_gradient_flow_bars.clf()
 
         # At the end of each epoch, explicitly send the confusion matrices to the SummaryWriter/TensorboardWriter
         self.train_cms.send_cms_to_writer(epoch=epoch)
+
+        # Also set the epoch number for the MetricTracker
+        self.train_metrics.epoch = epoch
 
         # When overfitting a single batch, only a small amount of data is used and hence, not all clases may be present
         # In such case, not all metrics are defined, so skip updating the metrics in that case
         if not self.overfit_single_batch:
             # Moreover, the epoch-based metrics need to be updated
             for met in self.metrics_epoch:
-                args, _, _, _ = inspect.getargspec(met)
-                # Output and target are needed for all metrics!
-                additional_args = [arg for arg in args if arg not in ('output', 'target')]
+                args = inspect.signature(met).parameters.values()
+                # Output and target are needed for all metrics! Only consider other args WITHOUT default
+                additional_args = [arg.name for arg in args
+                                   if arg.name not in ('output', 'target') and arg.default is arg.empty]
                 additional_kwargs = {
                     param_name: self._param_dict[param_name] for param_name in additional_args
                 }
-                self.train_metrics.epoch_update(met.__name__, met(target=targets, output=outputs, **additional_kwargs),
-                                                epoch)
+                if not self.multi_label_training and met.__name__=='cpsc_score_adapted':
+                    # Consider all labels for evaluation, even in the single label case
+                    self.train_metrics.epoch_update(met.__name__,
+                                                    met(target=targets_all_labels, output=outputs, **additional_kwargs))
+                else:
+                    self.train_metrics.epoch_update(met.__name__,
+                                                    met(target=targets, output=outputs, **additional_kwargs))
+
             # This holds for the class-wise, epoch-based metrics as well
             for met in self.metrics_epoch_class_wise:
-                args, _, _, _ = inspect.getargspec(met)
-                # Output and target are needed for all metrics!
-                additional_args = [arg for arg in args if arg not in ('output', 'target')]
+                args = inspect.signature(met).parameters.values()
+                # Output and target are needed for all metrics! Only consider other args WITHOUT default
+                additional_args = [arg.name for arg in args
+                                   if arg.name not in ('output', 'target') and arg.default is arg.empty]
                 additional_kwargs = {
                     param_name: self._param_dict[param_name] for param_name in additional_args
                 }
                 self.train_metrics.class_wise_epoch_update(met.__name__, met(target=targets, output=outputs,
-                                                                             **additional_kwargs), epoch)
+                                                                             **additional_kwargs))
 
         # Contains only NaNs for all non-iteration-based metrics when overfit_single_batch is True
         train_log = self.train_metrics.result()
@@ -237,6 +294,7 @@ class ECGTrainer(BaseTrainer):
         # Reset the trackers
         self.valid_metrics.reset()
         self.valid_cms.reset()
+
         # Set the writer object to validation mode
         self.writer.set_mode('valid')
 
@@ -245,24 +303,54 @@ class ECGTrainer(BaseTrainer):
             if len(self.metrics_epoch) > 0:
                 outputs = torch.FloatTensor().to(self.device)
                 targets = torch.FloatTensor().to(self.device)
+                if not self.multi_label_training:
+                    targets_all_labels = torch.FloatTensor().to(self.device)
 
             for batch_idx, (padded_records, labels, labels_one_hot, lengths, record_names) in enumerate(
                     self.valid_data_loader):
-                data, target = padded_records.to(self.device), labels_one_hot.to(self.device)
+
+                if self.multi_label_training:
+                    data, target = padded_records.to(self.device), labels_one_hot.to(self.device)
+                else:
+                    # target contains the first GT label, target_all_labels contains all labels in 1-hot-encoding
+                    data, target, target_all_labels = padded_records.to(self.device), labels.to(self.device), \
+                                                      labels_one_hot.to(self.device)
+
                 data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)
 
                 output = self.model(data)
+                if type(output) is tuple:
+                    output, attention_weights = output
+                    # The attention weights should not change during validation!
+                    fig = sns.heatmap(data=attention_weights.detach().numpy()[:, :, 0], ).get_figure()
+                    # plt.show()
+                    plt.close(fig)  # close the curren figure
+                    self.writer.add_figure("Attention weights for validation batch " + str(batch_idx),
+                                           fig, global_step=epoch)
+
                 if len(self.metrics_epoch) > 0:
                     outputs = torch.cat((outputs, output))
                     targets = torch.cat((targets, target))
-                loss = self.criterion(output, target)
+                    if not self.multi_label_training:
+                        targets_all_labels = torch.cat((targets_all_labels, target_all_labels))
+
+                args, _, _, _, _, _, _ = inspect.getfullargspec(self.criterion)
+                # Output and target are needed for all metrics!
+                additional_args = [arg for arg in args if arg not in ('output', 'target')]
+                additional_kwargs = {
+                    param_name: self._param_dict[param_name] if not param_name == 'class_weights'
+                    else self._param_dict['valid_class_weights'] for param_name in additional_args
+                }
+                loss = self.criterion(target=target, output=output, **additional_kwargs)
 
                 self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx)
+
                 self.valid_metrics.iter_update('loss', loss.item(), n=output.shape[0])
                 for met in self.metrics_iter:
-                    args, _, _, _ = inspect.getargspec(met)
-                    # Output and target are needed for all metrics!
-                    additional_args = [arg for arg in args if arg not in ('output', 'target')]
+                    args = inspect.signature(met).parameters.values()
+                    # Output and target are needed for all metrics! Only consider other args WITHOUT default
+                    additional_args = [arg.name for arg in args
+                                       if arg.name not in ('output', 'target') and arg.default is arg.empty]
                     additional_kwargs = {
                         param_name: self._param_dict[param_name] for param_name in additional_args
                     }
@@ -290,16 +378,41 @@ class ECGTrainer(BaseTrainer):
         # At the end of each epoch, explicitly send the confusion matrices to the SummaryWriter/TensorboardWriter
         self.valid_cms.send_cms_to_writer(epoch=epoch)
 
-        # Moreover, the epoch-based metrics need to be updated
-        for met in self.metrics_epoch:
-            args, _, _, _ = inspect.getargspec(met)
-            # Output and target are needed for all metrics!
-            additional_args = [arg for arg in args if arg not in ('output', 'target')]
-            additional_kwargs = {
-                param_name: self._param_dict[param_name] for param_name in additional_args
-            }
-            self.valid_metrics.epoch_update(met.__name__, met(target=targets, output=outputs, **additional_kwargs),
-                                            epoch)
+        # Also set the epoch number for the MetricTracker
+        self.valid_metrics.epoch = epoch
+
+        # When overfitting a single batch, only a small amount of data is used and hence, not all clases may be present
+        # In such case, not all metrics are defined, so skip updating the metrics in that case
+        if not self.overfit_single_batch:
+            # Moreover, the epoch-based metrics need to be updated
+            for met in self.metrics_epoch:
+                args = inspect.signature(met).parameters.values()
+                # Output and target are needed for all metrics! Only consider other args WITHOUT default
+                additional_args = [arg.name for arg in args
+                                   if arg.name not in ('output', 'target') and arg.default is arg.empty]
+                additional_kwargs = {
+                    param_name: self._param_dict[param_name] for param_name in additional_args
+                }
+                if not self.multi_label_training and met.__name__=='cpsc_score_adapted':
+                    # Consider all labels for evaluation, even in the single label case
+                    self.valid_metrics.epoch_update(met.__name__,
+                                                    met(target=targets_all_labels, output=outputs, **additional_kwargs))
+                else:
+                    self.valid_metrics.epoch_update(met.__name__,
+                                                    met(target=targets, output=outputs, **additional_kwargs))
+
+
+            # This holds for the class-wise, epoch-based metrics as well
+            for met in self.metrics_epoch_class_wise:
+                args = inspect.signature(met).parameters.values()
+                # Output and target are needed for all metrics! Only consider other args WITHOUT default
+                additional_args = [arg.name for arg in args
+                                   if arg.name not in ('output', 'target') and arg.default is arg.empty]
+                additional_kwargs = {
+                    param_name: self._param_dict[param_name] for param_name in additional_args
+                }
+                self.valid_metrics.class_wise_epoch_update(met.__name__, met(target=targets, output=outputs,
+                                                                             **additional_kwargs))
 
         # add histogram of model parameters to the tensorboard
         for name, p in self.model.named_parameters():

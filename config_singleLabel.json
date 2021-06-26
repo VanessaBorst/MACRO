@@ -1,9 +1,8 @@
 {
-  "_comment": "All paths need to be defined relative to the root directory. If the project is moved to another location, the root_directory method in util.py needs to be adapted ",
   "name": "CPSC_BaselineModel",
   "n_gpu": 1,
   "arch": {
-    "type": "BaselineModelWoRnnWoAttention",
+    "type": "BaselineModelWoRnnWoAttentionSingleLabel",
     "args": {}
   },
   "data_loader": {
@@ -16,7 +15,7 @@
       "num_workers": 1,
       "seq_len": 72000
     },
-    "overfit_single_batch": false,
+    "overfit_single_batch": true,
     "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/minmax"
   },
   "optimizer": {
@@ -27,13 +26,15 @@
       "amsgrad": true
     }
   },
-  "loss": "BCE",
+  "loss": "nll_loss",
   "metrics": {
     "per_iteration": [
-      "subset_accuracy"
+      "accuracy",
+      "top_k_acc"
     ],
     "per_epoch": [
       "cpsc_score_adapted",
+      "balanced_accuracy",
       "mirco_f1",
       "macro_f1",
       "weighted_f1",
@@ -43,16 +44,15 @@
       "weighted_roc_auc_ovr"
     ],
     "per_epoch_class_wise": [
-      "class_wise_f1",
-      "class_wise_roc_auc_ovr",
-      "class_wise_roc_auc_ovo"
+      "class_wise_f1"
     ],
     "additional_metrics_args": {
-      "sigmoid_probs": true,
-      "log_probs": false
+      "sigmoid_probs": false,
+      "log_probs": true
     }
   },
   "lr_scheduler": {
+    "active": true,
     "type": "StepLR",
     "args": {
       "step_size": 50,
@@ -66,7 +66,7 @@
     "verbosity": 2,
     "monitor": "min val_loss",
     "early_stop": 10,
-    "multi_label_training": true,
+    "multi_label_training": false,
     "tensorboard": true
   }
 }

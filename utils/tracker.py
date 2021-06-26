@@ -9,7 +9,7 @@ from model.multi_label_metrics import class_wise_confusion_matrices_multi_label
 from model.single_label_metrics import overall_confusion_matrix, class_wise_confusion_matrices_single_label
 import numpy as np
 
-smooth = 1e-6
+smooth = 0  # 1e-6
 
 
 class MetricTracker:
@@ -25,11 +25,22 @@ class MetricTracker:
                                        columns=['current', 'sum', 'square_sum', 'counts', 'mean', 'square_avg', 'std'],
                                        dtype=np.float64)
         all_keys_epoch_class_wise = [keys_epoch_class_wise[idx_ftn] + '_class_' + str(labels[idx_class])
-                                 for idx_class in range(0, len(labels))
-                                 for idx_ftn in range(0, len(keys_epoch_class_wise))]
+                                     for idx_class in range(0, len(labels))
+                                     for idx_ftn in range(0, len(keys_epoch_class_wise))]
         self._labels = labels
-        self._data_epoch = pd.DataFrame(index=keys_epoch + all_keys_epoch_class_wise, columns=['mean'], dtype=np.float64)
+        self._epoch = 0
+        self._data_epoch = pd.DataFrame(index=keys_epoch + all_keys_epoch_class_wise, columns=['mean'],
+                                        dtype=np.float64)
         self.reset()
+
+    @property
+    def epoch(self):
+        return self._epoch
+
+    @epoch.setter
+    def epoch(self, value):
+        assert value > self._epoch      # The epoch should increase with time
+        self._epoch = value
 
     def reset(self):
         for col in self._data_iter.columns:
@@ -43,17 +54,17 @@ class MetricTracker:
         self._data_iter.at[key, 'square_sum'] += value * value * n
         self._data_iter.at[key, 'counts'] += n
 
-    def epoch_update(self, key, value, epoch):
+    def epoch_update(self, key, value):
         if self.writer is not None:
-            self.writer.add_scalar(key, value, global_step=epoch)
+            self.writer.add_scalar(key, value, global_step=self._epoch)
         self._data_epoch.at[key, 'mean'] = value
 
     # class_wise_epoch_update(met.__name__, met(target=targets, output=outputs, **additional_kwargs), epoch)
-    def class_wise_epoch_update(self, key, values, epoch):
+    def class_wise_epoch_update(self, key, values):
         for idx_class in range(0, len(values)):
             full_key_name = key + '_class_' + str(self._labels[idx_class])
             if self.writer is not None:
-                self.writer.add_scalar(full_key_name, values[idx_class], global_step=epoch)
+                self.writer.add_scalar(full_key_name, values[idx_class], global_step=self._epoch)
             self._data_epoch.at[full_key_name, 'mean'] = values[idx_class]
 
     def current(self):
@@ -66,12 +77,16 @@ class MetricTracker:
 
     def std(self):
         for key, row in self._data_iter.iterrows():
-            self._data_iter.at[key, 'std'] = sqrt(row['square_avg'] - row['mean']**2 + smooth)
+            self._data_iter.at[key, 'std'] = sqrt(row['square_avg'] - row['mean'] ** 2 + smooth)
 
     def result(self):
         self.avg()
         self.std()
         iter_result = self._data_iter[['mean', 'std']]
+        # Send the mean epoch values for the iteration metrics to the tensorboard writer as well
+        if self.writer is not None:
+            for key, row in iter_result.iterrows():
+                self.writer.add_scalar('epoch_' + key, iter_result.at[key, 'mean'], global_step=self._epoch)
         epoch_result = self._data_epoch
         return pd.concat([iter_result, epoch_result])
 
@@ -223,8 +238,8 @@ if __name__ == '__main__':
     tracker.update_class_wise_cms(class_wise_cms)
 
     # Multi Label
-    output = [[0,0,0,1,0,0,1,0,0], [1,0,0,0,0,0,0,0,0], [0,0,0,0,1,0,0,0,0]]
-    target = [[1,0,0,1,0,0,1,0,0], [1,0,0,0,0,0,0,0,0], [0,0,0,0,0,0,0,1,0]]
+    output = [[0, 0, 0, 1, 0, 0, 1, 0, 0], [1, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0, 0]]
+    target = [[1, 0, 0, 1, 0, 0, 1, 0, 0], [1, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 1, 0]]
     class_wise_cms = class_wise_confusion_matrices_multi_label(output, target, False, [0, 1, 2, 3, 4, 5, 6, 7, 8])
     tracker = ConfusionMatrixTracker(*[0, 1, 2, 3, 4, 5, 6, 7, 8], writer=SummaryWriter(log_dir="saved/tmp"),
                                      multi_label_training=True)
