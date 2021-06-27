@@ -39,7 +39,7 @@ class MetricTracker:
 
     @epoch.setter
     def epoch(self, value):
-        assert value > self._epoch      # The epoch should increase with time
+        assert value > self._epoch  # The epoch should increase with time
         self._epoch = value
 
     def reset(self):
@@ -214,16 +214,34 @@ class ConfusionMatrixTracker:
                 #   global_step (int): Global step value to record
                 self.writer.add_figure("Overall confusion matrix", fig_, global_step=epoch)
 
-            # Plot the class-wise confusion matrices and send them to the writer
-            for idx in range(len(self._class_wise_cms)):
-                class_cm = self._class_wise_cms[idx]
-                plt.figure(figsize=(10, 7))
-                plt.title("Confusion matrix for class " + str(class_cm.columns.name))
-                fig_ = sns.heatmap(class_cm, annot=True, cmap='Spectral').get_figure()
-                # plt.show()
-                plt.close(fig_)  # close the curren figure
-                self.writer.add_figure("Confusion matrix for class " + str(class_cm.columns.name),
-                                       fig_, global_step=epoch)
+            # Also create a one-containing-all-single-cms-figure
+            fig_all_cms, axs = plt.subplots(3, 3, figsize=(15, 8))
+            for idx, ax in enumerate(axs.flatten()):
+                # Plot the class-wise confusion matrices and send them to the writer one-by-one
+                self._plot_cm_for_single_class(idx, ax, epoch)
+            fig_all_cms.tight_layout()
+            plt.close(fig_all_cms)
+            self.writer.add_figure("Overview single confusion matrices", fig_all_cms.get_figure(), global_step=epoch)
+            print("")
+
+    def _plot_cm_for_single_class(self, idx, ax, epoch):
+        class_cm = self._class_wise_cms[idx]
+
+        heatmap = sns.heatmap(class_cm, annot=True, cmap='Spectral', ax=ax)
+        heatmap.yaxis.set_ticklabels(heatmap.yaxis.get_ticklabels(), rotation=0, ha='right', fontsize=12)
+        heatmap.xaxis.set_ticklabels(heatmap.xaxis.get_ticklabels(), rotation=45, ha='right', fontsize=12)
+        ax.set_ylabel('True label')
+        ax.set_xlabel('Predicted label')
+        ax.set_title("Confusion Matrix for class " + str(class_cm.columns.name))
+
+        # Recreate the cm-related part to another figure to add it directly to the TensorBoardWriter
+        plt.figure(figsize=(10, 7))
+        plt.title("Confusion matrix for class " + str(class_cm.columns.name))
+        single_cm_fig = sns.heatmap(class_cm, annot=True, cmap='Spectral').get_figure()
+        # plt.show()
+        plt.close(single_cm_fig)  # close the current figure
+        self.writer.add_figure("Confusion matrix for class " + str(class_cm.columns.name),
+                               single_cm_fig, global_step=epoch)
 
 
 if __name__ == '__main__':
@@ -244,3 +262,4 @@ if __name__ == '__main__':
     tracker = ConfusionMatrixTracker(*[0, 1, 2, 3, 4, 5, 6, 7, 8], writer=SummaryWriter(log_dir="saved/tmp"),
                                      multi_label_training=True)
     tracker.update_class_wise_cms(class_wise_cms)
+    tracker.send_cms_to_writer(epoch=0)

@@ -8,8 +8,16 @@ from utils import plot_record_from_np_array
 
 
 class BaselineModelWoRnnWoAttention(BaseModel):
-    def __init__(self, num_classes=9, num_cnn_blocks=5):
+    def __init__(self, apply_final_activation, multi_label_training, num_classes=9, num_cnn_blocks=5):
+        """
+        :param apply_final_activation: whether the Sigmoid(sl) or the LogSoftmax(ml) should be applied at the end
+        :param multi_label_training: if true, Sigmoid is used as final activation, else the LogSoftmax
+        :param num_classes: Num of classes to classify
+        :param num_cnn_blocks: Num of CNN blocks to use
+        TODO functionality for num_cnn_blocks
+        """
         super().__init__()
+        self._apply_final_activation = apply_final_activation
         self._conv_block1 = nn.Sequential(
             # Keras Code -> Input shape (7200, 12) -> in_channel = 12
             # x = Convolution1D(12, 3, padding='same')(main_input) -> Stride 1 as default
@@ -67,7 +75,9 @@ class BaselineModelWoRnnWoAttention(BaseModel):
         )
 
         self._fcn = nn.Linear(in_features=2250*12, out_features=num_classes)
-        self._final_activation = nn.Sigmoid()
+
+        if apply_final_activation:
+            self._final_activation = nn.Sigmoid() if multi_label_training else nn.LogSoftmax(dim=1)
 
     def forward(self, x):
         # Plot the first sample from the batch
@@ -86,7 +96,7 @@ class BaselineModelWoRnnWoAttention(BaseModel):
         x = self._batchNorm(x)
         x = x.reshape(x.size(0), -1)
         x = self._fcn(x)
-        return self._final_activation(x)
+        return self._final_activation(x) if self._apply_final_activation else x
 
 
 if __name__ == "__main__":

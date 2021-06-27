@@ -17,11 +17,23 @@ import pandas as pd
 #           (and corresponds to the accuracy when all classes are considered)
 
 
-def _convert_logprob_to_prediction(logprob_output):
-    return torch.argmax(logprob_output, dim=1)
+def _convert_log_probs_to_prediction(log_prob_output):
+    return torch.argmax(log_prob_output, dim=1)
 
 
-def _f1(output, target, log_probs, labels, average):
+def _convert_logits_to_prediction(logits):
+    # Convert the logits to probabilities and take the one with the highest one as final prediction
+    # We are in the single-label case, so apply Softmax first and then return the maximum value
+    softmax_probs = torch.nn.Softmax(logits, dim=1)
+    # Should be the same as directly taking the maximum of raw logits (if x1<x2, then softmax(x1)<softmax(x2))
+    assert torch.argmax(softmax_probs, dim=1) == torch.argmax(logits, dim=1)
+    return torch.argmax(softmax_probs, dim=1)
+
+    sigmoid_probs = nn.functional.sigmoid(logits)
+    return torch.where(sigmoid_probs > threshold, 1, 0)
+
+
+def _f1(output, target, log_probs, logits, labels, average):
     """
     Compute the F1 score, also known as balanced F-score or F-measure.
     In the multi-class and multi-label case, this is the average of the F1 score of each class with
@@ -32,6 +44,7 @@ def _f1(output, target, log_probs, labels, average):
         Per entry, the log-probabilities of each class should be contained when log_probs is set to true
         Otherwise a list of the predicted class indices in the range [0, C-1] should be passed for each of the N samples
     :param log_probs: If the outputs are log probs, set param to True
+    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
     :param target: dimension= (N)
         Per entry, a class index in the range [0, C-1] as integer (ground truth)
     :param labels: The set of labels to include when average != 'binary', and their order if average is None.
@@ -51,17 +64,23 @@ def _f1(output, target, log_probs, labels, average):
     (see https://scikit-learn.org/stable/modules/generated/sklearn.metrics.f1_score.html)
     """
     with torch.no_grad():
-        pred = _convert_logprob_to_prediction(output) if log_probs else output
+        assert log_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+        if log_probs:
+            pred = _convert_log_probs_to_prediction(output)
+        else:
+            pred = _convert_logits_to_prediction(output)
+        assert pred.shape[0] == len(target)
         return f1_score(y_true=target, y_pred=pred, labels=labels, average=average)
 
 
-def _roc_auc(output, target, log_probs, labels, average, multi_class_cfg, ):
+def _roc_auc(output, target, log_probs, logits, labels, average, multi_class_cfg, ):
     """
     The following parameter description applies for the multiclass case
     :param output: dimension=(N,C)
         Per entry, the (log) probability estimates of each class should be contained and
         Later they MUST sum to 1 -> if log probs are provided instead of real probs, set log_prob param to True
     :param log_probs: If the outputs are log probs and do NOT necessarily sum to 1, set param to True
+    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
     :param target: dimension= (N)
         Per entry, a class index in the range [0, C-1] as integer (ground truth)
     :param labels: Needed for multiclass targets. List of labels that index the classes in output
@@ -82,12 +101,16 @@ def _roc_auc(output, target, log_probs, labels, average, multi_class_cfg, ):
     (see https://scikit-learn.org/stable/modules/generated/sklearn.metrics.roc_auc_score.html)
     """
     with torch.no_grad():
-        # If log_probs are provided, convert them to real probabilities
-        pred = output if not log_probs else np.exp(output)
+        assert log_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+        if log_probs:
+            pred = _convert_log_probs_to_prediction(output)
+        else:
+            pred = _convert_logits_to_prediction(output)
+        assert pred.shape[0] == len(target)
         return roc_auc_score(y_true=target, y_score=pred, labels=labels, average=average, multi_class=multi_class_cfg)
 
 
-def accuracy(output, target, log_probs):
+def accuracy(output, target, log_probs, logits):
     """
     Calculates the (TOP-1) accuracy for the multiclass case
 
@@ -98,6 +121,7 @@ def accuracy(output, target, log_probs):
         Otherwise a list of the predicted class indices in the range [0, C-1] should be passed for each of the N samples
         (obtaining log-probabilities is achieved by adding a LogSoftmax layer in the last layer of the network)
     :param log_probs: If set to True, the output should have dimension (N,C), otherwise dimension (N)
+    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
     :param target: dimension= (N)
         Per entry, a class index in the range [0, C-1] as integer (ground truth)
 
@@ -105,12 +129,16 @@ def accuracy(output, target, log_probs):
     (see https://scikit-learn.org/stable/modules/generated/sklearn.metrics.accuracy_score.html)
     """
     with torch.no_grad():
-        pred = _convert_logprob_to_prediction(output) if log_probs else output
+        assert log_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+        if log_probs:
+            pred = _convert_log_probs_to_prediction(output)
+        else:
+            pred = _convert_logits_to_prediction(output)
         assert pred.shape[0] == len(target)
         return accuracy_score(y_true=target, y_pred=pred)
 
 
-def balanced_accuracy(output, target, log_probs):
+def balanced_accuracy(output, target, log_probs, logits):
     """
     Compute the balanced accuracy.
 
@@ -125,16 +153,21 @@ def balanced_accuracy(output, target, log_probs):
         Otherwise a list of the predicted class indices in the range [0, C-1] should be passed for each of the N samples
         (obtaining log-probabilities is achieved by adding a LogSoftmax layer in the last layer of the network)
     :param log_probs: If set to True, the output should have dimension (N,C), otherwise dimension (N)
+    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
     :param target: dimension= (N)
         Per entry, a class index in the range [0, C-1] as integer (ground truth)
     """
     with torch.no_grad():
-        pred = _convert_logprob_to_prediction(output) if log_probs else output
+        assert log_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+        if log_probs:
+            pred = _convert_log_probs_to_prediction(output)
+        else:
+            pred = _convert_logits_to_prediction(output)
         assert pred.shape[0] == len(target)
         return balanced_accuracy_score(y_true=target, y_pred=pred)
 
 
-def top_k_acc(output, target, labels, k=3):
+def top_k_acc(output, target, log_probs, logits, labels, k=3):
     """
     Calculates the TOP-k accuracy for the multiclass case
     A prediction is considered correct when the true label is associated with one of the k highest predicted scores
@@ -150,49 +183,56 @@ def top_k_acc(output, target, labels, k=3):
     :param k: Number of most likely outcomes considered to find the correct label
     """
     with torch.no_grad():
+        assert log_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+        if log_probs:
+            pred = _convert_log_probs_to_prediction(output)
+        else:
+            pred = _convert_logits_to_prediction(output)
+        assert pred.shape[0] == len(target)
         return top_k_accuracy_score(y_true=target, y_score=output, k=k, labels=labels)
 
 
-def mirco_f1(output, target, log_probs, labels):
+def mirco_f1(output, target, log_probs, logits, labels):
     """See documentation for _f1 """
-    return _f1(output, target, log_probs, labels, "micro")
+    return _f1(output, target, log_probs, logits, labels, "micro")
 
 
-def macro_f1(output, target, log_probs, labels):
+def macro_f1(output, target, log_probs, logits, labels):
     """See documentation for _f1 """
-    return _f1(output, target, log_probs, labels, "macro")
+    return _f1(output, target, log_probs, logits, labels, "macro")
 
 
-def weighted_f1(output, target, log_probs, labels):
+def weighted_f1(output, target, log_probs, logits, labels):
     """See documentation for _f1 """
-    return _f1(output, target, log_probs, labels, "weighted")
+    return _f1(output, target, log_probs, logits, labels, "weighted")
 
 
-def class_wise_f1(output, target, log_probs, labels):
+def class_wise_f1(output, target, log_probs, logits, labels):
     """See documentation for _f1 """
-    return _f1(output, target, log_probs, labels, None)
+    return _f1(output, target, log_probs, logits, labels, None)
 
 
-def macro_roc_auc_ovo(output, target, log_probs, labels):
+def macro_roc_auc_ovo(output, target, log_probs, logits, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, target, log_probs, labels, "macro", "ovo")
+    return _roc_auc(output, target, log_probs, logits, labels, "macro", "ovo")
 
 
-def weighted_roc_auc_ovo(output, target, log_probs, labels):
+def weighted_roc_auc_ovo(output, target, log_probs, logits, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, target, log_probs, labels, "weighted", "ovo")
+    return _roc_auc(output, target, log_probs, logits, labels, "weighted", "ovo")
 
 
-def macro_roc_auc_ovr(output, target, log_probs, labels):
+def macro_roc_auc_ovr(output, target, log_probs, logits, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, target, log_probs, labels, "macro", "ovr")
+    return _roc_auc(output, target, log_probs, logits, labels, "macro", "ovr")
 
 
-def weighted_roc_auc_ovr(output, target, log_probs, labels):
+def weighted_roc_auc_ovr(output, target, log_probs, logits, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, target, log_probs, labels, "weighted", "ovr")
+    return _roc_auc(output, target, log_probs, logits, labels, "weighted", "ovr")
 
-def overall_confusion_matrix(output, target, log_probs, labels):
+
+def overall_confusion_matrix(output, target, log_probs, logits, labels):
     """
         Creates a num_labels x num_labels sized confusion matrix whose i-th row and j-th column entry indicates
         the number of samples with true label being i-th class and predicted label being j-th class
@@ -201,18 +241,24 @@ def overall_confusion_matrix(output, target, log_probs, labels):
             Per entry, the log-probabilities of each class should be contained when log_probs is set to true,
             otherwise a list of the predicted class indices in the range [0, C-1] should be passed for each of the N samples
         :param log_probs: If set to True, the output should have dimension (N,C), otherwise dimension (N)
+        :param logits:  If set to True, the vectors are expected to contain logits/raw scores
         :param target: List of integers of the real labels (ground truth)
         :param labels: List of labels to index the matrix
         :return: Dataframes of size (num_labels x num_labels) representing the confusion matrix
     """
     with torch.no_grad():
-        pred = _convert_logprob_to_prediction(output) if log_probs else output
+        assert log_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+        if log_probs:
+            pred = _convert_log_probs_to_prediction(output)
+        else:
+            pred = _convert_logits_to_prediction(output)
+        assert pred.shape[0] == len(target)
         cm = confusion_matrix(y_true=target, y_pred=pred, labels=labels)
         df_cm = pd.DataFrame(cm, index=labels, columns=labels)
         return df_cm
 
 
-def class_wise_confusion_matrices_single_label(output, target, log_probs, labels):
+def class_wise_confusion_matrices_single_label(output, target, log_probs, logits, labels):
     """
     Creates a 2x2 confusion matrix per class contained in labels
     CM(0,0) -> TN, CM(1,0) -> FN, CM(0,1) -> FP, CM(1,1) -> TP
@@ -221,6 +267,7 @@ def class_wise_confusion_matrices_single_label(output, target, log_probs, labels
         Per entry, the log-probabilities of each class should be contained when log_probs is set to true,
         otherwise a list of the predicted class indices in the range [0, C-1] should be passed for each of the N samples
     :param log_probs: If set to True, the output should have dimension (N,C), otherwise dimension (N)
+    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
     :param target: List of integers of the real labels (ground truth)
     :param labels: List of integers representing all classes that can occur
     :return: List of dataframes
@@ -229,7 +276,12 @@ def class_wise_confusion_matrices_single_label(output, target, log_probs, labels
     (see https://scikit-learn.org/stable/modules/generated/sklearn.metrics.multilabel_confusion_matrix.html)
     """
     with torch.no_grad():
-        pred = _convert_logprob_to_prediction(output) if log_probs else output
+        assert log_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+        if log_probs:
+            pred = _convert_log_probs_to_prediction(output)
+        else:
+            pred = _convert_logits_to_prediction(output)
+        assert pred.shape[0] == len(target)
         class_wise_cms = multilabel_confusion_matrix(y_true=target, y_pred=pred, labels=labels)
 
         df_class_wise_cms = [pd.DataFrame(class_wise_cms[idx]).astype('int64').rename_axis(labels[idx], axis=1)
@@ -237,7 +289,7 @@ def class_wise_confusion_matrices_single_label(output, target, log_probs, labels
         return df_class_wise_cms
 
 
-def cpsc_score_adapted(output, target, log_probs):
+def cpsc_score_adapted(output, target, log_probs, logits):
     '''
     cspc2018_challenge score
     Written by:  Xingyao Wang, Feifei Liu, Chengyu Liu
@@ -279,8 +331,14 @@ def cpsc_score_adapted(output, target, log_probs):
     The static of predicted answers and the final score are saved to score.txt in local path.
     '''
     with torch.no_grad():
-        # ndarray of size (sample_num, )
-        answers = _convert_logprob_to_prediction(output).numpy() if log_probs else output.numpy()
+        assert log_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+        if log_probs:
+            # ndarray of size (sample_num, )
+            answers = _convert_log_probs_to_prediction(output).numpy()
+        else:
+            # ndarray of size (sample_num, )
+            answers = _convert_logits_to_prediction(output).numpy()
+
         # list of sample_num ndarrays of size (1, ) or (2, ) or (3,)
         reference = [np.nonzero(sample_vec == 1)[0] for sample_vec in target.numpy()]
 
@@ -323,33 +381,3 @@ def cpsc_score_adapted(output, target, log_probs):
         # print(A)
         print('Total Record Number: ', np.sum(A))
         return F1
-
-
-def old_accuracy(output, target, log_probs=True):
-    """
-     Parameters
-     ----------
-     :param output: dimension=(minibatch,C);
-        Per entry, the log-probabilities of each class should be contained when log_probs is set to true, otherwise
-        a list of class indices in the range [0, C-1] should be passed
-        (obtaining log-probabilities is achieved by adding a LogSoftmax layer in the last layer of the network)
-     :param target: dimension= (N)
-        Per entry, a class index in the range [0, C-1] as integer
-    """
-    with torch.no_grad():
-        pred = _convert_logprob_to_prediction(output) if log_probs else output
-        assert pred.shape[0] == len(target)
-        correct = 0
-        correct += torch.sum(pred == target).item()  # Counts number of equal entries + converts the tensor to an number
-        # Alternative:  accuracy_score(y_true=target, y_pred=_convert_logprob_to_prediction(output))
-    return correct / len(target)
-
-
-def old_top_k_acc(output, target, k=3):
-    with torch.no_grad():
-        pred = torch.topk(output, k, dim=1)[1]
-        assert pred.shape[0] == len(target)
-        correct = 0
-        for i in range(k):
-            correct += torch.sum(pred[:, i] == target).item()
-    return correct / len(target)

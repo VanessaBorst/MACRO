@@ -14,7 +14,7 @@ class BaseTrainer:
         # create a logger with name "trainer" and the verbosity specified in the config.json
         self.logger = config.get_logger('trainer', config['trainer']['verbosity'])
 
-        self.multi_label_training = config['trainer']['multi_label_training']
+        self.multi_label_training = config['arch']['args']['multi_label_training']
 
         self.model = model
         self.criterion = criterion

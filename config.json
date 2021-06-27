@@ -4,32 +4,33 @@
   "n_gpu": 1,
   "arch": {
     "type": "BaselineModelWoRnnWoAttention",
-    "args": {}
+    "args": {
+      "apply_final_activation": false,
+      "multi_label_training": true
+    }
   },
   "data_loader": {
     "type": "ECGDataLoader",
     "args": {
-      "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/minmax",
+      "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/",
       "batch_size": 8,
       "shuffle": true,
       "validation_split": 0.25,
       "num_workers": 1,
       "seq_len": 72000
     },
-    "overfit_single_batch": false,
-    "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/minmax"
+    "overfit_single_batch": true,
+    "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/"
   },
   "optimizer": {
     "type": "Adam",
     "args": {
       "lr": 0.0001,
-      "betas": [0.9,0.98],
-      "eps":1e-09,
       "weight_decay": 0,
-      "amsgrad": false
+      "amsgrad": true
     }
   },
-  "loss": "BCE",
+  "loss": "BCE_with_logits",
   "metrics": {
     "per_iteration": [
       "subset_accuracy"
@@ -50,12 +51,13 @@
       "class_wise_roc_auc_ovo"
     ],
     "additional_metrics_args": {
-      "sigmoid_probs": true,
-      "log_probs": false
+      "sigmoid_probs": false,
+      "log_probs": false,
+      "logits": true
     }
   },
   "lr_scheduler": {
-    "active": false,
+    "active": true,
     "type": "StepLR",
     "args": {
       "step_size": 50,
@@ -69,7 +71,6 @@
     "verbosity": 2,
     "monitor": "min val_loss",
     "early_stop": 10,
-    "multi_label_training": true,
     "tensorboard": true
   }
 }

@@ -61,6 +61,7 @@ class ECGTrainer(BaseTrainer):
             "labels": class_labels,
             "sigmoid_probs": config["metrics"]["additional_metrics_args"].get("sigmoid_probs", False),
             "log_probs": config["metrics"]["additional_metrics_args"].get("log_probs", False),
+            "logits": config["metrics"]["additional_metrics_args"].get("logits", False),
             "train_class_weights": self.data_loader.dataset.get_target_distribution(
                 idx_list=self.data_loader.batch_sampler.sampler.indices, multi_labels=self.multi_label_training),
             "valid_class_weights": val_class_weights
@@ -87,9 +88,9 @@ class ECGTrainer(BaseTrainer):
         # Reset the trackers
         self.train_metrics.reset()
         self.train_cms.reset()
-        # If there are epoch-based metrics, store the intermediate outputs and targets
+        # If there are epoch-based metrics, store the intermediate targets. Always store the output scores
+        outputs = torch.FloatTensor().to(self.device)
         if len(self.metrics_epoch) > 0:
-            outputs = torch.FloatTensor().to(self.device)
             targets = torch.FloatTensor().to(self.device)
             if not self.multi_label_training:
                 targets_all_labels = torch.FloatTensor().to(self.device)
@@ -131,8 +132,8 @@ class ECGTrainer(BaseTrainer):
                 self.writer.add_figure("Attention weights for batch " + str(batch_idx),
                                        fig, global_step=epoch)
 
+            outputs = torch.cat((outputs, output))
             if len(self.metrics_epoch) > 0:
-                outputs = torch.cat((outputs, output))
                 targets = torch.cat((targets, target))
                 if not self.multi_label_training:
                     targets_all_labels = torch.cat((targets_all_labels, target_all_labels))
@@ -186,6 +187,7 @@ class ECGTrainer(BaseTrainer):
                 upd_class_wise_cms = class_wise_confusion_matrices_multi_label(output=output, target=target,
                                                                                sigmoid_probs=self._param_dict[
                                                                                    'sigmoid_probs'],
+                                                                               logits=self._param_dict['logits'],
                                                                                labels=self._param_dict['labels'])
             self.train_cms.update_class_wise_cms(upd_class_wise_cms)
 
@@ -241,6 +243,16 @@ class ECGTrainer(BaseTrainer):
                 }
                 self.train_metrics.class_wise_epoch_update(met.__name__, met(target=targets, output=outputs,
                                                                              **additional_kwargs))
+
+        # Plot heatmaps of the predicted scores for each validation sample to verify if they change
+        fig_output_scores = sns.heatmap(data=outputs.detach().numpy()).get_figure()
+        plt.xlabel("Class ID")
+        plt.ylabel("Training Sample ID")
+        # plt.show()
+        plt.close(fig_output_scores)  # close the current figure
+        self.writer.add_figure("Predicted output scores per training sample",
+                               fig_output_scores, global_step=epoch)
+
 
         # Contains only NaNs for all non-iteration-based metrics when overfit_single_batch is True
         train_log = self.train_metrics.result()
@@ -299,9 +311,9 @@ class ECGTrainer(BaseTrainer):
         self.writer.set_mode('valid')
 
         with torch.no_grad():
-            # If there are epoch-based metrics, store the intermediate outputs and targets
+            # If there are epoch-based metrics, store the intermediate targets. Always store the outputs
+            outputs = torch.FloatTensor().to(self.device)
             if len(self.metrics_epoch) > 0:
-                outputs = torch.FloatTensor().to(self.device)
                 targets = torch.FloatTensor().to(self.device)
                 if not self.multi_label_training:
                     targets_all_labels = torch.FloatTensor().to(self.device)
@@ -328,8 +340,8 @@ class ECGTrainer(BaseTrainer):
                     self.writer.add_figure("Attention weights for validation batch " + str(batch_idx),
                                            fig, global_step=epoch)
 
+                outputs = torch.cat((outputs, output))
                 if len(self.metrics_epoch) > 0:
-                    outputs = torch.cat((outputs, output))
                     targets = torch.cat((targets, target))
                     if not self.multi_label_training:
                         targets_all_labels = torch.cat((targets_all_labels, target_all_labels))
@@ -371,6 +383,7 @@ class ECGTrainer(BaseTrainer):
                     upd_class_wise_cms = class_wise_confusion_matrices_multi_label(output=output, target=target,
                                                                                    sigmoid_probs=self._param_dict[
                                                                                        'sigmoid_probs'],
+                                                                                   logits=self._param_dict['logits'],
                                                                                    labels=self._param_dict['labels'])
 
                 self.valid_cms.update_class_wise_cms(upd_class_wise_cms)
@@ -417,6 +430,15 @@ class ECGTrainer(BaseTrainer):
         # add histogram of model parameters to the tensorboard
         for name, p in self.model.named_parameters():
             self.writer.add_histogram(name, p, bins='auto')
+
+        # Plot heatmaps of the predicted scores for each validation sample to verify if they change
+        fig_output_scores = sns.heatmap(data=outputs.detach().numpy()).get_figure()
+        plt.xlabel("Class ID")
+        plt.ylabel("Validation Sample ID")
+        # plt.show()
+        plt.close(fig_output_scores)  # close the current figure
+        self.writer.add_figure("Predicted output scores per validation sample" + str(batch_idx),
+                               fig_output_scores, global_step=epoch)
 
         valid_log = self.valid_metrics.result()
 

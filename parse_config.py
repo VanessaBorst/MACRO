@@ -47,6 +47,8 @@ class ConfigParser:
             2: logging.DEBUG
         }
 
+        self._do_some_sanity_checks()
+
     @classmethod
     def from_args(cls, args, options=''):
         """
@@ -133,6 +135,48 @@ class ConfigParser:
     @property
     def log_dir(self):
         return self._log_dir
+
+    def _do_some_sanity_checks(self):
+        if self.config["loss"] == "BCE_with_logits":
+            assert self.config["arch"]["args"]["multi_label_training"] \
+                   and not self.config["arch"]["args"]["apply_final_activation"] \
+                   and not self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
+                   and not self.config["metrics"]["additional_metrics_args"]["log_probs"] \
+                   and self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
+                                                                                    "fit to the rest of the " \
+                                                                                    "configuration"
+        elif self.config["loss"] == "BCE":
+            assert self.config["arch"]["args"]["multi_label_training"] \
+                   and self.config["arch"]["args"]["apply_final_activation"] \
+                   and self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
+                   and not self.config["metrics"]["additional_metrics_args"]["log_probs"] \
+                   and not self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
+                                                                                        "fit to the rest of the " \
+                                                                                        "configuration "
+        elif self.config["loss"] == "nll_loss":
+            assert not self.config["arch"]["args"]["multi_label_training"] \
+                   and self.config["arch"]["args"]["apply_final_activation"] \
+                   and not self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
+                   and self.config["metrics"]["additional_metrics_args"]["log_probs"] \
+                   and not self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
+                                                                                        "fit to the rest of the " \
+                                                                                        "configuration "
+        elif self.config["loss"] == "cross_entropy_loss":
+            assert not self.config["arch"]["args"]["multi_label_training"] \
+                   and not self.config["arch"]["args"]["apply_final_activation"] \
+                   and not self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
+                   and not self.config["metrics"]["additional_metrics_args"]["log_probs"] \
+                   and self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
+                                                                                    "fit to the rest of the " \
+                                                                                    "configuration "
+
+        assert (self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] ^
+                self.config["metrics"]["additional_metrics_args"]["log_probs"]
+                ^ self.config["metrics"]["additional_metrics_args"]["logits"]) and not \
+            (self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"]
+             and self.config["metrics"]["additional_metrics_args"]["log_probs"]
+             and self.config["metrics"]["additional_metrics_args"]["logits"]), \
+            "Exactly one of the three must be true"
 
 
 # helper functions to update config dict with custom cli options

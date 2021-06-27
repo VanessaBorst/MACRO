@@ -25,7 +25,6 @@ class ECGDataset(Dataset):
         """
 
         :param input_dir: Path  -> Path to the directory containing the preprocessed pickle files for each record
-        :param multi_label_training: bool -> If set to true, multi-label training is applie
         :param transform: callable, optional -> Optional transform(s) to be applied on a sample.
         """
 

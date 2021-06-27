@@ -22,14 +22,12 @@ np.random.seed(SEED)
 def main(config):
 
     # Conditional inputs depending on the config
-    if config['arch']['type']=='BaselineModelWoRnnWoAttentionSingleLabel':
-        import model.baseline_model_woRNN_woAttention_singleLabel as module_arch
-    elif config['arch']['type']=='BaselineModelWoRnnWoAttention':
+    if config['arch']['type'] == 'BaselineModelWoRnnWoAttention':
         import model.baseline_model_woRNN_woAttention as module_arch
     else:
         import model.baseline_model as module_arch
 
-    if config['trainer']['multi_label_training']:
+    if config['arch']['args']['multi_label_training']:
         import model.multi_label_metrics as module_metric
     else:
         import model.single_label_metrics as module_metric

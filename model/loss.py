@@ -23,7 +23,7 @@ def BCE(output, target):
 # This contains Sigmoid itself
 def BCE_with_logits(output, target):
     loss = BCEWithLogitsLoss()
-    return loss(output, target)
+    return loss(output, target.float())
 
 
 # This contains Sigmoid itself
