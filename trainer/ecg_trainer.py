@@ -178,10 +178,12 @@ class ECGTrainer(BaseTrainer):
             if not self.multi_label_training:
                 upd_cm = overall_confusion_matrix(output=output, target=target,
                                                   log_probs=self._param_dict['log_probs'],
+                                                  logits=self._param_dict['logits'],
                                                   labels=self._param_dict['labels'])
                 self.train_cms.update_cm(upd_cm)
                 upd_class_wise_cms = class_wise_confusion_matrices_single_label(output=output, target=target,
                                                                                 log_probs=self._param_dict['log_probs'],
+                                                                                logits=self._param_dict['logits'],
                                                                                 labels=self._param_dict['labels'])
             else:
                 upd_class_wise_cms = class_wise_confusion_matrices_multi_label(output=output, target=target,
@@ -373,11 +375,13 @@ class ECGTrainer(BaseTrainer):
                 if not self.multi_label_training:
                     upd_cm = overall_confusion_matrix(output=output, target=target,
                                                       log_probs=self._param_dict['log_probs'],
+                                                      logits=self._param_dict['logits'],
                                                       labels=self._param_dict['labels'])
                     self.valid_cms.update_cm(upd_cm)
                     upd_class_wise_cms = class_wise_confusion_matrices_single_label(output=output, target=target,
                                                                                     log_probs=self._param_dict[
                                                                                         'log_probs'],
+                                                                                    logits=self._param_dict['logits'],
                                                                                     labels=self._param_dict['labels'])
                 else:
                     upd_class_wise_cms = class_wise_confusion_matrices_multi_label(output=output, target=target,
