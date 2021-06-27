@@ -222,7 +222,6 @@ class ConfusionMatrixTracker:
             fig_all_cms.tight_layout()
             plt.close(fig_all_cms)
             self.writer.add_figure("Overview single confusion matrices", fig_all_cms.get_figure(), global_step=epoch)
-            print("")
 
     def _plot_cm_for_single_class(self, idx, ax, epoch):
         class_cm = self._class_wise_cms[idx]

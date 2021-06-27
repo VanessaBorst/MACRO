@@ -24,13 +24,10 @@ def _convert_log_probs_to_prediction(log_prob_output):
 def _convert_logits_to_prediction(logits):
     # Convert the logits to probabilities and take the one with the highest one as final prediction
     # We are in the single-label case, so apply Softmax first and then return the maximum value
-    softmax_probs = torch.nn.Softmax(logits, dim=1)
+    softmax_probs = torch.nn.functional.softmax(logits, dim=1)
     # Should be the same as directly taking the maximum of raw logits (if x1<x2, then softmax(x1)<softmax(x2))
-    assert torch.argmax(softmax_probs, dim=1) == torch.argmax(logits, dim=1)
+    assert (torch.argmax(softmax_probs, dim=1) == torch.argmax(logits, dim=1)).all()
     return torch.argmax(softmax_probs, dim=1)
-
-    sigmoid_probs = nn.functional.sigmoid(logits)
-    return torch.where(sigmoid_probs > threshold, 1, 0)
 
 
 def _f1(output, target, log_probs, logits, labels, average):
@@ -167,7 +164,7 @@ def balanced_accuracy(output, target, log_probs, logits):
         return balanced_accuracy_score(y_true=target, y_pred=pred)
 
 
-def top_k_acc(output, target, log_probs, logits, labels, k=3):
+def top_k_acc(output, target, labels, k=3):
     """
     Calculates the TOP-k accuracy for the multiclass case
     A prediction is considered correct when the true label is associated with one of the k highest predicted scores
@@ -183,12 +180,6 @@ def top_k_acc(output, target, log_probs, logits, labels, k=3):
     :param k: Number of most likely outcomes considered to find the correct label
     """
     with torch.no_grad():
-        assert log_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
-        if log_probs:
-            pred = _convert_log_probs_to_prediction(output)
-        else:
-            pred = _convert_logits_to_prediction(output)
-        assert pred.shape[0] == len(target)
         return top_k_accuracy_score(y_true=target, y_score=output, k=k, labels=labels)
 
 

@@ -7,6 +7,7 @@ TODO:
     - https://pytorch.org/docs/stable/generated/torch.nn.MultiLabelSoftMarginLoss.html#torch.nn.MultiLabelSoftMarginLoss
     - Hamming loss (minimiert die Hamming Distance): https://scikit-learn.org/stable/modules/model_evaluation.html#hamming-loss
     - Class Balanced Loss: https://github.com/vandit15/Class-balanced-loss-pytorch/blob/master/class_balanced_loss.py
+    - Softmax for Multilabel Classification (Faceboook): https://gombru.github.io/2018/05/23/cross_entropy_loss/
 
 - Hyperparameter-Tuning: Frameworks/Libs finden und für eine entscheiden
     - Ray Tune: https://docs.ray.io/en/master/tune/index.html

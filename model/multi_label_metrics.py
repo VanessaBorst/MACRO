@@ -2,8 +2,8 @@ import csv
 
 import numpy as np
 import torch
-from sklearn.metrics import confusion_matrix, multilabel_confusion_matrix, \
-    accuracy_score, top_k_accuracy_score, roc_auc_score, f1_score, balanced_accuracy_score, precision_score, \
+from sklearn.metrics import multilabel_confusion_matrix, \
+    accuracy_score, roc_auc_score, f1_score, precision_score, \
     recall_score
 import pandas as pd
 
@@ -30,7 +30,7 @@ def _convert_sigmoid_probs_to_prediction(sigmoid_probs, threshold=THRESHOLD):
 def _convert_logits_to_prediction(logits, threshold=THRESHOLD):
     # We are in the multi-label case, so apply Sigmoid first and then the threshold
     # Good post: https://web.stanford.edu/~nanbhas/blog/sigmoid-softmax/
-    sigmoid_probs = nn.functional.sigmoid(logits)
+    sigmoid_probs = torch.sigmoid(logits)
     return torch.where(sigmoid_probs > threshold, 1, 0)
 
 
@@ -377,10 +377,10 @@ def _convert_multi_label_probs_to_single_prediction(sigmoid_prob_output):
 
 
 def _convert_multi_label_logits_to_single_prediction(logits_output):
-    # Convert the logits to probabilities and take the one with the highest one as final prediction
-    softmax_probs = torch.nn.Softmax(logits_output, dim=1)
+    # Convert the logits to probabilities and take the one with the highest one as final predicti
+    softmax_probs = torch.nn.functional.softmax(logits_output, dim=1)
     # Should be the same as directly taking the maximum of raw logits
-    assert torch.argmax(softmax_probs, dim=1) == torch.argmax(logits_output, dim=1)
+    assert (torch.argmax(softmax_probs, dim=1) == torch.argmax(logits_output, dim=1)).all()
     return torch.argmax(softmax_probs, dim=1)
 
 

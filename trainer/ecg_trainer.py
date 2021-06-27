@@ -441,7 +441,7 @@ class ECGTrainer(BaseTrainer):
         plt.ylabel("Validation Sample ID")
         # plt.show()
         plt.close(fig_output_scores)  # close the current figure
-        self.writer.add_figure("Predicted output scores per validation sample" + str(batch_idx),
+        self.writer.add_figure("Predicted output scores per validation sample",
                                fig_output_scores, global_step=epoch)
 
         valid_log = self.valid_metrics.result()

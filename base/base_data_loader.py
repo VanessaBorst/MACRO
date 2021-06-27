@@ -24,11 +24,12 @@ class BaseDataLoader(DataLoader):
         self.batch_size = batch_size
         self.n_samples = len(dataset)
 
+        np.random.seed(0)
+
         if not single_batch:
             self.sampler, self.valid_sampler = self._split_sampler(self.validation_split)
         else:
             idx_full = np.arange(self.n_samples)
-            np.random.seed(0)
             np.random.shuffle(idx_full)
             # Use only the number of samples contained in one batch and try to overfit them
             num_samples = batch_size if not batch_size % 2 == 1 else batch_size-1
@@ -54,7 +55,6 @@ class BaseDataLoader(DataLoader):
 
         idx_full = np.arange(self.n_samples)
 
-        np.random.seed(0)
         np.random.shuffle(idx_full)
 
         if isinstance(split, int):

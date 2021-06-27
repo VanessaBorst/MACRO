@@ -16,7 +16,7 @@ torch.manual_seed(SEED)
 # torch.backends.cudnn.deterministic = True
 torch.use_deterministic_algorithms(True)
 torch.backends.cudnn.benchmark = False
-np.random.seed(SEED)
+# np.random.seed(SEED) -> not used, np.random is only used in the base data loader and the seed is set to 0 there
 
 
 def main(config):
@@ -54,9 +54,14 @@ def main(config):
     # Important: The method config['loss'] must exist in the loss module (<module 'model.loss' >)
     # Equivalently, all metrics specified in the context must exist in the metrics modul
     criterion = getattr(module_loss, config['loss'])
-    metrics_iter = [getattr(module_metric, met) for met in config['metrics']['per_iteration']]
-    metrics_epoch = [getattr(module_metric, met) for met in config['metrics']['per_epoch']]
-    metrics_epoch_class_wise = [getattr(module_metric, met) for met in config['metrics']['per_epoch_class_wise']]
+    if config['arch']['args']['multi_label_training']:
+        metrics_iter = [getattr(module_metric, met) for met in config['metrics']['ml']['per_iteration']]
+        metrics_epoch = [getattr(module_metric, met) for met in config['metrics']['ml']['per_epoch']]
+        metrics_epoch_class_wise = [getattr(module_metric, met) for met in config['metrics']['ml']['per_epoch_class_wise']]
+    else:
+        metrics_iter = [getattr(module_metric, met) for met in config['metrics']['sl']['per_iteration']]
+        metrics_epoch = [getattr(module_metric, met) for met in config['metrics']['sl']['per_epoch']]
+        metrics_epoch_class_wise = [getattr(module_metric, met) for met in config['metrics']['sl']['per_epoch_class_wise']]
 
     # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
