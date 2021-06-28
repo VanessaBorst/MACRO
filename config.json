@@ -12,7 +12,7 @@
     "type": "ECGDataLoader",
     "args": {
       "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/",
-      "batch_size": 32,
+      "batch_size": 8,
       "shuffle": true,
       "validation_split": 0.25,
       "num_workers": 1,
@@ -91,7 +91,7 @@
     "save_period": 1,
     "verbosity": 2,
     "monitor": "min val_loss",
-    "early_stop": 50,
+    "early_stop": 30,
     "tensorboard": true
   }
 }

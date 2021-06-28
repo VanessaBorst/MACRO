@@ -202,17 +202,16 @@ class ConfusionMatrixTracker:
         if self.writer is not None:
             if not self.multi_label_training:
                 # Plot the global confusion matrix and send it to the writer
-                plt.figure(figsize=(10, 7))
-                plt.title("Overall confusion matrix")
-                fig_ = sns.heatmap(self._cm, annot=True, cmap='Spectral').get_figure()
-                # plt.show()
-                plt.close(fig_)  # close the curren figure
-
+                fig_overall_cm, ax = plt.subplots(figsize=(10, 7))
+                ax.set_title("Overall confusion matrix")
+                sns.heatmap(self._cm, annot=True, cmap='Spectral', ax=ax)
                 # Params of SummaryWriter.add_image:
                 #   tag (string): Data identifier
                 #   img_tensor (torch.Tensor, numpy.array, or string/blobname): Image data
                 #   global_step (int): Global step value to record
-                self.writer.add_figure("Overall confusion matrix", fig_, global_step=epoch)
+                self.writer.add_figure("Overall confusion matrix", fig_overall_cm, global_step=epoch)
+                fig_overall_cm.clear()
+                plt.close(fig_overall_cm)  # close the current figure
 
             # Also create a one-containing-all-single-cms-figure
             fig_all_cms, axs = plt.subplots(3, 3, figsize=(15, 8))
@@ -220,6 +219,7 @@ class ConfusionMatrixTracker:
                 # Plot the class-wise confusion matrices and send them to the writer one-by-one
                 self._plot_cm_for_single_class(idx, ax, epoch)
             fig_all_cms.tight_layout()
+            fig_all_cms.clear()
             plt.close(fig_all_cms)
             self.writer.add_figure("Overview single confusion matrices", fig_all_cms.get_figure(), global_step=epoch)
 
