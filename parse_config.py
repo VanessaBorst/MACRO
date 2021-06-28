@@ -137,7 +137,7 @@ class ConfigParser:
         return self._log_dir
 
     def _do_some_sanity_checks(self):
-        if self.config["loss"] == "BCE_with_logits":
+        if self.config["loss"] == "BCE_with_logits" or  self.config["loss"] == "balanced_BCE_with_logits":
             assert self.config["arch"]["args"]["multi_label_training"] \
                    and not self.config["arch"]["args"]["apply_final_activation"] \
                    and not self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \

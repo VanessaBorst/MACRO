@@ -27,10 +27,10 @@ def BCE_with_logits(output, target):
 
 
 # This contains Sigmoid itself
-def balanced_BCE_with_logits(output, target, class_weight=None):
-    # TODO set positive weights correctly, e.g. pos_weight=class_weight[1]
-    loss = BCEWithLogitsLoss(pos_weight=None)
-    return loss(output, target)
+def balanced_BCE_with_logits(output, target, pos_weights):
+    pos_weights_tensor = torch.tensor(pos_weights)
+    loss = BCEWithLogitsLoss(pos_weight=pos_weights_tensor)
+    return loss(output, target.float())
 
 
 # ------------------------- Single-Label Classification Loss Functions -------------------------

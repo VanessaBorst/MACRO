@@ -1,5 +1,6 @@
 import functools
 import operator
+from collections import Counter
 from typing import Tuple, List
 import numpy as np
 from scipy.io import loadmat
@@ -59,19 +60,19 @@ class ECGDataset(Dataset):
 
         return record, meta["classes_encoded"], meta["classes_one_hot"], len(record.index), record_name
 
-    def get_target_distribution(self, idx_list, multi_labels):
+    def get_class_freqs_and_target_distribution(self, idx_list, multi_label_training):
         """
-        Can be used to determine the target classes distribution
+        Can be used to determine  the class frequencies and the target classes distribution
         :param idx_list: list of ids, should contain all ids contained in the train, valid or test set
-        :return: Class distribution
-        :param multi_labels: If set to False, only the first label is considered for determining the target dist.
+        :param multi_label_training: If true, all labels are considered, otherwise only the first label is counted
+        :return:  Class frequencies and class distribution
 
-        Can be used e.g. as torch.Tensor(train.get_target_distribution()).to(device)
+        Deprecated: Can be used e.g. as torch.Tensor(train.get_target_distribution()).to(device)
         """
         classes = []
         for idx in idx_list:
             _, classes_encoded, classes_one_hot, _, record_name = self.__getitem__(idx)
-            if multi_labels:
+            if multi_label_training:
                 classes.append(classes_one_hot)
             else:
                 # Only consider the first label
@@ -79,23 +80,56 @@ class ECGDataset(Dataset):
                 classes_one_hot[classes_encoded[0]] = 1
                 classes.append(classes_one_hot)
 
-        target_sum = pd.DataFrame(classes).sum()
-        # Get the weights as ndarray
-        class_weights = target_sum.div(target_sum.sum()).values
-        return class_weights
+        # Get the class freqs as Pandas series
+        class_freqs = pd.DataFrame(classes).sum()
+        # Get the class distribution as Pandas series
+        class_dist = class_freqs.div(class_freqs.sum())
 
-    def get_inverse_class_frequency(self, idx_list, multi_labels=True):
+        # Return both as as ndarray
+        return class_freqs.values, class_dist.values
+
+    def get_ml_pos_weights(self, idx_list):
+        """
+        Can be used to determine  the class frequencies and the target classes distribution
+        :param idx_list: list of ids, should contain all ids contained in the train, valid or test set
+        :return:  Pos weights, one weight per class
+
+        """
+        classes = []
+        for idx in idx_list:
+            _, _, classes_one_hot, _, _ = self.__getitem__(idx)
+            classes.append(classes_one_hot)
+
+        # Get the class freqs as Pandas series
+        class_freqs = pd.DataFrame(classes).sum()
+
+        # Calculate the number of pos and negative samples per class
+        df = pd.DataFrame({'num_pos_samples': class_freqs})
+
+        # Each class should occur at least ones
+        assert not df['num_pos_samples'].isin([0]).any(), "Each class should occur at least ones"
+
+        df['num_neg_samples'] = df.apply(lambda row: len(idx_list) - row.values).values
+        df["ratio_neg_to_pos"] = df.num_neg_samples / (df.num_pos_samples)
+        # If num_pos_samples can be 0, a dummy term needs to be added to it to avoid dividing by 0
+        # df["ratio_neg_to_pos"] = df.num_neg_samples / (df.num_pos_samples + 1e-5)
+
+        # Return the ratio as as ndarray
+        return df["ratio_neg_to_pos"].values
+
+    def get_inverse_class_frequency(self, idx_list, multi_label_training):
         """
         Can be used to determine the inverse class frequencies
         :param idx_list: list of ids, should contain all ids contained in the train, valid or test set
-        :return: Class distribution
-        :param multi_labels: If set to False, only the first label is considered for determining the target dist.
+        :param multi_label_training: If true, all labels are considered, otherwise only the first label is counted
+
+        :return:  Inverse class frequencies
         """
 
         classes = []
         for idx in idx_list:
             _, classes_encoded, classes_one_hot, _, record_name = self.__getitem__(idx)
-            if multi_labels:
+            if multi_label_training:
                 classes.append(classes_encoded)
             else:
                 # Only consider the first label
@@ -109,7 +143,12 @@ class ECGDataset(Dataset):
 
         return class_weights
 
+
+
 if __name__ == '__main__':
     dataset = ECGDataset("data/CinC_CPSC/train/preprocessed/no_sampling/")
-    target_distribution = dataset.get_target_distribution([0,1,4,5,6,71,10,101])
-    class_weights = dataset.get_inverse_class_frequency([0,1,4,5,6,71,10,101])
+    # class_freqs, target_distribution = dataset.get_class_freqs_and_target_distribution([0, 1, 4, 5, 6, 71, 10, 99, 76],
+    #                                                                                    multi_label_training=True)
+    pos_weights = dataset.get_ml_pos_weights([0, 1, 4, 5, 6, 71, 10, 99, 76])
+    class_weights = dataset.get_inverse_class_frequency([0, 1, 4, 5, 6, 71, 10, 99, 76], multi_label_training=True)
+    print("Done")

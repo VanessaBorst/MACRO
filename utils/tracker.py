@@ -233,14 +233,14 @@ class ConfusionMatrixTracker:
         ax.set_xlabel('Predicted label')
         ax.set_title("Confusion Matrix for class " + str(class_cm.columns.name))
 
-        # Recreate the cm-related part to another figure to add it directly to the TensorBoardWriter
-        plt.figure(figsize=(10, 7))
-        plt.title("Confusion matrix for class " + str(class_cm.columns.name))
-        single_cm_fig = sns.heatmap(class_cm, annot=True, cmap='Spectral').get_figure()
-        # plt.show()
-        plt.close(single_cm_fig)  # close the current figure
-        self.writer.add_figure("Confusion matrix for class " + str(class_cm.columns.name),
-                               single_cm_fig, global_step=epoch)
+        # # Recreate the cm-related part to another figure to add it directly to the TensorBoardWriter
+        # plt.figure(figsize=(10, 7))
+        # plt.title("Confusion matrix for class " + str(class_cm.columns.name))
+        # single_cm_fig = sns.heatmap(class_cm, annot=True, cmap='Spectral').get_figure()
+        # # plt.show()
+        # plt.close(single_cm_fig)  # close the current figure
+        # self.writer.add_figure("Confusion matrix for class " + str(class_cm.columns.name),
+        #                        single_cm_fig, global_step=epoch)
 
 
 if __name__ == '__main__':

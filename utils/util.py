@@ -103,7 +103,7 @@ def plot_grad_flow_lines(named_parameters, fig_to_plot_into):
     plt.ylabel("average gradient")
     plt.title("Gradient flow")
     plt.grid(True)
-    plt.tight_layout()
+    #plt.tight_layout()
 
 
 def plot_grad_flow_bars(named_parameters, fig_to_plot_into):
@@ -136,4 +136,4 @@ def plot_grad_flow_bars(named_parameters, fig_to_plot_into):
     plt.legend([Line2D([0], [0], color="c", lw=4),
                 Line2D([0], [0], color="b", lw=4),
                 Line2D([0], [0], color="k", lw=4)], ['max-gradient', 'mean-gradient', 'zero-gradient'])
-    plt.tight_layout()
+    # plt.tight_layout()

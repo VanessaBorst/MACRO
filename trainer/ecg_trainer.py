@@ -3,8 +3,10 @@ import time
 
 import numpy as np
 import torch
+from matplotlib.colors import LinearSegmentedColormap
+
 from base import BaseTrainer
-from model.multi_label_metrics import class_wise_confusion_matrices_multi_label
+from model.multi_label_metrics import class_wise_confusion_matrices_multi_label, THRESHOLD
 from model.single_label_metrics import class_wise_confusion_matrices_single_label, overall_confusion_matrix
 from utils import inf_loop, plot_grad_flow_lines, plot_grad_flow_bars
 from utils.tracker import MetricTracker, ConfusionMatrixTracker
@@ -39,36 +41,42 @@ class ECGTrainer(BaseTrainer):
         self.lr_scheduler = lr_scheduler
         self.log_step = int(np.sqrt(data_loader.batch_size))
 
-        class_labels = self.data_loader.dataset.class_labels
+        self._class_labels = self.data_loader.dataset.class_labels
 
         # metrics
         keys_iter = [m.__name__ for m in self.metrics_iter]
         keys_epoch = [m.__name__ for m in self.metrics_epoch]
         keys_epoch_class_wise = [m.__name__ for m in self.metrics_epoch_class_wise]
         self.train_metrics = MetricTracker(keys_iter=['loss'] + keys_iter, keys_epoch=keys_epoch,
-                                           keys_epoch_class_wise=keys_epoch_class_wise, labels=class_labels,
+                                           keys_epoch_class_wise=keys_epoch_class_wise, labels=self._class_labels,
                                            writer=self.writer)
         self.valid_metrics = MetricTracker(keys_iter=['loss'] + keys_iter, keys_epoch=keys_epoch,
-                                           keys_epoch_class_wise=keys_epoch_class_wise, labels=class_labels,
+                                           keys_epoch_class_wise=keys_epoch_class_wise, labels=self._class_labels,
                                            writer=self.writer)
 
         # Store potential parameters needed for metrics
         # TODO Find out which shape is needed by the weights - inverse or normal?
-        val_class_weights = self.data_loader.dataset.get_target_distribution(
-            idx_list=self.data_loader.valid_sampler.indices, multi_labels=self.multi_label_training) \
+        # val_class_weights = self.data_loader.dataset.get_target_distribution(
+        #     idx_list=self.data_loader.valid_sampler.indices, multi_labels=self.multi_label_training) \
+        #     if not self.overfit_single_batch else None
+        val_pos_weights = self.data_loader.dataset.get_ml_pos_weights(
+                idx_list=self.data_loader.valid_sampler.indices) \
             if not self.overfit_single_batch else None
         self._param_dict = {
-            "labels": class_labels,
+            "labels": self._class_labels,
+
             "sigmoid_probs": config["metrics"]["additional_metrics_args"].get("sigmoid_probs", False),
             "log_probs": config["metrics"]["additional_metrics_args"].get("log_probs", False),
             "logits": config["metrics"]["additional_metrics_args"].get("logits", False),
-            "train_class_weights": self.data_loader.dataset.get_target_distribution(
-                idx_list=self.data_loader.batch_sampler.sampler.indices, multi_labels=self.multi_label_training),
-            "valid_class_weights": val_class_weights
-        }
 
-        # print("Train Class Weights:")
-        # print(str(self._param_dict["train_class_weights"]))
+            # "train_class_weights": self.data_loader.dataset.get_target_distribution(
+            #     idx_list=self.data_loader.batch_sampler.sampler.indices, multi_labels=self.multi_label_training),
+            "train_pos_weights": self.data_loader.dataset.get_ml_pos_weights(
+                idx_list=self.data_loader.batch_sampler.sampler.indices),
+
+            # "valid_class_weights": val_class_weights,
+            "valid_pos_weights": val_pos_weights
+        }
 
         # confusion matrices
         self.train_cms = ConfusionMatrixTracker(*self.data_loader.dataset.class_labels,
@@ -98,10 +106,9 @@ class ECGTrainer(BaseTrainer):
         # Set the writer object to training mode
         self.writer.set_mode('train')
 
-        # Create a figure for the average gradient flows of the epoch
-        fig_gradient_flow_lines = plt.figure(figsize=(8,8))
-        fig_gradient_flow_bars = plt.figure(figsize=(8, 8))
-
+        # # Create a figure for the average gradient flows of the epoch
+        # fig_gradient_flow_lines = plt.figure(figsize=(8,8))
+        # fig_gradient_flow_bars = plt.figure(figsize=(8,8))
 
         start = time.time()
         for batch_idx, (padded_records, labels, labels_one_hot, lengths, record_names) in enumerate(self.data_loader):
@@ -117,20 +124,13 @@ class ECGTrainer(BaseTrainer):
             # data has shape [batch_size, 12, seq_len]
             output = self.model(data)
 
-            # # Compute a dummy loss on last output sample of the batch and back-propagate
-            # output[-1].abs().sum().backward()
-            # # Check that gradient on samples i != -1 are zero!
-            # # sanity check: if this does not return 0, you have a bug!
-            # for i in range(len(output)-1):
-            #     assert data.grad[i].abs().sum().item()==0
-
-            if type(output) is tuple:
-                output, attention_weights = output
-                fig = sns.heatmap(data=attention_weights.detach().numpy()[:, :, 0], ).get_figure()
-                # plt.show()
-                plt.close(fig)  # close the curren figure
-                self.writer.add_figure("Attention weights for batch " + str(batch_idx),
-                                       fig, global_step=epoch)
+            # if type(output) is tuple:
+            #     output, attention_weights = output
+            #     fig_attention_weights = plt.figure(figsize=(8,8))
+            #     sns.heatmap(data=attention_weights.detach().numpy()[:, :, 0], ax=fig_attention_weights.add_subplot())
+            #     self.writer.add_figure("Attention weights for batch " + str(batch_idx),
+            #                            fig_attention_weights, global_step=epoch)
+            #     plt.close(fig_attention_weights)
 
             outputs = torch.cat((outputs, output))
             if len(self.metrics_epoch) > 0:
@@ -142,16 +142,16 @@ class ECGTrainer(BaseTrainer):
             # Output and target are needed for all metrics!
             additional_args = [arg for arg in args if arg not in ('output', 'target')]
             additional_kwargs = {
-                param_name: self._param_dict[param_name] if not param_name == 'class_weights'
-                else self._param_dict['train_class_weights'] for param_name in additional_args
+                param_name: self._param_dict[param_name] if not param_name == 'pos_weights'
+                else self._param_dict['train_pos_weights'] for param_name in additional_args
             }
             loss = self.criterion(target=target, output=output, **additional_kwargs)
             loss.backward()
 
-            # Add the average gradient of the current batch to the respective figure to
-            # record the average gradients per layer in every training iteration
-            plot_grad_flow_lines(self.model.named_parameters(), fig_gradient_flow_lines)
-            plot_grad_flow_bars(self.model.named_parameters(), fig_gradient_flow_bars)
+            # # Add the average gradient of the current batch to the respective figure to
+            # # record the average gradients per layer in every training iteration
+            # plot_grad_flow_lines(self.model.named_parameters(), fig_gradient_flow_lines)
+            # plot_grad_flow_bars(self.model.named_parameters(), fig_gradient_flow_bars)
 
             self.optimizer.step()
 
@@ -202,11 +202,11 @@ class ECGTrainer(BaseTrainer):
             if batch_idx == self.len_epoch:  # or self.overfit_single_batch:
                 break
 
-        # Send the gradient flows of the current epoch to the TensorboardWriter
-        self.writer.add_figure("Gradient flow as lines", fig_gradient_flow_lines, global_step=epoch)
-        self.writer.add_figure("Gradient flow as bars", fig_gradient_flow_bars, global_step=epoch)
-        fig_gradient_flow_lines.clf()
-        fig_gradient_flow_bars.clf()
+        # # Send the gradient flows of the current epoch to the TensorboardWriter
+        # self.writer.add_figure("Gradient flow as lines", fig_gradient_flow_lines, global_step=epoch)
+        # self.writer.add_figure("Gradient flow as bars", fig_gradient_flow_bars, global_step=epoch)
+        # fig_gradient_flow_lines.clf()
+        # fig_gradient_flow_bars.clf()
 
         # At the end of each epoch, explicitly send the confusion matrices to the SummaryWriter/TensorboardWriter
         self.train_cms.send_cms_to_writer(epoch=epoch)
@@ -246,15 +246,10 @@ class ECGTrainer(BaseTrainer):
                 self.train_metrics.class_wise_epoch_update(met.__name__, met(target=targets, output=outputs,
                                                                              **additional_kwargs))
 
-        # Plot heatmaps of the predicted scores for each validation sample to verify if they change
-        fig_output_scores = sns.heatmap(data=outputs.detach().numpy()).get_figure()
-        plt.xlabel("Class ID")
-        plt.ylabel("Training Sample ID")
-        # plt.show()
-        plt.close(fig_output_scores)  # close the current figure
-        self.writer.add_figure("Predicted output scores per training sample",
-                               fig_output_scores, global_step=epoch)
-
+        # # Plot heatmaps of the predicted scores for each training sample to verify if they change
+        # self._send_pred_scores_to_writer(epoch, outputs, 'training')
+        # # Plot heatmaps of the predicted classes for easier interpretability as well
+        # self._send_pred_classes_to_writer(epoch, outputs, 'training')
 
         # Contains only NaNs for all non-iteration-based metrics when overfit_single_batch is True
         train_log = self.train_metrics.result()
@@ -333,14 +328,14 @@ class ECGTrainer(BaseTrainer):
                 data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)
 
                 output = self.model(data)
-                if type(output) is tuple:
-                    output, attention_weights = output
-                    # The attention weights should not change during validation!
-                    fig = sns.heatmap(data=attention_weights.detach().numpy()[:, :, 0], ).get_figure()
-                    # plt.show()
-                    plt.close(fig)  # close the curren figure
-                    self.writer.add_figure("Attention weights for validation batch " + str(batch_idx),
-                                           fig, global_step=epoch)
+                # if type(output) is tuple:
+                #     output, attention_weights = output
+                #     fig_attention_weights_valid = plt.figure(figsize=(8, 8))
+                #     sns.heatmap(data=attention_weights.detach().numpy()[:, :, 0],
+                #                 ax=fig_attention_weights_valid.add_subplot())
+                #     self.writer.add_figure("Attention weights for validation batch " + str(batch_idx),
+                #                            fig_attention_weights_valid, global_step=epoch)
+                #     plt.close(fig_attention_weights_valid)
 
                 outputs = torch.cat((outputs, output))
                 if len(self.metrics_epoch) > 0:
@@ -352,8 +347,8 @@ class ECGTrainer(BaseTrainer):
                 # Output and target are needed for all metrics!
                 additional_args = [arg for arg in args if arg not in ('output', 'target')]
                 additional_kwargs = {
-                    param_name: self._param_dict[param_name] if not param_name == 'class_weights'
-                    else self._param_dict['valid_class_weights'] for param_name in additional_args
+                    param_name: self._param_dict[param_name] if not param_name == 'pos_weights'
+                    else self._param_dict['valid_pos_weights'] for param_name in additional_args
                 }
                 loss = self.criterion(target=target, output=output, **additional_kwargs)
 
@@ -418,7 +413,6 @@ class ECGTrainer(BaseTrainer):
                     self.valid_metrics.epoch_update(met.__name__,
                                                     met(target=targets, output=outputs, **additional_kwargs))
 
-
             # This holds for the class-wise, epoch-based metrics as well
             for met in self.metrics_epoch_class_wise:
                 args = inspect.signature(met).parameters.values()
@@ -435,14 +429,11 @@ class ECGTrainer(BaseTrainer):
         for name, p in self.model.named_parameters():
             self.writer.add_histogram(name, p, bins='auto')
 
-        # Plot heatmaps of the predicted scores for each validation sample to verify if they change
-        fig_output_scores = sns.heatmap(data=outputs.detach().numpy()).get_figure()
-        plt.xlabel("Class ID")
-        plt.ylabel("Validation Sample ID")
-        # plt.show()
-        plt.close(fig_output_scores)  # close the current figure
-        self.writer.add_figure("Predicted output scores per validation sample",
-                               fig_output_scores, global_step=epoch)
+        # # Plot heatmaps of the predicted scores for each validation sample to verify if they change
+        # self._send_pred_scores_to_writer(epoch, outputs, 'validation')
+        #
+        # # Plot heatmaps of the predicted classes for easier interpretability as well
+        # self._send_pred_classes_to_writer(epoch, outputs, 'validation')
 
         valid_log = self.valid_metrics.result()
 
@@ -452,6 +443,52 @@ class ECGTrainer(BaseTrainer):
                                        for _, class_cm in enumerate(self.valid_cms.class_wise_cms)})
 
         return valid_log, valid_cm_information
+
+    def _send_pred_scores_to_writer(self, epoch, outputs, str_mode):
+        """
+                :param epoch: Current epoch
+                :param outputs: All outputs of the current train/validation session
+                :param str_mode: Should either be 'training' or 'validation'
+                :return:
+                """
+        fig_output_scores = sns.heatmap(data=outputs.detach().numpy()).get_figure()
+        plt.xlabel("Class ID")
+        plt.ylabel(str(str_mode).capitalize() + " Sample ID")
+        plt.close(fig_output_scores)  # close the current figure
+        self.writer.add_figure("Predicted output scores per " + str(str_mode).lower() + " sample",
+                               fig_output_scores, global_step=epoch)
+
+    def _send_pred_classes_to_writer(self, epoch, outputs, str_mode):
+        """
+        :param epoch: Current epoch
+        :param outputs: All outputs of the current train/validation session
+        :param str_mode: Should either be 'training' or 'validation'
+        :return:
+        """
+        if self.multi_label_training:
+            if self._param_dict['logits']:
+                sigmoid_probs = torch.sigmoid(outputs)
+                classes = torch.where(sigmoid_probs > THRESHOLD, 1, 0)
+            else:
+                classes = torch.where(outputs > THRESHOLD, 1, 0)
+        else:
+            # Use the argmax (doesn't matter if the outputs are probs or logits)
+            pred_classes = torch.argmax(outputs, dim=1)
+            classes = torch.nn.functional.one_hot(pred_classes, len(self._class_labels))
+        fig_output_classes, ax = plt.subplots(figsize=(10, 20))
+        # Define the colors
+        colors = ["lightgray", "gray"]
+        cmap = LinearSegmentedColormap.from_list('Custom', colors, len(colors))
+        # Classes should be one-hot like [[1, 0, 0, 0, 0], [0, 1, 1, 0, 0]]
+        sns.heatmap(data=classes.detach().numpy(), cmap=cmap, ax=ax)
+        # Set the Colorbar labels
+        colorbar = ax.collections[0].colorbar
+        colorbar.set_ticks([0.25, 0.75])
+        colorbar.set_ticklabels(['0', '1'])
+        ax.set_xlabel("Class ID")
+        ax.set_ylabel(str(str_mode).capitalize() + " Sample ID")
+        self.writer.add_figure("Predicted output class(es) per " + str(str_mode).lower() + " sample",
+                               ax.get_figure(), global_step=epoch)
 
     def _progress(self, batch_idx):
         base = '[{}/{} ({:.0f}%)]'
