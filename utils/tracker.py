@@ -219,9 +219,9 @@ class ConfusionMatrixTracker:
                 # Plot the class-wise confusion matrices and send them to the writer one-by-one
                 self._plot_cm_for_single_class(idx, ax, epoch)
             fig_all_cms.tight_layout()
+            self.writer.add_figure("Overview single confusion matrices", fig_all_cms.get_figure(), global_step=epoch)
             fig_all_cms.clear()
             plt.close(fig_all_cms)
-            self.writer.add_figure("Overview single confusion matrices", fig_all_cms.get_figure(), global_step=epoch)
 
     def _plot_cm_for_single_class(self, idx, ax, epoch):
         class_cm = self._class_wise_cms[idx]
