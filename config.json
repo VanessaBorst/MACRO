@@ -5,7 +5,7 @@
     "type": "BaselineModel",
     "args": {
       "apply_final_activation": false,
-      "multi_label_training": false
+      "multi_label_training": true
     }
   },
   "data_loader": {
@@ -15,7 +15,7 @@
       "batch_size": 64,
       "shuffle": true,
       "validation_split": 0.25,
-      "num_workers": 3,
+      "num_workers": 16,
       "seq_len": 72000
     },
     "overfit_single_batch": false,
@@ -29,7 +29,7 @@
       "amsgrad": false
     }
   },
-  "loss": "cross_entropy_loss",
+  "loss": "balanced_BCE_with_logits",
   "metrics": {
     "sl": {
       "per_iteration": [
@@ -93,6 +93,7 @@
     "monitor": "min val_loss",
     "early_stop": 30,
     "tensorboard": true,
-    "try_run": false
+    "try_run": false,
+    "profiler_active": false
   }
 }

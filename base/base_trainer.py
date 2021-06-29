@@ -26,6 +26,7 @@ class BaseTrainer:
         self.monitor = cfg_trainer.get('monitor', 'off')   # 'off' is returned if the key doesn't exist in the dict
         self.overfit_single_batch = config['data_loader'].get('overfit_single_batch', False)
         self.try_run = cfg_trainer['try_run']
+        self.profiler_active = cfg_trainer['profiler_active']
 
         # configuration to monitor model performance and save best
         if self.monitor == 'off':

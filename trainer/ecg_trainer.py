@@ -1,11 +1,13 @@
 import inspect
 import os
 import time
+from contextlib import nullcontext
 
 import numpy as np
 import torch
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.lines import Line2D
+from torch.profiler import tensorboard_trace_handler
 
 from base import BaseTrainer
 from model.multi_label_metrics import class_wise_confusion_matrices_multi_label, THRESHOLD
@@ -140,73 +142,92 @@ class ECGTrainer(BaseTrainer):
                                     ['max-gradient', 'mean-gradient', 'zero-gradient'])
 
         start = time.time()
-        for batch_idx, (padded_records, labels, labels_one_hot, lengths, record_names) in enumerate(self.data_loader):
-            if self.multi_label_training:
-                data, target = padded_records.to(self.device), labels_one_hot.to(self.device)
-            else:
-                # target contains the first GT label, target_all_labels contains all labels in 1-hot-encoding
-                data, target, target_all_labels = padded_records.to(self.device), labels.to(self.device), \
-                                                  labels_one_hot.to(self.device)
-            data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)
 
-            self.optimizer.zero_grad()
-            # data has shape [batch_size, 12, seq_len]
-            output = self.model(data)
+        if self.profiler_active:
+            context_manager = torch.profiler.profile(
+                schedule=torch.profiler.schedule(
+                    wait=2,
+                    warmup=2,
+                    active=3,
+                    repeat=2),
+                on_trace_ready=tensorboard_trace_handler(self.config.log_dir),
+                with_stack=True
+            )
+        else:
+            context_manager = nullcontext()
 
-            if type(output) is tuple:
-                output, attention_weights = output
-                if self.try_run:
-                    self._send_attention_weights_to_writer(
-                        attention_weights=attention_weights.detach().cpu().numpy()[:, :, 0],
-                        batch_idx=batch_idx, epoch=epoch, str_mode="training")
+        with context_manager as profiler:
+            for batch_idx, (padded_records, labels, labels_one_hot, lengths, record_names) in enumerate(
+                    self.data_loader):
+                if self.multi_label_training:
+                    data, target = padded_records.to(self.device), labels_one_hot.to(self.device)
+                else:
+                    # target contains the first GT label, target_all_labels contains all labels in 1-hot-encoding
+                    data, target, target_all_labels = padded_records.to(self.device), labels.to(self.device), \
+                                                      labels_one_hot.to(self.device)
+                data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)
 
-            # Detach tensors needed for further tracing and metrics calculation to remove them from the graph
-            detached_output = output.detach().cpu()
-            detached_target = target.detach().cpu()
-            if not self.multi_label_training:
-                detached_target_all_labels = target_all_labels.detach().cpu()
+                self.optimizer.zero_grad()
+                # data has shape [batch_size, 12, seq_len]
+                output = self.model(data)
 
-            outputs_list.append(detached_output)
-            if len(self.metrics_epoch) > 0:
-                targets_list.append(detached_target)
+                if type(output) is tuple:
+                    output, attention_weights = output
+                    if self.try_run:
+                        self._send_attention_weights_to_writer(
+                            attention_weights=attention_weights.detach().cpu().numpy()[:, :, 0],
+                            batch_idx=batch_idx, epoch=epoch, str_mode="training")
+
+                # Detach tensors needed for further tracing and metrics calculation to remove them from the graph
+                detached_output = output.detach().cpu()
+                detached_target = target.detach().cpu()
                 if not self.multi_label_training:
-                    targets_all_labels_list.append(detached_target_all_labels)
+                    detached_target_all_labels = target_all_labels.detach().cpu()
 
-            # Calculate the loss, here gradients are nedded!
-            args, _, _, _, _, _, _ = inspect.getfullargspec(self.criterion)
-            # Output and target are needed for all metrics!
-            additional_args = [arg for arg in args if arg not in ('output', 'target')]
-            additional_kwargs = {
-                param_name: self._param_dict[param_name] if not param_name == 'pos_weights'
-                else self._param_dict['train_pos_weights'] for param_name in additional_args
-            }
-            loss = self.criterion(target=target, output=output, **additional_kwargs)
-            loss.backward()
+                outputs_list.append(detached_output)
+                if len(self.metrics_epoch) > 0:
+                    targets_list.append(detached_target)
+                    if not self.multi_label_training:
+                        targets_all_labels_list.append(detached_target_all_labels)
 
-            if self.try_run:
-                # Add the average gradient of the current batch to the respective figure to
-                # record the average gradients per layer in every training iteration
-                plot_grad_flow_lines(named_parameters=self.model.named_parameters(), ax=ax_gradient_lines)
-                plot_grad_flow_bars(named_parameters=self.model.named_parameters(), ax=ax_gradient_bars)
+                # Calculate the loss, here gradients are nedded!
+                args, _, _, _, _, _, _ = inspect.getfullargspec(self.criterion)
+                # Output and target are needed for all metrics!
+                additional_args = [arg for arg in args if arg not in ('output', 'target')]
+                additional_kwargs = {
+                    param_name: self._param_dict[param_name] if not param_name == 'pos_weights'
+                    else self._param_dict['train_pos_weights'] for param_name in additional_args
+                }
+                loss = self.criterion(target=target, output=output, **additional_kwargs)
+                loss.backward()
 
-            self.optimizer.step()
-            self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
+                if self.try_run:
+                    # Add the average gradient of the current batch to the respective figure to
+                    # record the average gradients per layer in every training iteration
+                    plot_grad_flow_lines(named_parameters=self.model.named_parameters(), ax=ax_gradient_lines)
+                    plot_grad_flow_bars(named_parameters=self.model.named_parameters(), ax=ax_gradient_bars)
 
-            # Iteratively update the loss and the metrics with the MetricTracker
-            self._do_iter_update(metric_tracker=self.train_metrics, output=detached_output,
-                                 target=detached_target, loss_val=loss.item())
+                self.optimizer.step()
+                self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
 
-            # Update the confusion matrices maintained by the ClassificationTracker
-            self._do_cm_updates(cm_tracker=self.train_cms, output=detached_output, target=detached_target)
+                # Iteratively update the loss and the metrics with the MetricTracker
+                self._do_iter_update(metric_tracker=self.train_metrics, output=detached_output,
+                                     target=detached_target, loss_val=loss.item())
 
-            if batch_idx % self.log_step == 0:
-                epoch_debug = f"Train Epoch: {epoch} {self._progress(batch_idx)} "
-                current_metrics = self.train_metrics.current()
-                metrics_debug = ", ".join(f"{key}: {value:.6f}" for key, value in current_metrics.items())
-                self.logger.debug(epoch_debug + metrics_debug)
+                # Update the confusion matrices maintained by the ClassificationTracker
+                self._do_cm_updates(cm_tracker=self.train_cms, output=detached_output, target=detached_target)
 
-            if batch_idx == self.len_epoch:  # or self.overfit_single_batch:
-                break
+                if batch_idx % self.log_step == 0:
+                    epoch_debug = f"Train Epoch: {epoch} {self._progress(batch_idx)} "
+                    current_metrics = self.train_metrics.current()
+                    metrics_debug = ", ".join(f"{key}: {value:.6f}" for key, value in current_metrics.items())
+                    self.logger.debug(epoch_debug + metrics_debug)
+
+                if batch_idx == self.len_epoch:  # or self.overfit_single_batch:
+                    break
+
+                if self.profiler_active:
+                    profiler.step()
 
         if self.try_run:
             # At the end of the epoch, send the gradient flows of the current epoch to the TensorboardWriter
@@ -361,9 +382,9 @@ class ECGTrainer(BaseTrainer):
         for name, p in self.model.named_parameters():
             self.writer.add_histogram(name, p, bins='auto')
 
-        # Dump the attention weights and the confusion matrices into a pickle file
-        if not self.try_run:
-            path_name = os.path.join(self.config.log_dir,"attention_weights_val_epoch_" + str(epoch) + ".p")
+        # Dump the attention weights and the confusion matrices into a pickle file each few epochs
+        if not self.try_run and (epoch == 1 or epoch % int(np.sqrt(self.epochs)) == 0):
+            path_name = os.path.join(self.config.log_dir, "attention_weights_val_epoch_" + str(epoch) + ".p")
             attention_weight_file = open(path_name, 'wb')
             pickle.dump(valid_attention_weights, attention_weight_file)
             attention_weight_file.close()
