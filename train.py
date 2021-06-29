@@ -13,8 +13,8 @@ SEED = 123
 torch.manual_seed(SEED)
 # VB: Replaced by use_deterministic_algorithms, which will make more PyTorch operations behave deterministically
 # See https://pytorch.org/docs/stable/notes/randomness.html
-# torch.backends.cudnn.deterministic = True
-torch.use_deterministic_algorithms(True)
+torch.backends.cudnn.deterministic = True
+# torch.use_deterministic_algorithms(True)
 torch.backends.cudnn.benchmark = False
 # np.random.seed(SEED) -> not used, np.random is only used in the base data loader and the seed is set to 0 there
 

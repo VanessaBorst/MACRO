@@ -98,13 +98,14 @@ def _roc_auc(output, target, log_probs, logits, labels, average, multi_class_cfg
     (see https://scikit-learn.org/stable/modules/generated/sklearn.metrics.roc_auc_score.html)
     """
     with torch.no_grad():
+        # In the multiclass case, y_score corresponds to an array of shape (n_samples, n_classes) of probability
+        # estimates. The probability estimates must sum to 1 across the possible classes
         assert log_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
-        if log_probs:
-            pred = _convert_log_probs_to_prediction(output)
-        else:
-            pred = _convert_logits_to_prediction(output)
-        assert pred.shape[0] == len(target)
-        return roc_auc_score(y_true=target, y_score=pred, labels=labels, average=average, multi_class=multi_class_cfg)
+        # In both cases, the scores do not sum to one
+        # Either they are logmax outputs or logits, so transform them
+        softmax_probs = torch.nn.functional.softmax(output, dim=1)
+        assert softmax_probs.shape[0] == len(target)
+        return roc_auc_score(y_true=target, y_score=softmax_probs, labels=labels, average=average, multi_class=multi_class_cfg)
 
 
 def accuracy(output, target, log_probs, logits):

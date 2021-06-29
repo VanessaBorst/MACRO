@@ -27,8 +27,8 @@ def BCE_with_logits(output, target):
 
 
 # This contains Sigmoid itself
-def balanced_BCE_with_logits(output, target, pos_weights):
-    pos_weights_tensor = torch.tensor(pos_weights)
+def balanced_BCE_with_logits(output, target, pos_weights, device):
+    pos_weights_tensor = torch.tensor(pos_weights).to(device)
     loss = BCEWithLogitsLoss(pos_weight=pos_weights_tensor)
     return loss(output, target.float())
 
@@ -54,7 +54,7 @@ def nll_loss(output, target):
     return F.nll_loss(output, target)
 
 
-def cross_entropy_loss(output,target):
+def cross_entropy_loss(output, target):
     """
          The cross entropy loss to train a classification problem with C classes
 

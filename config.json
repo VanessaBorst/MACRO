@@ -1,21 +1,21 @@
 {
-  "name": "CPSC_BaselineModel_ohneRNN_ohneAttention",
+  "name": "CPSC_BaselineModel",
   "n_gpu": 1,
   "arch": {
-    "type": "BaselineModelWoRnnWoAttention",
+    "type": "BaselineModel",
     "args": {
       "apply_final_activation": false,
-      "multi_label_training": true
+      "multi_label_training": false
     }
   },
   "data_loader": {
     "type": "ECGDataLoader",
     "args": {
       "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/",
-      "batch_size": 8,
+      "batch_size": 64,
       "shuffle": true,
       "validation_split": 0.25,
-      "num_workers": 1,
+      "num_workers": 3,
       "seq_len": 72000
     },
     "overfit_single_batch": false,
@@ -26,10 +26,10 @@
     "args": {
       "lr": 0.0001,
       "weight_decay": 0,
-      "amsgrad": true
+      "amsgrad": false
     }
   },
-  "loss": "balanced_BCE_with_logits",
+  "loss": "cross_entropy_loss",
   "metrics": {
     "sl": {
       "per_iteration": [
@@ -78,7 +78,7 @@
     }
   },
   "lr_scheduler": {
-    "active": true,
+    "active": false,
     "type": "StepLR",
     "args": {
       "step_size": 50,
@@ -92,6 +92,7 @@
     "verbosity": 2,
     "monitor": "min val_loss",
     "early_stop": 30,
-    "tensorboard": true
+    "tensorboard": true,
+    "try_run": false
   }
 }

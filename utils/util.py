@@ -91,7 +91,7 @@ def plot_grad_flow_lines(named_parameters, ax):
         ave_grads = []
         for n, p in named_parameters:
             if(p.requires_grad) and ("bias" not in n):
-                ave_grads.append(p.grad.detach().abs().mean().numpy())
+                ave_grads.append(p.grad.detach().abs().mean().cpu().numpy())
         ax.plot(ave_grads, alpha=0.3, color="b")
 
 
@@ -108,8 +108,8 @@ def plot_grad_flow_bars(named_parameters, ax):
         max_grads = []
         for n, p in named_parameters:
             if (p.requires_grad) and ("bias" not in n):
-                ave_grads.append(p.grad.detach().abs().mean().numpy())
-                max_grads.append(p.grad.detach().abs().max().numpy())
+                ave_grads.append(p.grad.detach().abs().mean().cpu().numpy())
+                max_grads.append(p.grad.detach().abs().max().cpu().numpy())
 
         ax.bar(np.arange(len(max_grads)), max_grads, alpha=0.1, lw=1, color="c")
         ax.bar(np.arange(len(max_grads)), ave_grads, alpha=0.1, lw=1, color="b")
