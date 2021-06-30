@@ -3,6 +3,7 @@ from torchinfo import summary
 
 from base import BaseModel
 from layers.contextualAttention import ContextualAttention
+from utils import plot_record_from_np_array
 
 
 class BaselineModel(BaseModel):

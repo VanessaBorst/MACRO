@@ -55,7 +55,6 @@ def prepare_device(n_gpu_use):
 
 
 def plot_record_from_df(record_name, df_record, preprocesed=False):
-    print(record_name)
     fig, axs = plt.subplots(6, 2, figsize=(15, 15), constrained_layout=True)
     title = "Record " + record_name + " after padding" if preprocesed else "Record " + record_name + " before padding"
     fig.suptitle(title)

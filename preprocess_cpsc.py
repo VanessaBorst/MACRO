@@ -1,3 +1,4 @@
+import math
 import os
 import pickle as pk
 import shutil
@@ -12,6 +13,8 @@ from matplotlib import pyplot as plt
 from scipy.io import loadmat
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
+
+from utils import plot_record_from_df
 
 
 def _parse_and_downsample_record(src_path, file, target_path, sampling):
@@ -288,6 +291,45 @@ def normalize(path):
         pk.dump((df, meta), open(os.path.join(path, "normalized", file), "wb"))
 
 
+def pad_or_truncate(path, seq_len):
+    """
+        The method applies zero padding/truncation to each record under the given path:
+        - pads records with a smaller amount of samples with zeros
+        - cuts records that exceed seq_len from both sides and only uses values in the middle
+    """
+
+    folder_name = "eq_len_" + str(seq_len)
+    if not os.path.exists(os.path.join(path, folder_name)):
+        os.makedirs(os.path.join(path, folder_name))
+
+    for file in os.listdir(path):
+        if ".pk" not in file:
+            continue
+        df_record, meta = pk.load(open(os.path.join(path, file), "rb"))
+
+        # Do transformation
+        record_len = len(df_record.index)
+        diff = seq_len - record_len
+
+        # Plot record to verify the padding visually
+        # plot_record_from_df(record_name=str(file), df_record=df_record, preprocesed=False)
+
+        if diff > 0:
+            # Pad the record to the maximum length of the batch
+            df_zeros = pd.DataFrame([[0] * df_record.shape[1]] * diff, columns=df_record.columns)
+            df_record = pd.concat([df_zeros, df_record], axis=0, ignore_index=True)
+        elif diff < 0:
+            # Cut the record to have length seq_len (if possible, cut the equal amount of values from both sides)
+            # If the diff is not even, cut one value more from the beginning
+            df_record = df_record.iloc[math.ceil(-diff / 2):record_len - math.floor(-diff / 2)]
+
+        # Plot record to verify the padding visually
+        # plot_record_from_df(record_name=str(file), df_record=df_record, preprocesed=True)
+
+        # Dump updated, ready-to-use df to new pk file
+        pk.dump((df_record, meta), open(os.path.join(path, folder_name, file), "wb"))
+
+
 def show(path):
     """
     The method creates a plot for each .pk file stored under the respective path
@@ -322,15 +364,21 @@ if __name__ == "__main__":
     # src_path = "data/CinC_CPSC/test/preprocessed/no_sampling/"
     # clean_meta(src_path)
 
-    # Uncomment for applying further preprocessing like normalization or padding (padding not yet implemented)
+    # Uncomment for applying further preprocessing like normalization
+    # src_path = "data/CinC_CPSC/train/preprocessed/no_sampling/"
+    # #normalize(src_path)
+    # #show(src_path + "normalized")
+    # min_max_scaling(path=src_path)
+    # show(src_path + "minmax")
+    # src_path = "data/CinC_CPSC/test/preprocessed/no_sampling/"
+    # #normalize(src_path)
+    # #show(src_path + "normalized")
+    # min_max_scaling(path=src_path)
+    # show(src_path + "minmax")
+
+    # Uncomment for applying further preprocessing like padding
     src_path = "data/CinC_CPSC/train/preprocessed/no_sampling/"
-    #normalize(src_path)
-    #show(src_path + "normalized")
-    min_max_scaling(path=src_path)
-    show(src_path + "minmax")
+    pad_or_truncate(path=src_path, seq_len=72000)
     src_path = "data/CinC_CPSC/test/preprocessed/no_sampling/"
-    #normalize(src_path)
-    #show(src_path + "normalized")
-    min_max_scaling(path=src_path)
-    show(src_path + "minmax")
+    pad_or_truncate(path=src_path, seq_len=72000)
     print("Finished")

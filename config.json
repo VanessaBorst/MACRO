@@ -11,15 +11,14 @@
   "data_loader": {
     "type": "ECGDataLoader",
     "args": {
-      "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/",
+      "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000/",
       "batch_size": 64,
       "shuffle": true,
       "validation_split": 0.25,
-      "num_workers": 16,
-      "seq_len": 72000
+      "num_workers": 1
     },
     "overfit_single_batch": false,
-    "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/"
+    "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/eq_len_72000/"
   },
   "optimizer": {
     "type": "Adam",
@@ -94,6 +93,6 @@
     "early_stop": 30,
     "tensorboard": true,
     "try_run": false,
-    "profiler_active": false
+    "profiler_active": true
   }
 }

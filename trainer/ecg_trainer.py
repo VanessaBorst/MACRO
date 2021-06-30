@@ -157,7 +157,7 @@ class ECGTrainer(BaseTrainer):
             context_manager = nullcontext()
 
         with context_manager as profiler:
-            for batch_idx, (padded_records, labels, labels_one_hot, lengths, record_names) in enumerate(
+            for batch_idx, (padded_records, labels, labels_one_hot, record_names) in enumerate(
                     self.data_loader):
                 if self.multi_label_training:
                     data, target = padded_records.to(self.device), labels_one_hot.to(self.device)
@@ -319,8 +319,7 @@ class ECGTrainer(BaseTrainer):
 
         with torch.no_grad():
 
-            for batch_idx, (padded_records, labels, labels_one_hot, lengths, record_names) in enumerate(
-                    self.valid_data_loader):
+            for batch_idx, (padded_records, labels, labels_one_hot, record_names) in enumerate(self.valid_data_loader):
 
                 if self.multi_label_training:
                     data, target = padded_records.to(self.device), labels_one_hot.to(self.device)

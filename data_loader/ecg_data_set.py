@@ -18,7 +18,7 @@ class ECGDataset(Dataset):
     This is memory efficient because all the records are not stored in the memory at once but read as required.
     """
 
-    def __init__(self, input_dir, transform=None):
+    def __init__(self, input_dir):
         """
 
         :param input_dir: Path  -> Path to the directory containing the preprocessed pickle files for each record
@@ -36,7 +36,6 @@ class ECGDataset(Dataset):
         # Save list of classes occurring in the dataset
         _, meta = pk.load(open(os.path.join(self._input_dir, records[0]), "rb"))
         self.class_labels = meta["classes_one_hot"].index.values
-        self.transform = transform
 
     def __len__(self):
         return len(self.records)
@@ -51,10 +50,11 @@ class ECGDataset(Dataset):
         # Ensure that the record is not containing any unknown class label
         assert all(label in self.class_labels for label in meta["classes_encoded"])
 
-        if self.transform:
-            record = self.transform(record)
+        # TODO DEAL WITH MULTI_LABEL CASE, at the moment only the first label is used per record
 
-        return record, meta["classes_encoded"], meta["classes_one_hot"], len(record.index), record_name
+        # Removed len(record.index) as length, now they are all 72000
+        # torch.tensor(record.values).float()
+        return record.values.astype("float32"), meta["classes_encoded"][0], meta["classes_one_hot"].values, record_name
 
     def get_class_freqs_and_target_distribution(self, idx_list, multi_label_training):
         """
@@ -67,7 +67,7 @@ class ECGDataset(Dataset):
         """
         classes = []
         for idx in idx_list:
-            _, classes_encoded, classes_one_hot, _, record_name = self.__getitem__(idx)
+            _, classes_encoded, classes_one_hot, record_name = self.__getitem__(idx)
             if multi_label_training:
                 classes.append(classes_one_hot)
             else:
@@ -93,7 +93,7 @@ class ECGDataset(Dataset):
         """
         classes = []
         for idx in idx_list:
-            _, _, classes_one_hot, _, _ = self.__getitem__(idx)
+            _, _, classes_one_hot, _ = self.__getitem__(idx)
             classes.append(classes_one_hot)
 
         # Get the class freqs as Pandas series
@@ -124,7 +124,7 @@ class ECGDataset(Dataset):
 
         classes = []
         for idx in idx_list:
-            _, classes_encoded, classes_one_hot, _, record_name = self.__getitem__(idx)
+            _, classes_encoded, classes_one_hot, record_name = self.__getitem__(idx)
             if multi_label_training:
                 classes.append(classes_encoded)
             else:
