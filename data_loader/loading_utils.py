@@ -1,11 +1,8 @@
 import math
+
 import pandas as pd
-
-
 #  collate_fn receives a list of tuples if your __getitem__ function from a Dataset subclass returns a tuple
 import torch
-
-from utils import plot_record_from_df
 
 
 def _collate_pad_or_truncate(batch, seq_len):

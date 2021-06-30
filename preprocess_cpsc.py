@@ -1,19 +1,17 @@
-import csv
+import os
+import pickle as pk
 import shutil
+from datetime import timedelta
+from multiprocessing import Pool
 
+import numpy as np
 import pandas as pd
+import wfdb
+from bidict import bidict
 from matplotlib import pyplot as plt
+from scipy.io import loadmat
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
-import wfdb
-import os
-import uuid
-import numpy as np
-from datetime import timedelta
-from scipy.io import loadmat
-import pickle as pk
-from multiprocessing import Pool
-from bidict import bidict
 
 
 def _parse_and_downsample_record(src_path, file, target_path, sampling):

@@ -1,8 +1,8 @@
-from torchvision import datasets, transforms
+from functools import partial
+
 from base import BaseDataLoader
 from data_loader.ecg_data_set import ECGDataset
 from data_loader.loading_utils import _collate_pad_or_truncate
-from functools import partial
 
 
 class ECGDataLoader(BaseDataLoader):

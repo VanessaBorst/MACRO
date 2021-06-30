@@ -1,6 +1,6 @@
 import torch
-from torch.nn import BCELoss, BCEWithLogitsLoss, MultiLabelSoftMarginLoss
 from torch.autograd import Variable
+from torch.nn import BCEWithLogitsLoss, MultiLabelSoftMarginLoss
 
 x = Variable(torch.randn(10, 3))
 y = Variable(torch.FloatTensor(10, 3).random_(2))

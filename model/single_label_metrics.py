@@ -1,8 +1,8 @@
 import numpy as np
+import pandas as pd
 import torch
 from sklearn.metrics import confusion_matrix, multilabel_confusion_matrix, \
     accuracy_score, top_k_accuracy_score, roc_auc_score, f1_score, balanced_accuracy_score
-import pandas as pd
 
 
 # This file contains multiclass classification metrics (currently not adapted for multi-label classification!)

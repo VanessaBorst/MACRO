@@ -1,9 +1,8 @@
-import shutil
+import os
+import pickle as pk
 
 import pandas as pd
 import wfdb
-import os
-import pickle as pk
 
 
 def _retrieve_data_statistics_from_wfdb(src_path, dest_path='info/'):

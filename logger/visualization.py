@@ -1,6 +1,6 @@
 import importlib
 from datetime import datetime
-from torch.utils.tensorboard import SummaryWriter
+
 
 # Start tensorboard with "tensorboard --logdir saved/log/" from the command line
 class TensorboardWriter:

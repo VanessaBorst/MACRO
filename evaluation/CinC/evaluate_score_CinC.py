@@ -16,7 +16,10 @@
 # measure, and the Challenge metric, which assigns different weights to
 # different misclassification errors.
 
-import numpy as np, os, os.path, sys
+import numpy as np
+import os
+import os.path
+import sys
 
 
 def evaluate_12ECG_score(label_directory, output_directory):

@@ -1,9 +1,7 @@
-import csv
-import cpsc2018
-import os
 import argparse
+import csv
+
 import numpy as np
-import sys
 
 '''
 cspc2018_challenge score

@@ -1,9 +1,10 @@
-import os
 import logging
-from pathlib import Path
+import os
+from datetime import datetime
 from functools import reduce, partial
 from operator import getitem
-from datetime import datetime
+from pathlib import Path
+
 from logger import setup_logging
 from utils import get_project_root, read_json, write_json
 

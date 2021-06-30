@@ -1,9 +1,13 @@
 import inspect
 import os
+import pickle
 import time
 from contextlib import nullcontext
 
+import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+import seaborn as sns
 import torch
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.lines import Line2D
@@ -14,10 +18,6 @@ from model.multi_label_metrics import class_wise_confusion_matrices_multi_label,
 from model.single_label_metrics import class_wise_confusion_matrices_single_label, overall_confusion_matrix
 from utils import inf_loop, plot_grad_flow_lines, plot_grad_flow_bars
 from utils.tracker import MetricTracker, ConfusionMatrixTracker
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-import pickle
 
 
 class ECGTrainer(BaseTrainer):

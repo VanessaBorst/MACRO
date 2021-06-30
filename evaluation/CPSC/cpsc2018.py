@@ -1,8 +1,6 @@
-import random
-import os
 import argparse
 import csv
-import glob
+import os
 
 '''
 cspc2018_challenge score

@@ -1,7 +1,8 @@
 import argparse
 import collections
+
 import torch
-import numpy as np
+
 import data_loader.data_loaders as module_data_loader
 import model.loss as module_loss
 from parse_config import ConfigParser

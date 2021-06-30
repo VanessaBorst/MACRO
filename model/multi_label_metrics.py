@@ -1,12 +1,11 @@
 import csv
 
 import numpy as np
+import pandas as pd
 import torch
 from sklearn.metrics import multilabel_confusion_matrix, \
     accuracy_score, roc_auc_score, f1_score, precision_score, \
     recall_score
-import pandas as pd
-
 
 # This file contains multiclass classification metrics (currently not adapted for multi-label classification!)
 # Macro metrics: Macro-level metrics gives equal weight to each class
@@ -18,7 +17,6 @@ import pandas as pd
 #       => Biases the classes towards the most populated class
 #       => Micro-Average Precision and Recall are the same values, therefore the MicroAverage F1-Score is also the same
 #           (and corresponds to the accuracy when all classes are considered)
-from torch import nn
 
 THRESHOLD = 0.5
 

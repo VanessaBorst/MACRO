@@ -1,10 +1,10 @@
 from collections import Counter
 
-import numpy as np, os, sys, joblib
-from scipy.io import loadmat
 import matplotlib.pyplot as plt
-import seaborn as sns
+import numpy as np
+import os
 import pandas as pd
+from scipy.io import loadmat
 
 dirname = os.path.dirname(__file__)
 input_directory = os.path.join(dirname, '../data/CinC_CPSC/raw/')

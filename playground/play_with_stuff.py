@@ -1,6 +1,7 @@
 import os
-import scipy.io as sio
+
 import numpy as np
+import scipy.io as sio
 
 # Play with the data loading from the authors
 

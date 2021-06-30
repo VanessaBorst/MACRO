@@ -1,12 +1,11 @@
 import json
-import torch
-import pandas as pd
-from pathlib import Path
-from itertools import repeat
 from collections import OrderedDict
+from itertools import repeat
+from pathlib import Path
+
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
 import numpy as np
+import torch
 
 
 def get_project_root() -> Path:

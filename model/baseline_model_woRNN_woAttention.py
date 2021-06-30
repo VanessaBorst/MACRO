@@ -1,10 +1,7 @@
 import torch.nn as nn
-import torch.nn.functional as F
-from base import BaseModel
-from layers.contextualAttention import ContextualAttention
 from torchinfo import summary
 
-from utils import plot_record_from_np_array
+from base import BaseModel
 
 
 class BaselineModelWoRnnWoAttention(BaseModel):

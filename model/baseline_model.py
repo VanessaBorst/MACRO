@@ -1,7 +1,8 @@
 import torch.nn as nn
+from torchinfo import summary
+
 from base import BaseModel
 from layers.contextualAttention import ContextualAttention
-from torchinfo import summary
 
 
 class BaselineModel(BaseModel):

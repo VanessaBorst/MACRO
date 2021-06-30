@@ -1,8 +1,9 @@
 import logging
 import logging.config
-from pathlib import Path
-from utils import get_project_root, read_json
 import os
+from pathlib import Path
+
+from utils import get_project_root, read_json
 
 '''
 INFORMATION about logging (see https://docs.python.org/3/howto/logging.html#logging-basic-tutorial)
