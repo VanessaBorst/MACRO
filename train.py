@@ -1,27 +1,37 @@
 import argparse
 import collections
+import os
+import random
 
 import torch
-
+import numpy as np
 import data_loader.data_loaders as module_data_loader
 import model.loss as module_loss
 from parse_config import ConfigParser
 from trainer.ecg_trainer import ECGTrainer
 from utils import prepare_device
 
+
+def _set_seed(SEED):
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
+    # VB: Replaced by use_deterministic_algorithms, which will make more PyTorch operations behave deterministically
+    # See https://pytorch.org/docs/stable/notes/randomness.html
+    torch.backends.cudnn.deterministic = True
+    # torch.use_deterministic_algorithms(True)
+    torch.backends.cudnn.benchmark = False
+
+    random.seed(SEED)
+    torch.cuda.manual_seed_all(SEED)
+    # os.environ['PYTHONHASHSEED'] = str(SEED)
+
+
 # fix random seeds for reproducibility
 SEED = 123
-torch.manual_seed(SEED)
-# VB: Replaced by use_deterministic_algorithms, which will make more PyTorch operations behave deterministically
-# See https://pytorch.org/docs/stable/notes/randomness.html
-torch.backends.cudnn.deterministic = True
-# torch.use_deterministic_algorithms(True)
-torch.backends.cudnn.benchmark = False
-# np.random.seed(SEED) -> not used, np.random is only used in the base data loader and the seed is set to 0 there
+_set_seed(SEED)
 
 
 def main(config):
-
     # Conditional inputs depending on the config
     if config['arch']['type'] == 'BaselineModelWoRnnWoAttention':
         import model.baseline_model_woRNN_woAttention as module_arch
@@ -58,11 +68,13 @@ def main(config):
     if config['arch']['args']['multi_label_training']:
         metrics_iter = [getattr(module_metric, met) for met in config['metrics']['ml']['per_iteration']]
         metrics_epoch = [getattr(module_metric, met) for met in config['metrics']['ml']['per_epoch']]
-        metrics_epoch_class_wise = [getattr(module_metric, met) for met in config['metrics']['ml']['per_epoch_class_wise']]
+        metrics_epoch_class_wise = [getattr(module_metric, met) for met in
+                                    config['metrics']['ml']['per_epoch_class_wise']]
     else:
         metrics_iter = [getattr(module_metric, met) for met in config['metrics']['sl']['per_iteration']]
         metrics_epoch = [getattr(module_metric, met) for met in config['metrics']['sl']['per_epoch']]
-        metrics_epoch_class_wise = [getattr(module_metric, met) for met in config['metrics']['sl']['per_epoch_class_wise']]
+        metrics_epoch_class_wise = [getattr(module_metric, met) for met in
+                                    config['metrics']['sl']['per_epoch_class_wise']]
 
     # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())

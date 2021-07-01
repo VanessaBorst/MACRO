@@ -45,7 +45,8 @@ class ECGTrainer(BaseTrainer):
         self.valid_data_loader = valid_data_loader
         self.do_validation = self.valid_data_loader is not None
         self.lr_scheduler = lr_scheduler
-        self.log_step = int(np.sqrt(data_loader.batch_size))
+        self.log_step = int(512/self.data_loader.batch_size)  # After 512 Samples
+        # int(np.sqrt(data_loader.batch_size))
 
         self._class_labels = self.data_loader.dataset.class_labels
 
@@ -61,9 +62,12 @@ class ECGTrainer(BaseTrainer):
                                            writer=self.writer)
 
         # Store potential parameters needed for metrics
-        # val_class_weights = self.data_loader.dataset.get_target_distribution(
-        #     idx_list=self.data_loader.valid_sampler.indices, multi_labels=self.multi_label_training) \
-        #     if not self.overfit_single_batch else None
+        val_class_freq, val_class_dist = self.data_loader.dataset.get_class_freqs_and_target_distribution(
+            idx_list=self.data_loader.valid_sampler.indices, multi_label_training=self.multi_label_training) \
+            if not self.overfit_single_batch else None
+
+        train_class_freq, train_class_dist =  self.data_loader.dataset.get_class_freqs_and_target_distribution(
+            idx_list=self.data_loader.batch_sampler.sampler.indices, multi_label_training=self.multi_label_training)
 
         val_pos_weights = self.data_loader.dataset.get_ml_pos_weights(
             idx_list=self.data_loader.valid_sampler.indices, mode='valid', log_dir=self.config.log_dir) \
@@ -71,17 +75,11 @@ class ECGTrainer(BaseTrainer):
         self._param_dict = {
             "labels": self._class_labels,
             "device": self.device,
-
             "sigmoid_probs": config["metrics"]["additional_metrics_args"].get("sigmoid_probs", False),
             "log_probs": config["metrics"]["additional_metrics_args"].get("log_probs", False),
             "logits": config["metrics"]["additional_metrics_args"].get("logits", False),
-
-            # "train_class_weights": self.data_loader.dataset.get_target_distribution(
-            #     idx_list=self.data_loader.batch_sampler.sampler.indices, multi_labels=self.multi_label_training),
             "train_pos_weights": self.data_loader.dataset.get_ml_pos_weights(
                 idx_list=self.data_loader.batch_sampler.sampler.indices, mode='train', log_dir=self.config.log_dir),
-
-            # "valid_class_weights": val_class_weights,
             "valid_pos_weights": val_pos_weights
         }
 
@@ -157,14 +155,20 @@ class ECGTrainer(BaseTrainer):
         else:
             context_manager = nullcontext()
 
+
         with context_manager as profiler:
-            for batch_idx, (padded_records, labels, labels_one_hot, record_names) in enumerate(
+            for batch_idx, (padded_records, _, first_labels, labels_one_hot, record_names) in enumerate(
                     self.data_loader):
+
+                if batch_idx==1:
+                    with open(os.path.join(self.config.log_dir, 'Record_names_batch1_epoch' + str(epoch)) + ".p", 'wb') as file:
+                        pickle.dump(record_names, file)
+
                 if self.multi_label_training:
                     data, target = padded_records.to(self.device), labels_one_hot.to(self.device)
                 else:
                     # target contains the first GT label, target_all_labels contains all labels in 1-hot-encoding
-                    data, target, target_all_labels = padded_records.to(self.device), labels.to(self.device), \
+                    data, target, target_all_labels = padded_records.to(self.device), first_labels.to(self.device), \
                                                       labels_one_hot.to(self.device)
                 data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)
 
@@ -319,14 +323,14 @@ class ECGTrainer(BaseTrainer):
             valid_attention_weights = []
 
         with torch.no_grad():
-
-            for batch_idx, (padded_records, labels, labels_one_hot, record_names) in enumerate(self.valid_data_loader):
+            for batch_idx, (padded_records, _, first_labels, labels_one_hot, record_names) in \
+                    enumerate(self.valid_data_loader):
 
                 if self.multi_label_training:
                     data, target = padded_records.to(self.device), labels_one_hot.to(self.device)
                 else:
                     # target contains the first GT label, target_all_labels contains all labels in 1-hot-encoding
-                    data, target, target_all_labels = padded_records.to(self.device), labels.to(self.device), \
+                    data, target, target_all_labels = padded_records.to(self.device), first_labels.to(self.device), \
                                                       labels_one_hot.to(self.device)
 
                 data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)

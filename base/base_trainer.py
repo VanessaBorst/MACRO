@@ -1,5 +1,7 @@
+import random
 from abc import abstractmethod
 
+import numpy.random
 import torch
 from numpy import inf
 
@@ -123,7 +125,11 @@ class BaseTrainer:
             'state_dict': self.model.state_dict(),
             'optimizer': self.optimizer.state_dict(),
             'monitor_best': self.mnt_best,
-            'config': self.config
+            'config': self.config,
+            'torch_rng_state': torch.get_rng_state(),
+            'np_rng_state': numpy.random.get_state(),
+            'random_state': random.getstate(),
+            'torch_cuda_rng_states': torch.cuda.get_rng_state_all()
         }
         filename = str(self.checkpoint_dir / 'checkpoint-epoch{}.pth'.format(epoch))
         torch.save(state, filename)
@@ -144,6 +150,12 @@ class BaseTrainer:
         checkpoint = torch.load(resume_path)
         self.start_epoch = checkpoint['epoch'] + 1
         self.mnt_best = checkpoint['monitor_best']
+
+        # Set the RNGs to ensure that the same data subset is used in the epoch as if there was no interruption
+        torch.set_rng_state(checkpoint['torch_rng_state'])
+        numpy.random.set_state(checkpoint['np_rng_state'])
+        random.setstate(checkpoint['random_state'])
+        torch.cuda.set_rng_state_all(checkpoint['torch_cuda_rng_states'])
 
         # load architecture params from checkpoint.
         if checkpoint['config']['arch'] != self.config['arch']:

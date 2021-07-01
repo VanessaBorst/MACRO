@@ -12,6 +12,7 @@ with open('Record_names_train_resume.p', 'rb') as file:
 with open('Record_names_valid_resume.p', 'rb') as file:
     valid_resume = pickle.load(file)
 
+
 assert train_init == train_resume
 assert valid_init == valid_resume
 

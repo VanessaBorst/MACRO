@@ -1,4 +1,5 @@
 import functools
+import json
 import operator
 import os
 import pickle
@@ -27,7 +28,7 @@ class ECGDataset(Dataset):
         """
 
         records = []
-        for file in os.listdir(input_dir):
+        for file in sorted(os.listdir(input_dir)):
             if ".pk" not in file:
                 continue
             records.append(file)
@@ -41,7 +42,7 @@ class ECGDataset(Dataset):
     def __len__(self):
         return len(self.records)
 
-    def __getitem__(self, idx) -> Tuple[pd.DataFrame, List[int], int, str]:
+    def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
@@ -51,11 +52,11 @@ class ECGDataset(Dataset):
         # Ensure that the record is not containing any unknown class label
         assert all(label in self.class_labels for label in meta["classes_encoded"])
 
-        # TODO DEAL WITH MULTI_LABEL CASE, at the moment only the first label is used per record
-
         # Removed len(record.index) as length, now they are all 72000
         # torch.tensor(record.values).float()
-        return record.values.astype("float32"), meta["classes_encoded"][0], meta["classes_one_hot"].values, record_name
+        return record.values.astype("float32"), \
+               str(meta["classes_encoded"]), meta["classes_encoded"][0], \
+               meta["classes_one_hot"].values, record_name
 
     def get_class_freqs_and_target_distribution(self, idx_list, multi_label_training):
         """
@@ -68,13 +69,13 @@ class ECGDataset(Dataset):
         """
         classes = []
         for idx in idx_list:
-            _, classes_encoded, classes_one_hot, record_name = self.__getitem__(idx)
+            _, _, first_class_encoded, classes_one_hot, record_name = self.__getitem__(idx)
             if multi_label_training:
                 classes.append(classes_one_hot)
             else:
                 # Only consider the first label
                 classes_one_hot[:] = 0
-                classes_one_hot[classes_encoded[0]] = 1
+                classes_one_hot[first_class_encoded] = 1
                 classes.append(classes_one_hot)
 
         # Get the class freqs as Pandas series
@@ -97,7 +98,7 @@ class ECGDataset(Dataset):
         classes = []
         record_names = []
         for idx in idx_list:
-            _, _, classes_one_hot, record_name = self.__getitem__(idx)
+            _, _, _, classes_one_hot, record_name = self.__getitem__(idx)
             classes.append(classes_one_hot)
             record_names.append(record_name)
 
@@ -133,12 +134,12 @@ class ECGDataset(Dataset):
 
         classes = []
         for idx in idx_list:
-            _, classes_encoded, classes_one_hot, record_name = self.__getitem__(idx)
+            _, classes_encoded, first_class_encoded, classes_one_hot, record_name = self.__getitem__(idx)
             if multi_label_training:
-                classes.append(classes_encoded)
+                classes.append(json.load(classes_encoded))
             else:
                 # Only consider the first label
-                classes.append(classes_encoded[0])
+                classes.append(first_class_encoded)
 
         # Flatten the classes to a one-dimensional array
         classes = functools.reduce(operator.iconcat, classes, [])
@@ -147,7 +148,6 @@ class ECGDataset(Dataset):
         class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(classes), y=classes)
 
         return class_weights
-
 
 
 if __name__ == '__main__':
