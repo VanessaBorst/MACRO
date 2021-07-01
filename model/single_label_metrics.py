@@ -2,10 +2,9 @@ import numpy as np
 import pandas as pd
 import torch
 from sklearn.metrics import confusion_matrix, multilabel_confusion_matrix, \
-    accuracy_score, top_k_accuracy_score, roc_auc_score, f1_score, balanced_accuracy_score
+    accuracy_score, top_k_accuracy_score, roc_auc_score, f1_score, balanced_accuracy_score, classification_report
 
 
-# This file contains multiclass classification metrics (currently not adapted for multi-label classification!)
 # Macro metrics: Macro-level metrics gives equal weight to each class
 #       => Each class has the same weight in the average
 #       => There is no distinction between highly and poorly populated classes
@@ -61,7 +60,7 @@ def _f1(output, target, log_probs, logits, labels, average):
     (see https://scikit-learn.org/stable/modules/generated/sklearn.metrics.f1_score.html)
     """
     with torch.no_grad():
-        assert log_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+        assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
         if log_probs:
             pred = _convert_log_probs_to_prediction(output)
         else:
@@ -100,7 +99,7 @@ def _roc_auc(output, target, log_probs, logits, labels, average, multi_class_cfg
     with torch.no_grad():
         # In the multiclass case, y_score corresponds to an array of shape (n_samples, n_classes) of probability
         # estimates. The probability estimates must sum to 1 across the possible classes
-        assert log_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+        assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
         # In both cases, the scores do not sum to one
         # Either they are logmax outputs or logits, so transform them
         softmax_probs = torch.nn.functional.softmax(output, dim=1)
@@ -127,7 +126,7 @@ def accuracy(output, target, log_probs, logits):
     (see https://scikit-learn.org/stable/modules/generated/sklearn.metrics.accuracy_score.html)
     """
     with torch.no_grad():
-        assert log_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+        assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
         if log_probs:
             pred = _convert_log_probs_to_prediction(output)
         else:
@@ -156,7 +155,7 @@ def balanced_accuracy(output, target, log_probs, logits):
         Per entry, a class index in the range [0, C-1] as integer (ground truth)
     """
     with torch.no_grad():
-        assert log_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+        assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
         if log_probs:
             pred = _convert_log_probs_to_prediction(output)
         else:
@@ -185,17 +184,26 @@ def top_k_acc(output, target, labels, k=3):
 
 
 def mirco_f1(output, target, log_probs, logits, labels):
-    """See documentation for _f1 """
+    """See documentation for _f1
+    Compute the f1-score using the global count of true positives / false negatives, etc.
+    (Sums the number of true positives / false negatives for each class).
+    """
     return _f1(output, target, log_probs, logits, labels, "micro")
 
 
 def macro_f1(output, target, log_probs, logits, labels):
-    """See documentation for _f1 """
+    """See documentation for _f1
+    Takes the average of the f1-score for each class: that's the avg / total result
+    """
     return _f1(output, target, log_probs, logits, labels, "macro")
 
 
 def weighted_f1(output, target, log_probs, logits, labels):
-    """See documentation for _f1 """
+    """See documentation for _f1
+    Compute a weighted average of the f1-score.
+    Weights the f1-score by the support of the class:
+    the more elements a class has, the more important the f1-score for this class in the computation.
+    """
     return _f1(output, target, log_probs, logits, labels, "weighted")
 
 
@@ -212,6 +220,16 @@ def macro_roc_auc_ovo(output, target, log_probs, logits, labels):
 def weighted_roc_auc_ovo(output, target, log_probs, logits, labels):
     """See documentation for _roc_auc """
     return _roc_auc(output, target, log_probs, logits, labels, "weighted", "ovo")
+
+
+# def class_wise_roc_auc_ovo(output, target, log_probs, logits, labels):
+#     """See documentation for _roc_auc """
+#     return _roc_auc(output, target, log_probs, logits, labels, None, "ovo")
+#
+#
+# def class_wise_roc_auc_ovr(output, target, log_probs, logits, labels):
+#     """See documentation for _roc_auc """
+#     return _roc_auc(output, target, log_probs, logits, labels, None, "ovr")
 
 
 def macro_roc_auc_ovr(output, target, log_probs, logits, labels):
@@ -239,7 +257,7 @@ def overall_confusion_matrix(output, target, log_probs, logits, labels):
         :return: Dataframes of size (num_labels x num_labels) representing the confusion matrix
     """
     with torch.no_grad():
-        assert log_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+        assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
         if log_probs:
             pred = _convert_log_probs_to_prediction(output)
         else:
@@ -268,7 +286,7 @@ def class_wise_confusion_matrices_single_label(output, target, log_probs, logits
     (see https://scikit-learn.org/stable/modules/generated/sklearn.metrics.multilabel_confusion_matrix.html)
     """
     with torch.no_grad():
-        assert log_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+        assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
         if log_probs:
             pred = _convert_log_probs_to_prediction(output)
         else:
@@ -323,7 +341,7 @@ def cpsc_score_adapted(output, target, log_probs, logits):
     The static of predicted answers and the final score are saved to score.txt in local path.
     '''
     with torch.no_grad():
-        assert log_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+        assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
         if log_probs:
             # ndarray of size (sample_num, )
             answers = _convert_log_probs_to_prediction(output).numpy()
@@ -373,3 +391,15 @@ def cpsc_score_adapted(output, target, log_probs, logits):
         # print(A)
         print('Total Record Number: ', np.sum(A))
         return F1
+
+
+def classification_summary(output, target, log_probs, logits, labels,
+                           target_names=["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]):
+    with torch.no_grad():
+        assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
+        if log_probs:
+            pred = _convert_log_probs_to_prediction(output)
+        else:
+            pred = _convert_logits_to_prediction(output)
+        assert pred.shape[0] == len(target)
+        return classification_report(y_true=target, y_pred=pred, labels=labels, digits=3, target_names=target_names)

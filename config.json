@@ -1,24 +1,24 @@
 {
-  "name": "CPSC_BaselineModel",
+  "name": "CPSC_BaselineModel_DEBUG",
   "n_gpu": 1,
   "arch": {
     "type": "BaselineModel",
     "args": {
       "apply_final_activation": false,
-      "multi_label_training": true
+      "multi_label_training": false
     }
   },
   "data_loader": {
     "type": "ECGDataLoader",
     "args": {
-      "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000/",
+      "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000",
       "batch_size": 64,
       "shuffle": true,
       "validation_split": 0.25,
-      "num_workers": 1
+      "num_workers": 4
     },
     "overfit_single_batch": false,
-    "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/eq_len_72000/"
+    "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/eq_len_72000"
   },
   "optimizer": {
     "type": "Adam",
@@ -28,7 +28,7 @@
       "amsgrad": false
     }
   },
-  "loss": "balanced_BCE_with_logits",
+  "loss": "cross_entropy_loss",
   "metrics": {
     "sl": {
       "per_iteration": [
@@ -85,12 +85,12 @@
     }
   },
   "trainer": {
-    "epochs": 500,
+    "epochs": 300,
     "save_dir": "saved/",
     "save_period": 1,
     "verbosity": 2,
     "monitor": "min val_loss",
-    "early_stop": 30,
+    "early_stop": 15,
     "tensorboard": true,
     "try_run": false,
     "profiler_active": true

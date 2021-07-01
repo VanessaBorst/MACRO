@@ -21,7 +21,7 @@
             "level": "DEBUG", 
             "formatter": "simple", 
             "stream": "ext://sys.stdout",
-            "filters": ["skipCMInfosForConsole"]
+            "filters": []
             }, 
         "info_file_handler": {
             "class": "logging.handlers.RotatingFileHandler", 

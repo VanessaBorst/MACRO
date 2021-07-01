@@ -1,6 +1,7 @@
 import functools
 import operator
 import os
+import pickle
 import pickle as pk
 from typing import Tuple, List
 
@@ -84,17 +85,25 @@ class ECGDataset(Dataset):
         # Return both as as ndarray
         return class_freqs.values, class_dist.values
 
-    def get_ml_pos_weights(self, idx_list):
+    def get_ml_pos_weights(self, idx_list, mode, log_dir):
         """
         Can be used to determine  the class frequencies and the target classes distribution
         :param idx_list: list of ids, should contain all ids contained in the train, valid or test set
+        :param mode: should be 'train' or 'valid'
+        :param log_dir: dir to save the record names to
         :return:  Pos weights, one weight per class
 
         """
         classes = []
+        record_names = []
         for idx in idx_list:
-            _, _, classes_one_hot, _ = self.__getitem__(idx)
+            _, _, classes_one_hot, record_name = self.__getitem__(idx)
             classes.append(classes_one_hot)
+            record_names.append(record_name)
+
+        # Dump to pickle
+        with open(os.path.join(log_dir, 'Record_names_' + str(mode)) + ".p", 'wb') as file:
+            pickle.dump(record_names, file)
 
         # Get the class freqs as Pandas series
         class_freqs = pd.DataFrame(classes).sum()

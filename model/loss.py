@@ -11,6 +11,7 @@ def balanced_BCE(output, target, class_weights):
 
 
 def multi_label_soft_margin(output, target, class_weights):
+    # TODO set class weights correctly, e.g. weight=class_weight[target.long()]
     loss = MultiLabelSoftMarginLoss(weight=torch.Tensor(class_weights))
     return loss(output, target)
 
@@ -66,3 +67,14 @@ def cross_entropy_loss(output, target):
             Per entry, a class index in the range [0, C-1] as integer
         """
     return F.cross_entropy(output, target)
+
+
+# Balanced cross entropy: Usually you increase the weight for minority classes, so that their loss also increases and
+# forces the model to learn these samples. This could be done by e.g. the inverse class count (class frequency).:
+# https://discuss.pytorch.org/t/passing-the-weights-to-crossentropyloss-correctly/14731/22
+
+# Poss. 1:  Weight of class c is the size of largest class divided by the size of class c.
+# You can also use the smallest class as nominator; this is only a re-scaling, the relative weights are the same
+# (https://datascience.stackexchange.com/questions/48369/what-loss-function-to-use-for-imbalanced-classes-using-pytorch)
+# Poss. 2: It could be done by e.g. the inverse class count (class frequency)
+# https://discuss.pytorch.org/t/passing-the-weights-to-crossentropyloss-correctly/14731/23

@@ -5,7 +5,7 @@ import pandas as pd
 import torch
 from sklearn.metrics import multilabel_confusion_matrix, \
     accuracy_score, roc_auc_score, f1_score, precision_score, \
-    recall_score
+    recall_score, classification_report
 
 # This file contains multiclass classification metrics (currently not adapted for multi-label classification!)
 # Macro metrics: Macro-level metrics gives equal weight to each class
@@ -368,6 +368,18 @@ def class_wise_confusion_matrices_multi_label(output, target, sigmoid_probs, log
         df_class_wise_cms = [pd.DataFrame(class_wise_cms[idx]).astype('int64').rename_axis(labels[idx], axis=1)
                              for idx in range(0, len(class_wise_cms))]
         return df_class_wise_cms
+
+
+def classification_summary(output, target, sigmoid_probs, logits, labels,
+                           target_names=["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]):
+    with torch.no_grad():
+        assert sigmoid_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+        if sigmoid_probs:
+            pred = _convert_sigmoid_probs_to_prediction(output)
+        else:
+            pred = _convert_logits_to_prediction(output)
+        assert pred.shape[0] == len(target)
+        return classification_report(y_true=target, y_pred=pred, labels=labels, digits=3, target_names=target_names)
 
 
 def _convert_multi_label_probs_to_single_prediction(sigmoid_prob_output):

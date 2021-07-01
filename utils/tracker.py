@@ -31,6 +31,9 @@ class MetricTracker:
         self._epoch = 0
         self._data_epoch = pd.DataFrame(index=keys_epoch + all_keys_epoch_class_wise, columns=['mean'],
                                         dtype=np.float64)
+        # Set the print option of pandas to at least twice the num of metrics, since they may later be printed together
+        # (one time for train, one time for valid)
+        pd.set_option('display.max_rows', 100)
         self.reset()
 
     @property

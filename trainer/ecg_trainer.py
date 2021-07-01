@@ -14,6 +14,7 @@ from matplotlib.lines import Line2D
 from torch.profiler import tensorboard_trace_handler
 
 from base import BaseTrainer
+from model import multi_label_metrics, single_label_metrics
 from model.multi_label_metrics import class_wise_confusion_matrices_multi_label, THRESHOLD
 from model.single_label_metrics import class_wise_confusion_matrices_single_label, overall_confusion_matrix
 from utils import inf_loop, plot_grad_flow_lines, plot_grad_flow_bars
@@ -60,12 +61,12 @@ class ECGTrainer(BaseTrainer):
                                            writer=self.writer)
 
         # Store potential parameters needed for metrics
-        # TODO Find out which shape is needed by the weights - inverse or normal?
         # val_class_weights = self.data_loader.dataset.get_target_distribution(
         #     idx_list=self.data_loader.valid_sampler.indices, multi_labels=self.multi_label_training) \
         #     if not self.overfit_single_batch else None
+
         val_pos_weights = self.data_loader.dataset.get_ml_pos_weights(
-            idx_list=self.data_loader.valid_sampler.indices) \
+            idx_list=self.data_loader.valid_sampler.indices, mode='valid', log_dir=self.config.log_dir) \
             if not self.overfit_single_batch else None
         self._param_dict = {
             "labels": self._class_labels,
@@ -78,7 +79,7 @@ class ECGTrainer(BaseTrainer):
             # "train_class_weights": self.data_loader.dataset.get_target_distribution(
             #     idx_list=self.data_loader.batch_sampler.sampler.indices, multi_labels=self.multi_label_training),
             "train_pos_weights": self.data_loader.dataset.get_ml_pos_weights(
-                idx_list=self.data_loader.batch_sampler.sampler.indices),
+                idx_list=self.data_loader.batch_sampler.sampler.indices, mode='train', log_dir=self.config.log_dir),
 
             # "valid_class_weights": val_class_weights,
             "valid_pos_weights": val_pos_weights
@@ -223,11 +224,11 @@ class ECGTrainer(BaseTrainer):
                     metrics_debug = ", ".join(f"{key}: {value:.6f}" for key, value in current_metrics.items())
                     self.logger.debug(epoch_debug + metrics_debug)
 
-                if batch_idx == self.len_epoch:  # or self.overfit_single_batch:
-                    break
-
                 if self.profiler_active:
                     profiler.step()
+
+                if batch_idx == self.len_epoch:  # or self.overfit_single_batch:
+                    break
 
         if self.try_run:
             # At the end of the epoch, send the gradient flows of the current epoch to the TensorboardWriter
@@ -499,6 +500,19 @@ class ECGTrainer(BaseTrainer):
         # For this, calculate both, the normal epoch-based metrics as well as the class-wise epoch-based metrics
         self._do_epoch_updates(tracker=metric_tracker, outputs=det_outputs,
                                targets=det_targets, targets_all_labels=det_targets_all_labels)
+
+        # Print the summary report to the console and the log
+        self.logger.info("Summary Report for Epoch " + str(epoch) + ":")
+        if self.multi_label_training:
+            self.logger.info(multi_label_metrics.classification_summary(output=det_outputs, target=det_targets,
+                                                                        sigmoid_probs=self._param_dict["sigmoid_probs"],
+                                                                        logits=self._param_dict["logits"],
+                                                                        labels=self._param_dict["labels"]))
+        else:
+            self.logger.info(single_label_metrics.classification_summary(output=det_outputs, target=det_targets,
+                                                                         log_probs=self._param_dict["log_probs"],
+                                                                         logits=self._param_dict["logits"],
+                                                                         labels=self._param_dict["labels"]))
 
     def _send_attention_weights_to_writer(self, attention_weights, batch_idx, epoch, str_mode):
         fig_attention_weights, attention_ax = plt.subplots(figsize=(8, 8))
