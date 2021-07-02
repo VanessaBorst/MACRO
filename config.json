@@ -5,20 +5,20 @@
     "type": "BaselineModel",
     "args": {
       "apply_final_activation": false,
-      "multi_label_training": false
+      "multi_label_training": true
     }
   },
   "data_loader": {
     "type": "ECGDataLoader",
     "args": {
-      "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000",
-      "batch_size": 64,
+      "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000/subset",
+      "batch_size": 8,
       "shuffle": true,
       "validation_split": 0.25,
-      "num_workers": 4
+      "num_workers": 1
     },
     "overfit_single_batch": false,
-    "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/eq_len_72000"
+    "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/eq_len_72000/subset"
   },
   "optimizer": {
     "type": "Adam",
@@ -28,7 +28,7 @@
       "amsgrad": false
     }
   },
-  "loss": "cross_entropy_loss",
+  "loss": "balanced_BCE_with_logits",
   "metrics": {
     "sl": {
       "per_iteration": [
@@ -89,10 +89,10 @@
     "save_dir": "saved/",
     "save_period": 1,
     "verbosity": 2,
-    "monitor": "min val_loss",
-    "early_stop": 15,
+    "monitor": "max val_cpsc_score_adapted",
+    "early_stop": 20,
     "tensorboard": true,
     "try_run": false,
-    "profiler_active": true
+    "profiler_active": false
   }
 }

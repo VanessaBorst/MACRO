@@ -155,14 +155,9 @@ class ECGTrainer(BaseTrainer):
         else:
             context_manager = nullcontext()
 
-
         with context_manager as profiler:
             for batch_idx, (padded_records, _, first_labels, labels_one_hot, record_names) in enumerate(
                     self.data_loader):
-
-                if batch_idx==1:
-                    with open(os.path.join(self.config.log_dir, 'Record_names_batch1_epoch' + str(epoch)) + ".p", 'wb') as file:
-                        pickle.dump(record_names, file)
 
                 if self.multi_label_training:
                     data, target = padded_records.to(self.device), labels_one_hot.to(self.device)

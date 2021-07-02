@@ -403,3 +403,18 @@ def classification_summary(output, target, log_probs, logits, labels,
             pred = _convert_logits_to_prediction(output)
         assert pred.shape[0] == len(target)
         return classification_report(y_true=target, y_pred=pred, labels=labels, digits=3, target_names=target_names)
+
+
+if __name__ == '__main__':
+    # Single Label
+    # output = [0, 2, 5, 6]
+    target = [1, 8, 7, 6]
+    output = [[0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1],
+              [0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1],
+              [0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+              [0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]]
+
+    test = roc_auc_score(y_true=target, y_score=output, labels=[0,1,2,3,4,5,6,7,8], average=None, multi_class="ovo")
+
+    print("Finihed")
+

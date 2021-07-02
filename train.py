@@ -1,6 +1,7 @@
 import argparse
 import collections
 import os
+import pickle
 import random
 
 import torch
@@ -97,6 +98,9 @@ def main(config):
                          lr_scheduler=lr_scheduler)
 
     log_best = trainer.train()
+    path_name = os.path.join(config.log_dir, "model_best_metrics.p")
+    with open(path_name, 'wb') as file:
+        pickle.dump(log_best, file)
 
 
 if __name__ == '__main__':

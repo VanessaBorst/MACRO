@@ -120,5 +120,5 @@ class BaselineModel(BaseModel):
 
 
 if __name__ == "__main__":
-    model = BaselineModel()
+    model = BaselineModel(apply_final_activation=True, multi_label_training=True)
     summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "num_params"])
