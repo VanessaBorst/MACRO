@@ -11,14 +11,14 @@
   "data_loader": {
     "type": "ECGDataLoader",
     "args": {
-      "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000/subset",
-      "batch_size": 8,
+      "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000",
+      "batch_size": 64,
       "shuffle": true,
       "validation_split": 0.25,
-      "num_workers": 1
+      "num_workers": 4
     },
     "overfit_single_batch": false,
-    "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/eq_len_72000/subset"
+    "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/eq_len_72000"
   },
   "optimizer": {
     "type": "Adam",
@@ -28,15 +28,17 @@
       "amsgrad": false
     }
   },
-  "loss": "balanced_BCE_with_logits",
+  "loss": {
+    "type": "balanced_BCE_with_logits",
+    "add_args": ["pos_weights", "device"]
+  },
   "metrics": {
     "sl": {
-      "per_iteration": [
-        "accuracy",
-        "top_k_acc"
-      ],
+      "per_iteration": {
+        "accuracy": ["log_probs", "logits"]
+      },
       "per_epoch": [
-        "cpsc_score_adapted",
+        "cpsc_score",
         "balanced_accuracy",
         "mirco_f1",
         "macro_f1",
@@ -51,11 +53,11 @@
       ]
     },
     "ml": {
-      "per_iteration": [
-        "subset_accuracy"
-      ],
+      "per_iteration": {
+        "subset_accuracy": ["sigmoid_probs", "logits"]
+      },
       "per_epoch": [
-        "cpsc_score_adapted",
+        "cpsc_score",
         "mirco_f1",
         "macro_f1",
         "weighted_f1",
@@ -89,7 +91,7 @@
     "save_dir": "saved/",
     "save_period": 1,
     "verbosity": 2,
-    "monitor": "max val_cpsc_score_adapted",
+    "monitor": "max val_cpsc_F1",
     "early_stop": 20,
     "tensorboard": true,
     "try_run": false,

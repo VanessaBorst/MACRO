@@ -45,8 +45,11 @@ class ECGTrainer(BaseTrainer):
         self.valid_data_loader = valid_data_loader
         self.do_validation = self.valid_data_loader is not None
         self.lr_scheduler = lr_scheduler
-        self.log_step = int(512/self.data_loader.batch_size)  # After 512 Samples
-        # int(np.sqrt(data_loader.batch_size))
+
+        self.batch_log_step = int(512/self.data_loader.batch_size) # used for logging frequency during the training loop
+        #self.batch_log_step = int(np.sqrt(self.data_loader.batch_size))  # used for logging frequency during the training loop
+        self.epoch_log_step_train = 25  # used for epoch metrics and confusion matrix handling
+        self.epoch_log_step_valid = 15  # used for confusion matrix handling
 
         self._class_labels = self.data_loader.dataset.class_labels
 
@@ -62,12 +65,12 @@ class ECGTrainer(BaseTrainer):
                                            writer=self.writer)
 
         # Store potential parameters needed for metrics
-        val_class_freq, val_class_dist = self.data_loader.dataset.get_class_freqs_and_target_distribution(
-            idx_list=self.data_loader.valid_sampler.indices, multi_label_training=self.multi_label_training) \
-            if not self.overfit_single_batch else None
-
-        train_class_freq, train_class_dist =  self.data_loader.dataset.get_class_freqs_and_target_distribution(
-            idx_list=self.data_loader.batch_sampler.sampler.indices, multi_label_training=self.multi_label_training)
+        # val_class_freq, val_class_dist = self.data_loader.dataset.get_class_freqs_and_target_distribution(
+        #     idx_list=self.data_loader.valid_sampler.indices, multi_label_training=self.multi_label_training) \
+        #     if not self.overfit_single_batch else None
+        #
+        # train_class_freq, train_class_dist =  self.data_loader.dataset.get_class_freqs_and_target_distribution(
+        #     idx_list=self.data_loader.batch_sampler.sampler.indices, multi_label_training=self.multi_label_training)
 
         val_pos_weights = self.data_loader.dataset.get_ml_pos_weights(
             idx_list=self.data_loader.valid_sampler.indices, mode='valid', log_dir=self.config.log_dir) \
@@ -101,9 +104,10 @@ class ECGTrainer(BaseTrainer):
         # Reset the trackers
         self.train_metrics.reset()
         self.train_cms.reset()
-        # If there are epoch-based metrics, store the intermediate targets. Always store the output scores
-        outputs_list = []
-        if len(self.metrics_epoch) > 0:
+
+        if epoch == 1 or epoch % self.epoch_log_step_train == 0:
+            # If there are epoch-based metrics, store the intermediate targets and the output scores
+            outputs_list = []
             targets_list = []
             targets_all_labels_list = [] if not self.multi_label_training else None
 
@@ -184,16 +188,14 @@ class ECGTrainer(BaseTrainer):
                 if not self.multi_label_training:
                     detached_target_all_labels = target_all_labels.detach().cpu()
 
-                outputs_list.append(detached_output)
-                if len(self.metrics_epoch) > 0:
+                if epoch == 1 or epoch % self.epoch_log_step_train == 0:
+                    outputs_list.append(detached_output)
                     targets_list.append(detached_target)
                     if not self.multi_label_training:
                         targets_all_labels_list.append(detached_target_all_labels)
 
                 # Calculate the loss, here gradients are nedded!
-                args, _, _, _, _, _, _ = inspect.getfullargspec(self.criterion)
-                # Output and target are needed for all metrics!
-                additional_args = [arg for arg in args if arg not in ('output', 'target')]
+                additional_args = self.config['loss']['add_args']
                 additional_kwargs = {
                     param_name: self._param_dict[param_name] if not param_name == 'pos_weights'
                     else self._param_dict['train_pos_weights'] for param_name in additional_args
@@ -210,14 +212,11 @@ class ECGTrainer(BaseTrainer):
                 self.optimizer.step()
                 self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
 
-                # Iteratively update the loss and the metrics with the MetricTracker
+                # Iteratively update the loss and the metrics with the MetricTracker for each batch
                 self._do_iter_update(metric_tracker=self.train_metrics, output=detached_output,
                                      target=detached_target, loss_val=loss.item())
 
-                # Update the confusion matrices maintained by the ClassificationTracker
-                self._do_cm_updates(cm_tracker=self.train_cms, output=detached_output, target=detached_target)
-
-                if batch_idx % self.log_step == 0:
+                if batch_idx % self.batch_log_step == 0:
                     epoch_debug = f"Train Epoch: {epoch} {self._progress(batch_idx)} "
                     current_metrics = self.train_metrics.current()
                     metrics_debug = ", ".join(f"{key}: {value:.6f}" for key, value in current_metrics.items())
@@ -240,24 +239,24 @@ class ECGTrainer(BaseTrainer):
             plt.close(fig_gradient_flow_lines)
             plt.close(fig_gradient_flow_bars)
 
-        # At the end of each epoch, explicitly handle the tracking of confusion matrices and metrics by means of
-        # the SummaryWriter/TensorboardWriter
-        self._handle_tracking_at_epoch_end(cm_tracker=self.train_cms, metric_tracker=self.train_metrics,
-                                           epoch=epoch, outputs=outputs_list, targets=targets_list,
-                                           targets_all_labels=targets_all_labels_list)
-
-        if self.try_run:
-            # Plot heatmaps of the predicted scores for each training sample to verify if they change
-            self._send_pred_scores_to_writer(epoch, outputs_list, 'training')
-            # Plot heatmaps of the predicted classes for easier interpretability as well
-            self._send_pred_classes_to_writer(epoch, outputs_list, 'training')
+        # At the end of each epoch, explicitly handle the tracking of metrics and confusion matrices by means of
+        # the SummaryWriter/TensorboardWriter, but only each epoch_log_step steps
+        if epoch == 1 or epoch % self.epoch_log_step_train == 0:
+            # Update the cms and metrics
+            summary_str = self._handle_tracking_at_epoch_end(metric_tracker=self.train_metrics, epoch=epoch,
+                                                             outputs=outputs_list, targets=targets_list,
+                                                             targets_all_labels=targets_all_labels_list,
+                                                             mode='train', track_cms=True)
+        else:
+            summary_str = "Not calc."
 
         # Contains only NaNs for all non-iteration-based metrics when overfit_single_batch is True
-        train_log = self.train_metrics.result()
+        # Moreover, the train metrics are only contained each epoch_log_step times
+        train_log = self.train_metrics.result(include_epoch_metrics=(epoch == 1 or epoch % self.epoch_log_step_train))
 
         if self.do_validation:
             # log.update({'Note': '-------------Start of Validation-------------'})
-            valid_log, valid_cm_information = self._valid_epoch(epoch)
+            valid_log, valid_summary_str = self._valid_epoch(epoch)
             valid_log.set_index('val_' + valid_log.index.astype(str), inplace=True)
             # log.update(**{'val_' + k: v for k, v in val_log.items()})  # Extends the dict by the val loss and metrics
 
@@ -265,6 +264,8 @@ class ECGTrainer(BaseTrainer):
             self.lr_scheduler.step()
 
         log = pd.concat([train_log, valid_log]) if self.do_validation else train_log
+        summary = "Training summary:\n" + summary_str + "\nValidation summary:\n" + valid_summary_str \
+            if self.do_validation else "Training summary:\n" + summary_str
         end = time.time()
         ty_res = time.gmtime(end - start)
         res = time.strftime("%H hours, %M minutes, %S seconds", ty_res)
@@ -272,24 +273,24 @@ class ECGTrainer(BaseTrainer):
                      'iterations': self.len_epoch * epoch,
                      'Runtime': res}
         epoch_info = ', '.join(f"{key}: {value}" for key, value in epoch_log.items())
-        logger_info = f"{epoch_info}\n{log}"
+        logger_info = f"{epoch_info}\n{log}\n{summary}"
         self.logger.info(logger_info)
 
-        # Directly log the confusion matrix-related information to a dict and send it to the logger
-        # In the returned dataframe, the confusion matrices are not contained!
-        cm_information = dict({"overall_cm": "\n" + str(self.train_cms.cm)},
-                              **{"Confusion matrix for class " + str(class_cm.columns.name): "\n" + str(class_cm)
-                                 for _, class_cm in enumerate(self.train_cms.class_wise_cms)})
-        self.logger.info("------------------Confusion Matrices (train) for epoch " + str(epoch) + "------------------")
-        for key, value in cm_information.items():
-            self.logger.info('    {:15s}: {}'.format(str(key), value))
-
-        if self.do_validation:
-            # Do the same with the cm-related dict from the validation step
-            self.logger.info(
-                "------------------Confusion Matrices (valid) for epoch " + str(epoch) + "------------------")
-            for key, value in valid_cm_information.items():
-                self.logger.info('    {:15s}: {}'.format(str(key), value))
+        # # Directly log the confusion matrix-related information to a dict and send it to the logger
+        # # In the returned dataframe, the confusion matrices are not contained!
+        # cm_information = dict({"overall_cm": "\n" + str(self.train_cms.cm)},
+        #                       **{"Confusion matrix for class " + str(class_cm.columns.name): "\n" + str(class_cm)
+        #                          for _, class_cm in enumerate(self.train_cms.class_wise_cms)})
+        # self.logger.info("------------------Confusion Matrices (train) for epoch " + str(epoch) + "------------------")
+        # for key, value in cm_information.items():
+        #     self.logger.info('    {:15s}: {}'.format(str(key), value))
+        #
+        # if self.do_validation:
+        #     # Do the same with the cm-related dict from the validation step
+        #     self.logger.info(
+        #         "------------------Confusion Matrices (valid) for epoch " + str(epoch) + "------------------")
+        #     for key, value in valid_cm_information.items():
+        #         self.logger.info('    {:15s}: {}'.format(str(key), value))
 
         return log
 
@@ -307,20 +308,15 @@ class ECGTrainer(BaseTrainer):
 
         # If there are epoch-based metrics, store the intermediate targets. Always store the output scores
         outputs_list = []
-        if len(self.metrics_epoch) > 0:
-            targets_list = []
-            targets_all_labels_list = [] if not self.multi_label_training else None
+        targets_list = []
+        targets_all_labels_list = [] if not self.multi_label_training else None
 
-            # Set the writer object to validation mode
+        # Set the writer object to validation mode
         self.writer.set_mode('valid')
-
-        if not self.try_run:
-            valid_attention_weights = []
 
         with torch.no_grad():
             for batch_idx, (padded_records, _, first_labels, labels_one_hot, record_names) in \
                     enumerate(self.valid_data_loader):
-
                 if self.multi_label_training:
                     data, target = padded_records.to(self.device), labels_one_hot.to(self.device)
                 else:
@@ -337,9 +333,6 @@ class ECGTrainer(BaseTrainer):
                         self._send_attention_weights_to_writer(
                             attention_weights=attention_weights.detach().cpu().numpy()[:, :, 0],
                             batch_idx=batch_idx, epoch=epoch, str_mode="validation")
-                    else:
-                        # Save the weights to the array and finally write them to a file at least
-                        valid_attention_weights.append(attention_weights.detach().cpu().numpy()[:, :, 0])
 
                 # Detach tensors needed for further tracing and metrics calculation to remove them from the graph
                 detached_output = output.detach().cpu()
@@ -348,14 +341,11 @@ class ECGTrainer(BaseTrainer):
                     detached_target_all_labels = target_all_labels.detach().cpu()
 
                 outputs_list.append(detached_output)
-                if len(self.metrics_epoch) > 0:
-                    targets_list.append(detached_target)
-                    if not self.multi_label_training:
-                        targets_all_labels_list.append(detached_target_all_labels)
+                targets_list.append(detached_target)
+                if not self.multi_label_training:
+                    targets_all_labels_list.append(detached_target_all_labels)
 
-                args, _, _, _, _, _, _ = inspect.getfullargspec(self.criterion)
-                # Output and target are needed for all metrics!
-                additional_args = [arg for arg in args if arg not in ('output', 'target')]
+                additional_args = self.config['loss']['add_args']
                 additional_kwargs = {
                     param_name: self._param_dict[param_name] if not param_name == 'pos_weights'
                     else self._param_dict['valid_pos_weights'] for param_name in additional_args
@@ -368,48 +358,35 @@ class ECGTrainer(BaseTrainer):
                 self._do_iter_update(metric_tracker=self.valid_metrics, output=detached_output,
                                      target=detached_target, loss_val=loss.item())
 
-                # Update the confusion matrices maintained by the ClassificationTracker
-                self._do_cm_updates(cm_tracker=self.valid_cms, output=detached_output, target=detached_target)
+                # if batch_idx % self.batch_log_step == 0:
+                #     epoch_debug = f"Valid Epoch: {epoch} {self._progress(batch_idx, valid=True)} "
+                #     current_metrics = self.valid_metrics.current()
+                #     metrics_debug = ", ".join(f"{key}: {value:.6f}" for key, value in current_metrics.items())
+                #     self.logger.debug(epoch_debug + metrics_debug)
 
         # At the end of each epoch, explicitly handle the tracking of confusion matrices and metrics by means of
         # the SummaryWriter/TensorboardWriter
-        self._handle_tracking_at_epoch_end(cm_tracker=self.valid_cms, metric_tracker=self.valid_metrics,
-                                           epoch=epoch, outputs=outputs_list, targets=targets_list,
-                                           targets_all_labels=targets_all_labels_list)
-
-        # Add histogram of model parameters to the tensorboard
-        for name, p in self.model.named_parameters():
-            self.writer.add_histogram(name, p, bins='auto')
-
-        # Dump the attention weights and the confusion matrices into a pickle file each few epochs
-        if not self.try_run and (epoch == 1 or epoch % int(np.sqrt(self.epochs)) == 0):
-            path_name = os.path.join(self.config.log_dir, "attention_weights_val_epoch_" + str(epoch) + ".p")
-            attention_weight_file = open(path_name, 'wb')
-            pickle.dump(valid_attention_weights, attention_weight_file)
-            attention_weight_file.close()
-
-            path_name = os.path.join(self.config.log_dir, "cms_val_epoch_" + str(epoch) + ".p")
-            with open(path_name, 'wb') as cm_file:
-                all_cms = [self.valid_cms.cm, self.valid_cms.class_wise_cms]
-                pickle.dump(all_cms, cm_file)
-                # Can later be loaded as follows:
-                # with open(os.path.join(self.config.log_dir, "cms" + str(epoch) + ".p"), "rb") as file:
-                #     test = pickle.load(file)
+        # For validation, metrics are calculated each epoch
+        # Do not calculate and track the confusion matrices each time, ony each few epochs
+        valid_sum_str = self._handle_tracking_at_epoch_end(metric_tracker=self.valid_metrics, epoch=epoch,
+                                                           outputs=outputs_list, targets=targets_list,
+                                                           targets_all_labels=targets_all_labels_list, mode='valid',
+                                                           track_cms=(epoch == 1 or epoch % self.epoch_log_step_valid == 0))
 
         if self.try_run:
-            # Plot heatmaps of the predicted scores for each validation sample to verify if they change
-            self._send_pred_scores_to_writer(epoch, outputs_list, 'validation')
-            # Plot heatmaps of the predicted classes for easier interpretability as well
-            self._send_pred_classes_to_writer(epoch, outputs_list, 'validation')
+            # Add histogram of model parameters to the tensorboard
+            for name, p in self.model.named_parameters():
+                self.writer.add_histogram(name, p, bins='auto')
 
-        valid_log = self.valid_metrics.result()
+        # For validation, the metrics are contained each epoch
+        valid_log = self.valid_metrics.result(include_epoch_metrics=True)
 
-        # Also log the confusion matrix-related information to the valid log
-        valid_cm_information = dict({"overall_cm": "\n" + str(self.valid_cms.cm)},
-                                    **{"Confusion matrix for class " + str(class_cm.columns.name): "\n" + str(class_cm)
-                                       for _, class_cm in enumerate(self.valid_cms.class_wise_cms)})
+        # # Also log the confusion matrix-related information to the valid log
+        # valid_cm_information = dict({"overall_cm": "\n" + str(self.valid_cms.cm)},
+        #                             **{"Confusion matrix for class " + str(class_cm.columns.name): "\n" + str(class_cm)
+        #                                for _, class_cm in enumerate(self.valid_cms.class_wise_cms)})
 
-        return valid_log, valid_cm_information
+        return valid_log, valid_sum_str
 
     def _do_iter_update(self, metric_tracker, output, target, loss_val):
         # Iteratively update the loss and the metrics with the MetricTracker
@@ -418,15 +395,78 @@ class ECGTrainer(BaseTrainer):
         # The loss and each metric are updated in a separate row for each of them
         metric_tracker.iter_update('loss', loss_val, n=output.shape[0])
         for met in self.metrics_iter:
-            args = inspect.signature(met).parameters.values()
-            # Output and target are needed for all metrics! Only consider other args WITHOUT default
-            additional_args = [arg.name for arg in args
-                               if arg.name not in ('output', 'target') and arg.default is arg.empty]
+            if self.multi_label_training:
+                additional_args = self.config['metrics']['ml']['per_iteration'][met.__name__]
+            else:
+                additional_args = self.config['metrics']['sl']['per_iteration'][met.__name__]
             additional_kwargs = {
                 param_name: self._param_dict[param_name] for param_name in additional_args
             }
             metric_tracker.iter_update(met.__name__, met(target=target, output=output, **additional_kwargs),
                                        n=output.shape[0])
+
+    def _handle_tracking_at_epoch_end(self, metric_tracker, epoch, outputs, targets,
+                                      targets_all_labels, mode, track_cms):
+        # Get detached tensors from the list for further evaluation
+        # For this, create a tensor from the dynamically filled list
+        det_outputs = torch.cat(outputs).detach().cpu()
+        det_targets = torch.cat(targets).detach().cpu()
+        det_targets_all_labels = torch.cat(targets_all_labels).detach().cpu() if not self.multi_label_training else None
+
+        # ------------ Confusion matrices ------------------------
+        if track_cms:
+            cm_tracker = self.train_cms if mode == 'train' else self.valid_cms
+            # Dump the confusion matrices into a pickle file each few epochs and send them to the writer
+            self._handle_cm_at_epoch_end(cm_tracker=cm_tracker, epoch=epoch, det_outputs=det_outputs,
+                                         det_targets=det_targets, str_mode=mode)
+
+        # ------------ Metrics ------------------------------------
+        # Also set the epoch number for the MetricTracker
+        metric_tracker.epoch = epoch
+
+        # Finally, the epoch-based metrics need to be updated
+        # For this, calculate both, the normal epoch-based metrics as well as the class-wise epoch-based metrics
+        # When overfitting a single batch, only a small amount of data is used and hence, not all classes may be present
+        # In such case, not all metrics are defined, so skip updating the metrics in that case
+        if not self.overfit_single_batch:
+            for met in self.metrics_epoch:
+                args = inspect.signature(met).parameters.values()
+                # Output and target are needed for all metrics! Only consider other args WITHOUT default
+                additional_args = [arg.name for arg in args
+                                   if arg.name not in ('output', 'target') and arg.default is arg.empty]
+                additional_kwargs = {
+                    param_name: self._param_dict[param_name] for param_name in additional_args
+                }
+                if not self.multi_label_training and met.__name__ == 'cpsc_score':
+                    # Consider all labels for evaluation, even in the single label case
+                    metric_tracker.epoch_update(met.__name__, met(target=det_targets_all_labels, output=det_outputs,
+                                                                  **additional_kwargs))
+                else:
+                    metric_tracker.epoch_update(met.__name__, met(target=det_targets, output=det_outputs,
+                                                                  **additional_kwargs))
+
+            # This holds for the class-wise, epoch-based metrics as well
+            for met in self.metrics_epoch_class_wise:
+                args = inspect.signature(met).parameters.values()
+                # Output and target are needed for all metrics! Only consider other args WITHOUT default
+                additional_args = [arg.name for arg in args
+                                   if arg.name not in ('output', 'target') and arg.default is arg.empty]
+                additional_kwargs = {
+                    param_name: self._param_dict[param_name] for param_name in additional_args
+                }
+                metric_tracker.class_wise_epoch_update(met.__name__, met(target=det_targets, output=det_outputs,
+                                                                         **additional_kwargs))
+
+        # ------------------- Predicted Scores and Classes -------------------
+        if self.try_run:
+            # Plot heatmaps of the predicted scores for each training/validation sample to verify if they change
+            self._send_pred_scores_to_writer(epoch, det_outputs.numpy(), mode)
+            # Plot heatmaps of the predicted classes for easier interpretability as well
+            self._send_pred_classes_to_writer(epoch, det_outputs, mode)
+
+        # Create a summary for each call, dump the dict and return the string
+        summary_str = self._create_report_summary(det_outputs=det_outputs, det_targets=det_targets, epoch=epoch)
+        return summary_str
 
     def _do_cm_updates(self, cm_tracker, output, target):
         if not self.multi_label_training:
@@ -450,68 +490,35 @@ class ECGTrainer(BaseTrainer):
                                                                            labels=self._param_dict['labels'])
         cm_tracker.update_class_wise_cms(upd_class_wise_cms)
 
-    def _do_epoch_updates(self, tracker, outputs, targets, targets_all_labels):
-        # When overfitting a single batch, only a small amount of data is used and hence, not all classes may be present
-        # In such case, not all metrics are defined, so skip updating the metrics in that case
-        if not self.overfit_single_batch:
-            for met in self.metrics_epoch:
-                args = inspect.signature(met).parameters.values()
-                # Output and target are needed for all metrics! Only consider other args WITHOUT default
-                additional_args = [arg.name for arg in args
-                                   if arg.name not in ('output', 'target') and arg.default is arg.empty]
-                additional_kwargs = {
-                    param_name: self._param_dict[param_name] for param_name in additional_args
-                }
-                if not self.multi_label_training and met.__name__ == 'cpsc_score_adapted':
-                    # Consider all labels for evaluation, even in the single label case
-                    tracker.epoch_update(met.__name__, met(target=targets_all_labels, output=outputs,
-                                                           **additional_kwargs))
-                else:
-                    tracker.epoch_update(met.__name__, met(target=targets, output=outputs, **additional_kwargs))
+    def _handle_cm_at_epoch_end(self, cm_tracker, epoch, det_outputs, det_targets, str_mode):
+        # Update the confusion matrices maintained by the ClassificationTracker
+        self._do_cm_updates(cm_tracker=cm_tracker, output=det_outputs, target=det_targets)
+        # At the end of each epoch, explicitly send the confusion matrices to the SummaryWriter/TensorboardWriter
+        cm_tracker.send_cms_to_writer(epoch=epoch)
+        # Moreover, save them as pickle
+        path_name = os.path.join(self.config.log_dir, "cms_" + str(str_mode) + "_epoch_" + str(epoch) + ".p")
+        with open(path_name, 'wb') as cm_file:
+            all_cms = [self.valid_cms.cm, self.valid_cms.class_wise_cms]
+            pickle.dump(all_cms, cm_file)
+            # Can later be loaded as follows:
+            # with open(os.path.join(self.config.log_dir, "cms" + str(epoch) + ".p"), "rb") as file:
+            #     test = pickle.load(file)
 
-            # This holds for the class-wise, epoch-based metrics as well
-            for met in self.metrics_epoch_class_wise:
-                args = inspect.signature(met).parameters.values()
-                # Output and target are needed for all metrics! Only consider other args WITHOUT default
-                additional_args = [arg.name for arg in args
-                                   if arg.name not in ('output', 'target') and arg.default is arg.empty]
-                additional_kwargs = {
-                    param_name: self._param_dict[param_name] for param_name in additional_args
-                }
-                tracker.class_wise_epoch_update(met.__name__, met(target=targets, output=outputs,
-                                                                  **additional_kwargs))
-
-    def _handle_tracking_at_epoch_end(self, cm_tracker, metric_tracker, epoch, outputs, targets, targets_all_labels):
-        # Create the figure only for try runs, otherwise they are at least contained in the lpg
-        if self.try_run:
-            # At the end of each epoch, explicitly send the confusion matrices to the SummaryWriter/TensorboardWriter
-            cm_tracker.send_cms_to_writer(epoch=epoch)
-
-        # Also set the epoch number for the MetricTracker
-        metric_tracker.epoch = epoch
-
-        # Create a tensor from the dynamically filled list
-        det_outputs = torch.cat(outputs).detach().cpu()
-        det_targets = torch.cat(targets).detach().cpu()
-        det_targets_all_labels = torch.cat(targets_all_labels).detach().cpu() if not self.multi_label_training else None
-
-        # Finally, the epoch-based metrics need to be updated
-        # For this, calculate both, the normal epoch-based metrics as well as the class-wise epoch-based metrics
-        self._do_epoch_updates(tracker=metric_tracker, outputs=det_outputs,
-                               targets=det_targets, targets_all_labels=det_targets_all_labels)
-
-        # Print the summary report to the console and the log
-        self.logger.info("Summary Report for Epoch " + str(epoch) + ":")
+    def _create_report_summary(self, det_outputs, det_targets, epoch):
         if self.multi_label_training:
-            self.logger.info(multi_label_metrics.classification_summary(output=det_outputs, target=det_targets,
-                                                                        sigmoid_probs=self._param_dict["sigmoid_probs"],
-                                                                        logits=self._param_dict["logits"],
-                                                                        labels=self._param_dict["labels"]))
+            summary_dict = multi_label_metrics.classification_summary(output=det_outputs, target=det_targets,
+                                                                      sigmoid_probs=self._param_dict["sigmoid_probs"],
+                                                                      logits=self._param_dict["logits"],
+                                                                      labels=self._param_dict["labels"],
+                                                                      output_dict=True)
         else:
-            self.logger.info(single_label_metrics.classification_summary(output=det_outputs, target=det_targets,
-                                                                         log_probs=self._param_dict["log_probs"],
-                                                                         logits=self._param_dict["logits"],
-                                                                         labels=self._param_dict["labels"]))
+            summary_dict = single_label_metrics.classification_summary(output=det_outputs, target=det_targets,
+                                                                       log_probs=self._param_dict["log_probs"],
+                                                                       logits=self._param_dict["logits"],
+                                                                       labels=self._param_dict["labels"],
+                                                                       output_dict=True)
+
+        return "Summary Report for Epoch " + str(epoch) + ":\n" + pd.DataFrame(summary_dict).to_string()
 
     def _send_attention_weights_to_writer(self, attention_weights, batch_idx, epoch, str_mode):
         fig_attention_weights, attention_ax = plt.subplots(figsize=(8, 8))
@@ -521,14 +528,13 @@ class ECGTrainer(BaseTrainer):
         fig_attention_weights.clear()
         plt.close(fig_attention_weights)
 
-    def _send_pred_scores_to_writer(self, epoch, outputs, str_mode):
+    def _send_pred_scores_to_writer(self, epoch, det_outputs, str_mode):
         """
         :param epoch: Current epoch
         :param outputs: All outputs of the current train/validation session
-        :param str_mode: Should either be 'training' or 'validation'
+        :param str_mode: Should either be 'train' or 'valid'
         :return:
         """
-        det_outputs = torch.cat(outputs).detach().cpu().numpy()
         # Create the figure
         fig_output_scores, ax = plt.subplots(figsize=(10, 20))
         sns.heatmap(data=det_outputs, ax=ax)
@@ -539,15 +545,13 @@ class ECGTrainer(BaseTrainer):
         fig_output_scores.clear()
         plt.close(fig_output_scores)
 
-    def _send_pred_classes_to_writer(self, epoch, outputs, str_mode):
+    def _send_pred_classes_to_writer(self, epoch, det_outputs, str_mode):
         """
         :param epoch: Current epoch
         :param outputs: All outputs of the current train/validation session
-        :param str_mode: Should either be 'training' or 'validation'
+        :param str_mode: Should either be 'train' or 'valid'
         :return:
         """
-        # Create a tensor from the dynamically filled list
-        det_outputs = torch.cat(outputs).detach().cpu()
         if self.multi_label_training:
             if self._param_dict['logits']:
                 sigmoid_probs = torch.sigmoid(det_outputs)
@@ -579,9 +583,10 @@ class ECGTrainer(BaseTrainer):
 
     def _progress(self, batch_idx):
         base = '[{}/{} ({:.0f}%)]'
-        if hasattr(self.data_loader, 'n_samples'):
-            current = batch_idx * self.data_loader.batch_size
-            total = self.data_loader.n_samples
+        data_loader = self.data_loader # if not valid else self.valid_data_loader
+        if hasattr(data_loader, 'n_samples'):
+            current = batch_idx * data_loader.batch_size
+            total = data_loader.n_samples
         else:
             current = batch_idx
             total = self.len_epoch

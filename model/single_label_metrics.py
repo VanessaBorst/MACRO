@@ -299,7 +299,7 @@ def class_wise_confusion_matrices_single_label(output, target, log_probs, logits
         return df_class_wise_cms
 
 
-def cpsc_score_adapted(output, target, log_probs, logits):
+def cpsc_score(output, target, log_probs, logits):
     '''
     cspc2018_challenge score
     Written by:  Xingyao Wang, Feifei Liu, Chengyu Liu
@@ -337,6 +337,19 @@ def cpsc_score_adapted(output, target, log_probs, logits):
     In addition, we also calculate the F1 measures for each of the four sub-abnormal types:
                 AF: Faf=2*N22/(N2x+Nx2)                         Block: Fblock=2*(N33+N44+N55)/(N3x+Nx3+N4x+Nx4+N5x+Nx5)
     Premature contraction: Fpc=2*(N66+N77)/(N6x+Nx6+N7x+Nx7)    ST-segment change: Fst=2*(N88+N99)/(N8x+Nx8+N9x+Nx9)
+    
+    UDPATE:
+                                             Predicted
+                            IAVB  AF    LBBB  PAC   RBBB  SNR  STD  STE  VEB
+                   IAVB     N11   N12   N13   N14   N15   N16  N17  N18  N19
+                   AF       N21   N22   N23   N24   N25   N26  N27  N28  N29
+                   LBBB     N31   N32   N33   N34   N35   N36  N37  N38  N39
+                   PAC      N41   N42   N43   N44   N45   N46  N47  N48  N49
+    Reference      RBBB     N51   N52   N53   N54   N55   N56  N57  N58  N59
+                   SNR      N61   N62   N63   N64   N65   N66  N67  N68  N69
+                   STD      N71   N72   N73   N74   N75   N76  N77  N78  N79
+                   STE      N81   N82   N83   N84   N85   N86  N87  N88  N89
+                   VEB      N91   N92   N93   N94   N95   N96  N97  N98  N99
 
     The static of predicted answers and the final score are saved to score.txt in local path.
     '''
@@ -377,23 +390,31 @@ def cpsc_score_adapted(output, target, log_probs, logits):
         F1 = (F11 + F12 + F13 + F14 + F15 + F16 + F17 + F18 + F19) / 9
 
         ## Following is calculating scores for 4 types: AF, Block, Premature contraction, ST-segment change.
-        # TODO adapt the indices of the formulas
 
-        # # Class AF -> 164889003 -> Index 1
-        # Faf = 2 * A[1][1] / (np.sum(A[1, :]) + np.sum(A[:, 1]))
-        # # Classes I-AVB, LBBB, RBBB -> 270492004, 164909002, 59118001 -> Indices 0, 2, 4
-        # Fblock = 2 * (A[2][2] + A[3][3] + A[4][4]) / (np.sum(A[2:5, :]) + np.sum(A[:, 2:5]))
+        # Class AF -> 164889003 -> Index 1
+        Faf = 2 * A[1][1] / (np.sum(A[1, :]) + np.sum(A[:, 1]))
+        """                    
+        Block: Fblock=2*(N33+N44+N55)/(N3x+Nx3+N4x+Nx4+N5x+Nx5)
+        Premature contraction: Fpc=2*(N66+N77)/(N6x+Nx6+N7x+Nx7)    
+        ST-segment change: Fst=2*(N88+N99)/(N8x+Nx8+N9x+Nx9)
+        """
+        # Block: Classes I-AVB, LBBB, RBBB -> 270492004, 164909002, 59118001 -> Indices 0, 2, 4
+        Fblock = 2 * (A[0][0] + A[2][2] + A[4][4]) / \
+                 (np.sum(A[0, :]) + np.sum(A[:, 0]) + np.sum(A[2, :]) + np.sum(A[:, 2]) + np.sum(A[4, :]) + np.sum(
+                     A[:, 4]))
+
         # # Classes PAC, PVC -> 284470004, 164884008 -> Indices 3, 8
-        # Fpc = 2 * (A[5][5] + A[6][6]) / (np.sum(A[5:7, :]) + np.sum(A[:, 5:7]))
+        Fpc = 2 * (A[3][3] + A[8][8]) / (np.sum(A[3, :]) + np.sum(A[:, 3]) + np.sum(A[8, :]) + np.sum(A[:, 8]))
+
         # # Classes STD, STE -> 429622005, 164931005 -> Indices 6, 7
-        # Fst = 2 * (A[7][7] + A[8][8]) / (np.sum(A[7:9, :]) + np.sum(A[:, 7:9]))
+        Fst = 2 * (A[6][6] + A[7][7]) / (np.sum(A[6:8, :]) + np.sum(A[:, 6:8]))
 
         # print(A)
-        print('Total Record Number: ', np.sum(A))
-        return F1
+        # print('Total Record Number: ', np.sum(A))
+        return F1, Faf, Fblock, Fpc, Fst
 
 
-def classification_summary(output, target, log_probs, logits, labels,
+def classification_summary(output, target, log_probs, logits, labels, output_dict,
                            target_names=["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]):
     with torch.no_grad():
         assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
@@ -402,7 +423,8 @@ def classification_summary(output, target, log_probs, logits, labels,
         else:
             pred = _convert_logits_to_prediction(output)
         assert pred.shape[0] == len(target)
-        return classification_report(y_true=target, y_pred=pred, labels=labels, digits=3, target_names=target_names)
+        return classification_report(y_true=target, y_pred=pred, labels=labels, digits=3, target_names=target_names,
+                                     output_dict=output_dict)
 
 
 if __name__ == '__main__':

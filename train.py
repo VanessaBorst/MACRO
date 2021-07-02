@@ -65,14 +65,14 @@ def main(config):
     # Get function handles of loss and metrics
     # Important: The method config['loss'] must exist in the loss module (<module 'model.loss' >)
     # Equivalently, all metrics specified in the context must exist in the metrics modul
-    criterion = getattr(module_loss, config['loss'])
+    criterion = getattr(module_loss, config['loss']['type'])
     if config['arch']['args']['multi_label_training']:
-        metrics_iter = [getattr(module_metric, met) for met in config['metrics']['ml']['per_iteration']]
+        metrics_iter = [getattr(module_metric, met) for met in config['metrics']['ml']['per_iteration'].keys()]
         metrics_epoch = [getattr(module_metric, met) for met in config['metrics']['ml']['per_epoch']]
         metrics_epoch_class_wise = [getattr(module_metric, met) for met in
                                     config['metrics']['ml']['per_epoch_class_wise']]
     else:
-        metrics_iter = [getattr(module_metric, met) for met in config['metrics']['sl']['per_iteration']]
+        metrics_iter = [getattr(module_metric, met) for met in config['metrics']['sl']['per_iteration'].keys()]
         metrics_epoch = [getattr(module_metric, met) for met in config['metrics']['sl']['per_epoch']]
         metrics_epoch_class_wise = [getattr(module_metric, met) for met in
                                     config['metrics']['sl']['per_epoch_class_wise']]
