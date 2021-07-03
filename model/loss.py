@@ -69,6 +69,23 @@ def cross_entropy_loss(output, target):
     return F.cross_entropy(output, target)
 
 
+def balanced_cross_entropy(output, target, class_weights, device):
+    """
+     The cross entropy loss to train a classification problem with C classes
+
+     Parameters
+     ----------
+     :param output: dimension=(minibatch,C);
+        Per entry, the raw, unnormalized scores for each class should be contained
+     :param target: dimension= (N)
+        Per entry, a class index in the range [0, C-1] as integer
+    :param class_weights:  a manual rescaling weight given to each class
+    :param device: device currently used
+    """
+    class_weights_tensor = torch.tensor(class_weights).to(device).float()
+    return F.cross_entropy(output, target, class_weights_tensor)
+
+
 # Balanced cross entropy: Usually you increase the weight for minority classes, so that their loss also increases and
 # forces the model to learn these samples. This could be done by e.g. the inverse class count (class frequency).:
 # https://discuss.pytorch.org/t/passing-the-weights-to-crossentropyloss-correctly/14731/22

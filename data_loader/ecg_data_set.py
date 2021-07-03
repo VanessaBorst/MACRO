@@ -86,7 +86,7 @@ class ECGDataset(Dataset):
         # Return both as as ndarray
         return class_freqs.values, class_dist.values
 
-    def get_ml_pos_weights(self, idx_list, mode, log_dir):
+    def get_ml_pos_weights(self, idx_list, mode=None, log_dir=None):
         """
         Can be used to determine  the class frequencies and the target classes distribution
         :param idx_list: list of ids, should contain all ids contained in the train, valid or test set
@@ -103,8 +103,9 @@ class ECGDataset(Dataset):
             record_names.append(record_name)
 
         # Dump to pickle
-        with open(os.path.join(log_dir, 'Record_names_' + str(mode)) + ".p", 'wb') as file:
-            pickle.dump(record_names, file)
+        if mode is not None and log_dir is not None:
+            with open(os.path.join(log_dir, 'Record_names_' + str(mode)) + ".p", 'wb') as file:
+                pickle.dump(record_names, file)
 
         # Get the class freqs as Pandas series
         class_freqs = pd.DataFrame(classes).sum()
@@ -134,26 +135,68 @@ class ECGDataset(Dataset):
 
         classes = []
         for idx in idx_list:
+            _, _, first_class_encoded, classes_one_hot, record_name = self.__getitem__(idx)
+            if multi_label_training:
+                classes.append(classes_one_hot)
+            else:
+                # Only consider the first label
+                classes_one_hot[:] = 0
+                classes_one_hot[first_class_encoded] = 1
+                classes.append(classes_one_hot)
+
+        # Get the class freqs as Pandas series
+        class_freqs = pd.DataFrame(classes).sum()
+
+        # Each class should occur at least ones
+        assert not class_freqs.isin([0]).any(), "Each class should occur at least ones"
+
+        # Calculate the inverse class freqs
+        inverse_class_freqs = class_freqs.apply(lambda x: class_freqs.sum() / x)
+
+        # Return them as as ndarray
+        return inverse_class_freqs.values
+
+    def get_inverse_class_frequency_old(self, idx_list, multi_label_training):
+        """
+        Can be used to determine the inverse class frequencies
+        :param idx_list: list of ids, should contain all ids contained in the train, valid or test set
+        :param multi_label_training: If true, all labels are considered, otherwise only the first label is counted
+
+        :return:  Inverse class frequencies
+        """
+
+        classes = []
+        for idx in idx_list:
             _, classes_encoded, first_class_encoded, classes_one_hot, record_name = self.__getitem__(idx)
             if multi_label_training:
-                classes.append(json.load(classes_encoded))
+                classes.append(json.loads(classes_encoded))
             else:
                 # Only consider the first label
                 classes.append(first_class_encoded)
 
-        # Flatten the classes to a one-dimensional array
-        classes = functools.reduce(operator.iconcat, classes, [])
-        # TODO the above is not completely correct, since the following method interprets the array
-        #  length as number of samples
+        # Flatten the classes to a one-dimensional array in the ML case
+        if multi_label_training:
+            classes = functools.reduce(operator.iconcat, classes, [])
+        # TODO the above is not completely correct in the ML case,
+        #  since the following method interprets the array length as number of samples
         class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(classes), y=classes)
 
         return class_weights
 
 
 if __name__ == '__main__':
-    dataset = ECGDataset("data/CinC_CPSC/train/preprocessed/no_sampling/")
-    # class_freqs, target_distribution = dataset.get_class_freqs_and_target_distribution([0, 1, 4, 5, 6, 71, 10, 99, 76],
-    #                                                                                    multi_label_training=True)
-    pos_weights = dataset.get_ml_pos_weights([0, 1, 4, 5, 6, 71, 10, 99, 76])
-    class_weights = dataset.get_inverse_class_frequency([0, 1, 4, 5, 6, 71, 10, 99, 76], multi_label_training=True)
+    dataset = ECGDataset("data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000/")
+
+    # for idx in range(0, len(dataset)):
+    #     _, classes_encoded, _, _, _ = dataset.__getitem__(idx)
+    #     if json.loads(classes_encoded)==[9]:
+    #         break
+
+    # class_freqs, target_distribution = dataset.get_class_freqs_and_target_distribution([0, 1, 4, 5, 6, 71, 10, 99, 31],
+    #                                                                                     multi_label_training=True)
+    # pos_weights = dataset.get_ml_pos_weights([0, 1, 4, 5, 6, 71, 10, 99, 31])
+
+    class_weights1 = dataset.get_inverse_class_frequency_old([0, 1, 2, 4, 5, 6, 7, 71, 10, 99, 31, 28, 9, 33, 15 ],
+                                                             multi_label_training=False)
+    class_weights2 = dataset.get_inverse_class_frequency([0, 1, 2, 4, 5, 6, 7, 71, 10, 99, 31, 28, 9, 33, 15 ], multi_label_training=False)
     print("Done")

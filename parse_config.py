@@ -29,8 +29,11 @@ class ConfigParser:
         exper_name = self.config['name']
         if run_id is None:  # use timestamp as default run-id
             run_id = datetime.now().strftime(r'%m%d_%H%M%S')
-        self._save_dir = Path(os.path.join(get_project_root(), save_dir / 'models' / exper_name / run_id))
-        self._log_dir = Path(os.path.join(get_project_root(), save_dir / 'log' / exper_name / run_id))
+        details = "_{}_bs{}{}".format("ml" if self.config['arch']['args']['multi_label_training'] else "sl",
+                                      self.config['data_loader']['args']['batch_size'],
+                                      self.config['run_details'])
+        self._save_dir = Path(os.path.join(get_project_root(), save_dir / 'models' / exper_name / str(run_id + details)))
+        self._log_dir = Path(os.path.join(get_project_root(), save_dir / 'log' / exper_name / str(run_id + details)))
 
         # make directory for saving checkpoints and log.
         exist_ok = run_id == ''
@@ -138,7 +141,7 @@ class ConfigParser:
         return self._log_dir
 
     def _do_some_sanity_checks(self):
-        if self.config["loss"] == "BCE_with_logits" or  self.config["loss"] == "balanced_BCE_with_logits":
+        if self.config["loss"] == "BCE_with_logits" or self.config["loss"] == "balanced_BCE_with_logits":
             assert self.config["arch"]["args"]["multi_label_training"] \
                    and not self.config["arch"]["args"]["apply_final_activation"] \
                    and not self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
@@ -174,9 +177,9 @@ class ConfigParser:
         assert (self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] ^
                 self.config["metrics"]["additional_metrics_args"]["log_probs"]
                 ^ self.config["metrics"]["additional_metrics_args"]["logits"]) and not \
-            (self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"]
-             and self.config["metrics"]["additional_metrics_args"]["log_probs"]
-             and self.config["metrics"]["additional_metrics_args"]["logits"]), \
+                   (self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"]
+                    and self.config["metrics"]["additional_metrics_args"]["log_probs"]
+                    and self.config["metrics"]["additional_metrics_args"]["logits"]), \
             "Exactly one of the three must be true"
 
 

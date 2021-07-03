@@ -19,7 +19,7 @@ def main(config):
         batch_size=512,
         shuffle=False,
         validation_split=0.0,
-        num_workers=2
+        num_workers=4
     )
 
     # build model architecture

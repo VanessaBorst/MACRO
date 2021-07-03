@@ -1,19 +1,19 @@
 {
   "name": "CPSC_BaselineModel_DEBUG",
-  "run_details": "_weightedBCE",
+  "run_details": "",
   "n_gpu": 1,
   "arch": {
     "type": "BaselineModel",
     "args": {
       "apply_final_activation": false,
-      "multi_label_training": false
+      "multi_label_training": true
     }
   },
   "data_loader": {
     "type": "ECGDataLoader",
     "args": {
       "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000",
-      "batch_size": 64,
+      "batch_size": 8,
       "shuffle": true,
       "validation_split": 0.25,
       "num_workers": 4
@@ -30,8 +30,8 @@
     }
   },
   "loss": {
-    "type": "balanced_cross_entropy",
-    "add_args": ["class_weights", "device"]
+    "type": "balanced_BCE_with_logits",
+    "add_args": ["pos_weights", "device"]
   },
   "metrics": {
     "sl": {
@@ -40,9 +40,14 @@
       },
       "per_epoch": [
         "cpsc_score",
+        "balanced_accuracy",
         "mirco_f1",
         "macro_f1",
-        "weighted_f1"
+        "weighted_f1",
+        "macro_roc_auc_ovo",
+        "weighted_roc_auc_ovo",
+        "macro_roc_auc_ovr",
+        "weighted_roc_auc_ovr"
       ],
       "per_epoch_class_wise": [
         "class_wise_f1"
@@ -56,10 +61,16 @@
         "cpsc_score",
         "mirco_f1",
         "macro_f1",
-        "weighted_f1"
+        "weighted_f1",
+        "macro_roc_auc_ovo",
+        "weighted_roc_auc_ovo",
+        "macro_roc_auc_ovr",
+        "weighted_roc_auc_ovr"
       ],
       "per_epoch_class_wise": [
-        "class_wise_f1"
+        "class_wise_f1",
+        "class_wise_roc_auc_ovr",
+        "class_wise_roc_auc_ovo"
       ]
     },
     "additional_metrics_args": {
@@ -78,7 +89,7 @@
   },
   "trainer": {
     "epochs": 300,
-    "save_dir": "savedVM/",
+    "save_dir": "saved/",
     "save_period": 1,
     "verbosity": 2,
     "monitor": "max val_cpsc_F1",

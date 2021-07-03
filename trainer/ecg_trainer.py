@@ -11,6 +11,7 @@ import seaborn as sns
 import torch
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.lines import Line2D
+from torch._C._autograd import ProfilerActivity
 from torch.profiler import tensorboard_trace_handler
 
 from base import BaseTrainer
@@ -46,10 +47,10 @@ class ECGTrainer(BaseTrainer):
         self.do_validation = self.valid_data_loader is not None
         self.lr_scheduler = lr_scheduler
 
-        self.batch_log_step = int(512/self.data_loader.batch_size) # used for logging frequency during the training loop
-        #self.batch_log_step = int(np.sqrt(self.data_loader.batch_size))  # used for logging frequency during the training loop
+        self.batch_log_step = int(
+            512 / self.data_loader.batch_size)  # used for logging frequency during the training loop
         self.epoch_log_step_train = 25  # used for epoch metrics and confusion matrix handling
-        self.epoch_log_step_valid = 15  # used for confusion matrix handling
+        self.epoch_log_step_valid = 15  # Usually used for confusion matrix handling, at the moment disabled
 
         self._class_labels = self.data_loader.dataset.class_labels
 
@@ -65,16 +66,14 @@ class ECGTrainer(BaseTrainer):
                                            writer=self.writer)
 
         # Store potential parameters needed for metrics
-        # val_class_freq, val_class_dist = self.data_loader.dataset.get_class_freqs_and_target_distribution(
-        #     idx_list=self.data_loader.valid_sampler.indices, multi_label_training=self.multi_label_training) \
-        #     if not self.overfit_single_batch else None
-        #
-        # train_class_freq, train_class_dist =  self.data_loader.dataset.get_class_freqs_and_target_distribution(
-        #     idx_list=self.data_loader.batch_sampler.sampler.indices, multi_label_training=self.multi_label_training)
+        val_class_weights = self.data_loader.dataset.get_inverse_class_frequency(
+            idx_list=self.data_loader.valid_sampler.indices, multi_label_training=self.multi_label_training) \
+            if not self.overfit_single_batch else None
 
         val_pos_weights = self.data_loader.dataset.get_ml_pos_weights(
-            idx_list=self.data_loader.valid_sampler.indices, mode='valid', log_dir=self.config.log_dir) \
+            idx_list=self.data_loader.valid_sampler.indices) \
             if not self.overfit_single_batch else None
+
         self._param_dict = {
             "labels": self._class_labels,
             "device": self.device,
@@ -82,8 +81,12 @@ class ECGTrainer(BaseTrainer):
             "log_probs": config["metrics"]["additional_metrics_args"].get("log_probs", False),
             "logits": config["metrics"]["additional_metrics_args"].get("logits", False),
             "train_pos_weights": self.data_loader.dataset.get_ml_pos_weights(
-                idx_list=self.data_loader.batch_sampler.sampler.indices, mode='train', log_dir=self.config.log_dir),
-            "valid_pos_weights": val_pos_weights
+                idx_list=self.data_loader.batch_sampler.sampler.indices),
+            "train_class_weights": self.data_loader.dataset.get_inverse_class_frequency(
+                idx_list=self.data_loader.batch_sampler.sampler.indices,
+                multi_label_training=self.multi_label_training),
+            "valid_pos_weights": val_pos_weights,
+            "valid_class_weights": val_class_weights
         }
 
         # confusion matrices
@@ -113,6 +116,8 @@ class ECGTrainer(BaseTrainer):
 
         # Set the writer object to training mode
         self.writer.set_mode('train')
+        # Moreover, set the epoch number for the MetricTracker
+        self.train_metrics.epoch = epoch
 
         if self.try_run:
             # Create a figure for the average gradient flows of the epoch
@@ -148,10 +153,11 @@ class ECGTrainer(BaseTrainer):
 
         if self.profiler_active:
             context_manager = torch.profiler.profile(
+                activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
                 schedule=torch.profiler.schedule(
-                    wait=2,
+                    wait=40,
                     warmup=2,
-                    active=3,
+                    active=10,
                     repeat=2),
                 on_trace_ready=tensorboard_trace_handler(self.config.log_dir),
                 with_stack=True
@@ -197,8 +203,8 @@ class ECGTrainer(BaseTrainer):
                 # Calculate the loss, here gradients are nedded!
                 additional_args = self.config['loss']['add_args']
                 additional_kwargs = {
-                    param_name: self._param_dict[param_name] if not param_name == 'pos_weights'
-                    else self._param_dict['train_pos_weights'] for param_name in additional_args
+                    param_name: self._param_dict[param_name.replace('pos_weights', 'train_pos_weights').
+                        replace('class_weights', 'train_class_weights')] for param_name in additional_args
                 }
                 loss = self.criterion(target=target, output=output, **additional_kwargs)
                 loss.backward()
@@ -246,13 +252,14 @@ class ECGTrainer(BaseTrainer):
             summary_str = self._handle_tracking_at_epoch_end(metric_tracker=self.train_metrics, epoch=epoch,
                                                              outputs=outputs_list, targets=targets_list,
                                                              targets_all_labels=targets_all_labels_list,
-                                                             mode='train', track_cms=True)
+                                                             mode='train', track_cms=False)
         else:
             summary_str = "Not calc."
 
         # Contains only NaNs for all non-iteration-based metrics when overfit_single_batch is True
         # Moreover, the train metrics are only contained each epoch_log_step times
-        train_log = self.train_metrics.result(include_epoch_metrics=(epoch == 1 or epoch % self.epoch_log_step_train))
+        train_log = self.train_metrics.result(
+            include_epoch_metrics=(epoch == 1 or epoch % self.epoch_log_step_train == 0))
 
         if self.do_validation:
             # log.update({'Note': '-------------Start of Validation-------------'})
@@ -313,6 +320,8 @@ class ECGTrainer(BaseTrainer):
 
         # Set the writer object to validation mode
         self.writer.set_mode('valid')
+        # Moreover, set the epoch number for the MetricTracker
+        self.valid_metrics.epoch = epoch
 
         with torch.no_grad():
             for batch_idx, (padded_records, _, first_labels, labels_one_hot, record_names) in \
@@ -347,8 +356,8 @@ class ECGTrainer(BaseTrainer):
 
                 additional_args = self.config['loss']['add_args']
                 additional_kwargs = {
-                    param_name: self._param_dict[param_name] if not param_name == 'pos_weights'
-                    else self._param_dict['valid_pos_weights'] for param_name in additional_args
+                    param_name: self._param_dict[param_name.replace('pos_weights', 'valid_pos_weights').
+                                       replace('class_weights', 'valid_class_weights')] for param_name in additional_args
                 }
                 loss = self.criterion(target=target, output=output, **additional_kwargs)
 
@@ -371,7 +380,8 @@ class ECGTrainer(BaseTrainer):
         valid_sum_str = self._handle_tracking_at_epoch_end(metric_tracker=self.valid_metrics, epoch=epoch,
                                                            outputs=outputs_list, targets=targets_list,
                                                            targets_all_labels=targets_all_labels_list, mode='valid',
-                                                           track_cms=(epoch == 1 or epoch % self.epoch_log_step_valid == 0))
+                                                           track_cms=False)
+        # track_cms=  (epoch == 1 or epoch % self.epoch_log_step_valid == 0))
 
         if self.try_run:
             # Add histogram of model parameters to the tensorboard
@@ -421,9 +431,6 @@ class ECGTrainer(BaseTrainer):
                                          det_targets=det_targets, str_mode=mode)
 
         # ------------ Metrics ------------------------------------
-        # Also set the epoch number for the MetricTracker
-        metric_tracker.epoch = epoch
-
         # Finally, the epoch-based metrics need to be updated
         # For this, calculate both, the normal epoch-based metrics as well as the class-wise epoch-based metrics
         # When overfitting a single batch, only a small amount of data is used and hence, not all classes may be present
@@ -583,7 +590,7 @@ class ECGTrainer(BaseTrainer):
 
     def _progress(self, batch_idx):
         base = '[{}/{} ({:.0f}%)]'
-        data_loader = self.data_loader # if not valid else self.valid_data_loader
+        data_loader = self.data_loader  # if not valid else self.valid_data_loader
         if hasattr(data_loader, 'n_samples'):
             current = batch_idx * data_loader.batch_size
             total = data_loader.n_samples
