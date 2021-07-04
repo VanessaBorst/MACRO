@@ -183,7 +183,7 @@ def top_k_acc(output, target, labels, k=3):
         return top_k_accuracy_score(y_true=target, y_score=output, k=k, labels=labels)
 
 
-def mirco_f1(output, target, log_probs, logits, labels):
+def micro_f1(output, target, log_probs, logits, labels):
     """See documentation for _f1
     Compute the f1-score using the global count of true positives / false negatives, etc.
     (Sums the number of true positives / false negatives for each class).

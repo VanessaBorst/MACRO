@@ -10,7 +10,7 @@ from utils import get_project_root, read_json, write_json
 
 
 class ConfigParser:
-    def __init__(self, config, resume=None, modification=None, run_id=None):
+    def __init__(self, config, resume=None, modification=None, mode=None, run_id=None):
         """
         class to parse configuration json file. Handles hyperparameters for training, initializations of modules, checkpoint saving
         and logging module.
@@ -34,11 +34,20 @@ class ConfigParser:
                                       self.config['run_details'])
         self._save_dir = Path(os.path.join(get_project_root(), save_dir / 'models' / exper_name / str(run_id + details)))
         self._log_dir = Path(os.path.join(get_project_root(), save_dir / 'log' / exper_name / str(run_id + details)))
+        if mode is not None and mode=='test':
+            assert resume is not None, "checkpoint must be provided for testing"
+            self._test_output_dir = Path(os.path.join(resume.parent, 'test_output'))
+        else:
+            self._test_output_dir = None    # For training not needed
 
-        # make directory for saving checkpoints and log.
+
+
+        # make directory for saving checkpoints and log and test outputs (if needed).
         exist_ok = run_id == ''
         self.save_dir.mkdir(parents=True, exist_ok=exist_ok)
         self.log_dir.mkdir(parents=True, exist_ok=exist_ok)
+        if self.test_output_dir is not None:
+            self.test_output_dir.mkdir(parents=True, exist_ok=True)
 
         # save updated config file to the checkpoint dir
         write_json(self.config, self.save_dir / 'config.json')
@@ -54,7 +63,7 @@ class ConfigParser:
         self._do_some_sanity_checks()
 
     @classmethod
-    def from_args(cls, args, options=''):
+    def from_args(cls, args, mode=None, options=''):
         """
         Initialize this class from some cli arguments. Used in train, test.
         """
@@ -81,7 +90,7 @@ class ConfigParser:
 
         # parse custom cli options into dictionary
         modification = {opt.target: getattr(args, _get_opt_name(opt.flags)) for opt in options}
-        return cls(config, resume, modification)
+        return cls(config, resume, modification, mode)
 
     def init_obj(self, name, module, *args, **kwargs):
         """
@@ -140,6 +149,10 @@ class ConfigParser:
     def log_dir(self):
         return self._log_dir
 
+    @property
+    def test_output_dir(self):
+        return self._test_output_dir
+
     def _do_some_sanity_checks(self):
         if self.config["loss"] == "BCE_with_logits" or self.config["loss"] == "balanced_BCE_with_logits":
             assert self.config["arch"]["args"]["multi_label_training"] \
@@ -190,6 +203,8 @@ def _update_config(config, modification):
 
     for k, v in modification.items():
         if v is not None:
+            if isinstance(v, Path):
+                v = v.__str__()
             _set_by_path(config, k, v)
     return config
 

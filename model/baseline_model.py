@@ -7,13 +7,12 @@ from utils import plot_record_from_np_array
 
 
 class BaselineModel(BaseModel):
-    def __init__(self, apply_final_activation, multi_label_training, num_classes=9, num_cnn_blocks=5):
+    def __init__(self, apply_final_activation, multi_label_training, num_classes=9):
         """
         :param apply_final_activation: whether the Sigmoid(sl) or the LogSoftmax(ml) should be applied at the end
         :param multi_label_training: if true, Sigmoid is used as final activation, else the LogSoftmax
         :param num_classes: Num of classes to classify
         :param num_cnn_blocks: Num of CNN blocks to use
-        TODO functionality for num_cnn_blocks
         """
         super().__init__()
         self._apply_final_activation = apply_final_activation
@@ -86,7 +85,7 @@ class BaselineModel(BaseModel):
             nn.Dropout(0.2)
         )
 
-        self._fcn  =nn.Linear(in_features=24, out_features=num_classes)
+        self._fcn = nn.Linear(in_features=24, out_features=num_classes)
 
         if apply_final_activation:
             self._final_activation = nn.Sigmoid() if multi_label_training else nn.LogSoftmax(dim=1)

@@ -10,7 +10,7 @@ class BaseDataLoader(DataLoader):
     Handles batch generation, data shuffling, and validation data splitting.
     """
 
-    def __init__(self, dataset, batch_size, shuffle, validation_split, num_workers, collate_fn=default_collate,
+    def __init__(self, dataset, batch_size, shuffle, validation_split, num_workers, pin_memory, collate_fn=default_collate,
                  single_batch=False):
         """
         single_batch: If set to True, this reduces the training set to a single batch and turns off the validation set.
@@ -47,7 +47,7 @@ class BaseDataLoader(DataLoader):
             'collate_fn': collate_fn,
             'num_workers': num_workers
         }
-        super().__init__(sampler=self.sampler, **self.init_kwargs)
+        super().__init__(sampler=self.sampler, pin_memory=pin_memory, **self.init_kwargs)
 
     def _split_sampler(self, split):
         if split == 0.0:

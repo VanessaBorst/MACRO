@@ -1,6 +1,6 @@
 {
-  "name": "CPSC_BaselineModel_DEBUG",
-  "run_details": "_weightedBCE",
+  "name": "CPSC_BaselineModel",
+  "run_details": "_lr_10e-5",
   "n_gpu": 1,
   "arch": {
     "type": "BaselineModel",
@@ -13,18 +13,19 @@
     "type": "ECGDataLoader",
     "args": {
       "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000",
-      "batch_size": 64,
+      "batch_size": 8,
       "shuffle": true,
       "validation_split": 0.25,
-      "num_workers": 4
+      "num_workers": 4,
+      "pin_memory": false
     },
     "overfit_single_batch": false,
-    "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/eq_len_72000"
+    "test_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000/valid"
   },
   "optimizer": {
     "type": "Adam",
     "args": {
-      "lr": 0.0001,
+      "lr": 0.00001,
       "weight_decay": 0,
       "amsgrad": false
     }
@@ -40,8 +41,6 @@
       },
       "per_epoch": [
         "cpsc_score",
-        "mirco_f1",
-        "macro_f1",
         "weighted_f1"
       ],
       "per_epoch_class_wise": [
@@ -54,8 +53,6 @@
       },
       "per_epoch": [
         "cpsc_score",
-        "mirco_f1",
-        "macro_f1",
         "weighted_f1"
       ],
       "per_epoch_class_wise": [

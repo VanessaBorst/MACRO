@@ -36,8 +36,10 @@ def main(config):
     # Conditional inputs depending on the config
     if config['arch']['type'] == 'BaselineModelWoRnnWoAttention':
         import model.baseline_model_woRNN_woAttention as module_arch
-    else:
+    elif config['arch']['type'] == 'BaselineModel':
         import model.baseline_model as module_arch
+    else:
+        import model.baseline_model_variableConvs as module_arch
 
     if config['arch']['args']['multi_label_training']:
         import model.multi_label_metrics as module_metric
@@ -119,5 +121,5 @@ if __name__ == '__main__':
         CustomArgs(['--bs', '--batch_size'], type=int, target='data_loader;args;batch_size')
         # options added here can be modified by command line flags.
     ]
-    config = ConfigParser.from_args(args, options)
+    config = ConfigParser.from_args(args=args, options=options)
     main(config)

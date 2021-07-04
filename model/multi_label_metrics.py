@@ -18,6 +18,9 @@ from sklearn.metrics import multilabel_confusion_matrix, \
 #       => Micro-Average Precision and Recall are the same values, therefore the MicroAverage F1-Score is also the same
 #           (and corresponds to the accuracy when all classes are considered)
 
+# Details:
+# https://datascience.stackexchange.com/questions/15989/micro-average-vs-macro-average-performance-in-a-multiclass-classification-settin/16001
+
 THRESHOLD = 0.5
 
 
@@ -145,7 +148,7 @@ def _recall(output, target, sigmoid_probs, logits, labels, average):
         return recall_score(y_true=target, y_pred=pred, labels=labels, average=average)
 
 
-def _roc_auc(output, target, sigmoid_probs, logits, labels, average, multi_class_cfg):
+def _roc_auc(output, target, sigmoid_probs, logits, labels, average):
     """
     The following parameter description applies for the multiclass case
     :param output: dimension=(N,C)
@@ -179,7 +182,7 @@ def _roc_auc(output, target, sigmoid_probs, logits, labels, average, multi_class
         else:
             pred = _convert_logits_to_prediction(output)
         assert pred.shape[0] == len(target)
-        return roc_auc_score(y_true=target, y_score=pred, labels=labels, average=average, multi_class=multi_class_cfg)
+        return roc_auc_score(y_true=target, y_score=pred, labels=labels, average=average)
 
 
 def subset_accuracy(output, target, sigmoid_probs, logits):
@@ -234,7 +237,7 @@ def accuracy(output, target, sigmoid_probs, logits):
         return accuracy_score(y_true=target, y_pred=pred)
 
 
-def mirco_f1(output, target, sigmoid_probs, logits, labels):
+def micro_f1(output, target, sigmoid_probs, logits, labels):
     """See documentation for _f1 """
     return _f1(output, target, sigmoid_probs, logits, labels, "micro")
 
@@ -309,34 +312,24 @@ def class_wise_recall(output, target, sigmoid_probs, logits, labels):
     return _recall(output, target, sigmoid_probs, logits, labels, None)
 
 
-def macro_roc_auc_ovo(output, target, sigmoid_probs, logits, labels):
+def macro_roc_auc(output, target, sigmoid_probs, logits, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, target, sigmoid_probs, logits, labels, "macro", "ovo")
+    return _roc_auc(output, target, sigmoid_probs, logits, labels, "macro")
 
 
-def weighted_roc_auc_ovo(output, target, sigmoid_probs, logits, labels):
+def weighted_roc_auc(output, target, sigmoid_probs, logits, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, target, sigmoid_probs, logits, labels, "weighted", "ovo")
+    return _roc_auc(output, target, sigmoid_probs, logits, labels, "weighted")
 
 
-def macro_roc_auc_ovr(output, target, sigmoid_probs, logits, labels):
+def micro_roc_auc(output, target, sigmoid_probs, logits, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, target, sigmoid_probs, logits, labels, "macro", "ovr")
+    return _roc_auc(output, target, sigmoid_probs, logits, labels, "micro")
 
 
-def weighted_roc_auc_ovr(output, target, sigmoid_probs, logits, labels):
+def class_wise_roc_auc(output, target, sigmoid_probs, logits, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, target, sigmoid_probs, logits, labels, "weighted", "ovr")
-
-
-def class_wise_roc_auc_ovr(output, target, sigmoid_probs, logits, labels):
-    """See documentation for _roc_auc """
-    return _roc_auc(output, target, sigmoid_probs, logits, labels, None, "ovr")
-
-
-def class_wise_roc_auc_ovo(output, target, sigmoid_probs, logits, labels):
-    """See documentation for _roc_auc """
-    return _roc_auc(output, target, sigmoid_probs, logits, labels, None, "ovo")
+    return _roc_auc(output, target, sigmoid_probs, logits, labels, average=None)
 
 
 # A Normal confusion matrix does not make sense in the multi-label context, but a label-wise one can be computed
