@@ -20,9 +20,12 @@ from sklearn.metrics import multilabel_confusion_matrix, \
 
 # Details:
 # https://datascience.stackexchange.com/questions/15989/micro-average-vs-macro-average-performance-in-a-multiclass-classification-settin/16001
+from torchmetrics import AUROC, F1, Precision
 
 THRESHOLD = 0.5
 
+
+# ----------------------------------- SKlearn Metric -----------------------------------------------
 
 def _convert_sigmoid_probs_to_prediction(sigmoid_probs, threshold=THRESHOLD):
     return torch.where(sigmoid_probs > threshold, 1, 0)
@@ -35,7 +38,7 @@ def _convert_logits_to_prediction(logits, threshold=THRESHOLD):
     return torch.where(sigmoid_probs > threshold, 1, 0)
 
 
-def _f1(output, target, sigmoid_probs, logits, labels, average):
+def _sk_f1(output, target, sigmoid_probs, logits, labels, average):
     """
     Compute the F1 score, also known as balanced F-score or F-measure.
     In the multi-class and multi-label case, this is the average of the F1 score of each class with
@@ -74,7 +77,7 @@ def _f1(output, target, sigmoid_probs, logits, labels, average):
         return f1_score(y_true=target, y_pred=pred, labels=labels, average=average)
 
 
-def _precision(output, target, sigmoid_probs, logits, labels, average):
+def _sk_precision(output, target, sigmoid_probs, logits, labels, average):
     """
     Compute the precision
 
@@ -111,7 +114,7 @@ def _precision(output, target, sigmoid_probs, logits, labels, average):
         return precision_score(y_true=target, y_pred=pred, labels=labels, average=average)
 
 
-def _recall(output, target, sigmoid_probs, logits, labels, average):
+def _sk_recall(output, target, sigmoid_probs, logits, labels, average):
     """
     Compute the recall
 
@@ -148,44 +151,30 @@ def _recall(output, target, sigmoid_probs, logits, labels, average):
         return recall_score(y_true=target, y_pred=pred, labels=labels, average=average)
 
 
-def _roc_auc(output, target, sigmoid_probs, logits, labels, average):
+def _sk_roc_auc(output, target, sigmoid_probs, logits, labels, average):
     """
-    The following parameter description applies for the multiclass case
+    The following parameter description applies for the multilabel case
     :param output: dimension=(N,C)
-        Per entry, the (log) probability estimates of each class should be contained and
-        Later they MUST sum to 1 -> if log probs are provided instead of real probs, set log_prob param to True
+        Per entry, the (log) probability estimates of each class should be contained
     :param sigmoid_probs: If set to True, the vectors are expected to contain Sigmoid output probabilities
     :param logits:  If set to True, the vectors are expected to contain logits/raw scores
-    :param target: dimension= (N)
-        Per entry, a class index in the range [0, C-1] as integer (ground truth)
+    :param target: dimension= (N,C)
+        Label indicator array / sparse matrix containing the ground truth data
     :param labels: Needed for multiclass targets. List of labels that index the classes in output
-    :param average: In the multiclass-case, either ‘macro’ or ‘weighted’ or None
-        None:       The scores for each class are returned
-        ‘macro’:    Calculate metrics for each label, and find their unweighted mean.
-                    This does not take label imbalance into account.
-        ‘weighted’: Calculate metrics for each label, and find their average, weighted by support
-                    (the number of true instances for each label).
-    :param multi_class_cfg: Should be specified
-        'ovr': One-vs-rest. Computes the AUC of each class against the rest, sensitive to class imbalance even
-            when average == 'macro', because class imbalance affects the composition of each of the ‘rest’ groupings.
-        'ovo': One-vs-one. Computes the average AUC of all possible pairwise combinations of classes [5].
-            Insensitive to class imbalance when average == 'macro'.
-    :return: Area Under the Receiver Operating Characteristic Curve (ROC AUC) for the multiclass case
-
-    Note: Could be extended to binary and multilabel classification, but some restrictions apply
-    (see https://scikit-learn.org/stable/modules/generated/sklearn.metrics.roc_auc_score.html)
+    :param average: In the multilabel-case, either ‘macro’, 'micro', ‘weighted’, 'samples' or None
+    :return: Area Under the Receiver Operating Characteristic Curve (ROC AUC) for the multilabel case
     """
     with torch.no_grad():
         assert sigmoid_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
-        if sigmoid_probs:
-            pred = _convert_sigmoid_probs_to_prediction(output)
-        else:
-            pred = _convert_logits_to_prediction(output)
+
+        # Predictions should be passes as probabilities, not as one-hot-vector!
+        pred = output if sigmoid_probs else torch.sigmoid(output)
+
         assert pred.shape[0] == len(target)
         return roc_auc_score(y_true=target, y_score=pred, labels=labels, average=average)
 
 
-def subset_accuracy(output, target, sigmoid_probs, logits):
+def sk_subset_accuracy(output, target, sigmoid_probs, logits):
     """
     Calculates the (TOP-1) accuracy for the multi-label  case
     For the multi-label case, this function computes subset accuracy:
@@ -211,129 +200,108 @@ def subset_accuracy(output, target, sigmoid_probs, logits):
         return accuracy_score(y_true=target, y_pred=pred)
 
 
-def accuracy(output, target, sigmoid_probs, logits):
-    """
-    Calculates the (TOP-1) accuracy for the multi-label  case
-    For the multi-label case, this function computes subset accuracy:
-    the set of labels predicted for a sample must exactly match the corresponding set of labels in y_true
-
-    Parameters
-    ----------
-    :param output: dimension=(N,C)
-        Label indicator array / sparse matrix as returned by the classifier
-    :param target: dimension= (N,C)
-        Label indicator array / sparse matrix containing the Ground Truth
-    :param sigmoid_probs: If set to True, the vectors are expected to contain Sigmoid output probabilites
-    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
-
-    """
-    with torch.no_grad():
-        assert sigmoid_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
-        if sigmoid_probs:
-            pred = _convert_sigmoid_probs_to_prediction(output)
-        else:
-            pred = _convert_logits_to_prediction(output)
-        assert pred.shape[0] == len(target)
-        return accuracy_score(y_true=target, y_pred=pred)
-
-
-def micro_f1(output, target, sigmoid_probs, logits, labels):
+def micro_sk_f1(output, target, sigmoid_probs, logits, labels):
     """See documentation for _f1 """
-    return _f1(output, target, sigmoid_probs, logits, labels, "micro")
+    return _sk_f1(output, target, sigmoid_probs, logits, labels, "micro")
 
 
-def macro_f1(output, target, sigmoid_probs, logits, labels):
+def macro_sk_f1(output, target, sigmoid_probs, logits, labels):
     """See documentation for _f1 """
-    return _f1(output, target, sigmoid_probs, logits, labels, "macro")
+    return _sk_f1(output, target, sigmoid_probs, logits, labels, "macro")
 
 
-def weighted_f1(output, target, sigmoid_probs, logits,  labels):
+def weighted_sk_f1(output, target, sigmoid_probs, logits, labels):
     """See documentation for _f1 """
-    return _f1(output, target, sigmoid_probs, logits, labels, "weighted")
+    return _sk_f1(output, target, sigmoid_probs, logits, labels, "weighted")
 
 
-def samples_f1(output, target, sigmoid_probs, logits, labels):
+def samples_sk_f1(output, target, sigmoid_probs, logits, labels):
     """See documentation for _f1 """
-    return _f1(output, target, sigmoid_probs, logits, labels, "samples")
+    return _sk_f1(output, target, sigmoid_probs, logits, labels, "samples")
 
 
-def class_wise_f1(output, target, sigmoid_probs, logits, labels):
+def class_wise_sk_f1(output, target, sigmoid_probs, logits, labels):
     """See documentation for _f1 """
-    return _f1(output, target, sigmoid_probs, logits, labels, None)
+    return _sk_f1(output, target, sigmoid_probs, logits, labels, None)
 
 
-def micro_precision(output, target, sigmoid_probs, logits, labels):
+def micro_sk_precision(output, target, sigmoid_probs, logits, labels):
     """See documentation for _f1 """
-    return _precision(output, target, sigmoid_probs, logits, labels, "micro")
+    return _sk_precision(output, target, sigmoid_probs, logits, labels, "micro")
 
 
-def macro_precision(output, target, sigmoid_probs, logits, labels):
+def macro_sk_precision(output, target, sigmoid_probs, logits, labels):
     """See documentation for _f1 """
-    return _precision(output, target, sigmoid_probs, logits, labels, "macro")
+    return _sk_precision(output, target, sigmoid_probs, logits, labels, "macro")
 
 
-def weighted_precision(output, target, sigmoid_probs, logits, labels):
+def weighted_sk_precision(output, target, sigmoid_probs, logits, labels):
     """See documentation for _f1 """
-    return _precision(output, target, sigmoid_probs, logits, labels, "weighted")
+    return _sk_precision(output, target, sigmoid_probs, logits, labels, "weighted")
 
 
-def sample_precision(output, target, sigmoid_probs, logits, labels):
+def samples_sk_precision(output, target, sigmoid_probs, logits, labels):
     """See documentation for _f1 """
-    return _precision(output, target, sigmoid_probs, logits, labels, "samples")
+    return _sk_precision(output, target, sigmoid_probs, logits, labels, "samples")
 
 
-def class_wise_precision(output, target, sigmoid_probs, logits, labels):
+def class_wise_sk_precision(output, target, sigmoid_probs, logits, labels):
     """See documentation for _f1 """
-    return _precision(output, target, sigmoid_probs, logits, labels, None)
+    return _sk_precision(output, target, sigmoid_probs, logits, labels, None)
 
 
-def micro_recall(output, target, sigmoid_probs, logits, labels):
+def micro_sk_recall(output, target, sigmoid_probs, logits, labels):
     """See documentation for _f1 """
-    return _recall(output, target, sigmoid_probs, logits, labels, "micro")
+    return _sk_recall(output, target, sigmoid_probs, logits, labels, "micro")
 
 
-def macro_recall(output, target, sigmoid_probs, logits, labels):
+def macro_sk_recall(output, target, sigmoid_probs, logits, labels):
     """See documentation for _f1 """
-    return _recall(output, target, sigmoid_probs, logits, labels, "macro")
+    return _sk_recall(output, target, sigmoid_probs, logits, labels, "macro")
 
 
-def weighted_recall(output, target, sigmoid_probs, logits, labels):
+def weighted_sk_recall(output, target, sigmoid_probs, logits, labels):
     """See documentation for _f1 """
-    return _recall(output, target, sigmoid_probs, logits, labels, "weighted")
+    return _sk_recall(output, target, sigmoid_probs, logits, labels, "weighted")
 
 
-def sample_recall(output, target, sigmoid_probs, logits, labels):
+def samples_sk_recall(output, target, sigmoid_probs, logits, labels):
     """See documentation for _f1 """
-    return _recall(output, target, sigmoid_probs, logits, labels, "samples")
+    return _sk_recall(output, target, sigmoid_probs, logits, labels, "samples")
 
 
-def class_wise_recall(output, target, sigmoid_probs, logits, labels):
+def class_wise_sk_recall(output, target, sigmoid_probs, logits, labels):
     """See documentation for _f1 """
-    return _recall(output, target, sigmoid_probs, logits, labels, None)
+    return _sk_recall(output, target, sigmoid_probs, logits, labels, None)
 
 
-def macro_roc_auc(output, target, sigmoid_probs, logits, labels):
+def micro_sk_roc_auc(output, target, sigmoid_probs, logits, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, target, sigmoid_probs, logits, labels, "macro")
+    return _sk_roc_auc(output, target, sigmoid_probs, logits, labels, "micro")
 
 
-def weighted_roc_auc(output, target, sigmoid_probs, logits, labels):
+def macro_sk_roc_auc(output, target, sigmoid_probs, logits, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, target, sigmoid_probs, logits, labels, "weighted")
+    return _sk_roc_auc(output, target, sigmoid_probs, logits, labels, "macro")
 
 
-def micro_roc_auc(output, target, sigmoid_probs, logits, labels):
+def weighted_sk_roc_auc(output, target, sigmoid_probs, logits, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, target, sigmoid_probs, logits, labels, "micro")
+    return _sk_roc_auc(output, target, sigmoid_probs, logits, labels, "weighted")
 
 
-def class_wise_roc_auc(output, target, sigmoid_probs, logits, labels):
+def samples_sk_roc_auc(output, target, sigmoid_probs, logits, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, target, sigmoid_probs, logits, labels, average=None)
+    return _sk_roc_auc(output, target, sigmoid_probs, logits, labels, "samples")
+
+
+def class_wise_sk_roc_auc(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _roc_auc """
+    return _sk_roc_auc(output, target, sigmoid_probs, logits, labels, average=None)
 
 
 # A Normal confusion matrix does not make sense in the multi-label context, but a label-wise one can be computed
-def class_wise_confusion_matrices_multi_label(output, target, sigmoid_probs, logits, labels):
+def class_wise_confusion_matrices_multi_label_sk(output, target, sigmoid_probs, logits, labels):
     """
     Creates a 2x2 confusion matrix per class contained in labels
     CM(0,0) -> TN, CM(1,0) -> FN, CM(0,1) -> FP, CM(1,1) -> TP
@@ -363,8 +331,8 @@ def class_wise_confusion_matrices_multi_label(output, target, sigmoid_probs, log
         return df_class_wise_cms
 
 
-def classification_summary(output, target, sigmoid_probs, logits, labels, output_dict,
-                           target_names=["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]):
+def sk_classification_summary(output, target, sigmoid_probs, logits, labels, output_dict,
+                              target_names=["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]):
     with torch.no_grad():
         assert sigmoid_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
         if sigmoid_probs:
@@ -374,6 +342,9 @@ def classification_summary(output, target, sigmoid_probs, logits, labels, output
         assert pred.shape[0] == len(target)
         return classification_report(y_true=target, y_pred=pred, labels=labels, digits=3, target_names=target_names,
                                      output_dict=output_dict)
+
+
+# ----------------------------------- Further Metrics -----------------------------------------------
 
 
 def _convert_multi_label_probs_to_single_prediction(sigmoid_prob_output):
@@ -491,7 +462,8 @@ def cpsc_score(output, target, sigmoid_probs, logits):
         """
         # Block: Classes I-AVB, LBBB, RBBB -> 270492004, 164909002, 59118001 -> Indices 0, 2, 4
         Fblock = 2 * (A[0][0] + A[2][2] + A[4][4]) / \
-                 (np.sum(A[0, :]) + np.sum(A[:, 0])+np.sum(A[2, :]) + np.sum(A[:, 2])+np.sum(A[4, :]) + np.sum(A[:, 4]))
+                 (np.sum(A[0, :]) + np.sum(A[:, 0]) + np.sum(A[2, :]) + np.sum(A[:, 2]) + np.sum(A[4, :]) + np.sum(
+                     A[:, 4]))
 
         # # Classes PAC, PVC -> 284470004, 164884008 -> Indices 3, 8
         Fpc = 2 * (A[3][3] + A[8][8]) / (np.sum(A[3, :]) + np.sum(A[:, 3]) + np.sum(A[8, :]) + np.sum(A[:, 8]))
@@ -506,132 +478,89 @@ def cpsc_score(output, target, sigmoid_probs, logits):
         return F1, Faf, Fblock, Fpc, Fst
 
 
-def cpsc_score_orig(answers_csv_path, reference_csv_path):
-    '''
-    cspc2018_challenge score
-    Written by:  Xingyao Wang, Feifei Liu, Chengyu Liu
-                 School of Instrument Science and Engineering
-                 Southeast University, China
-                 chengyu@seu.edu.cns
-    Adapted by: Vanessa Borst
-    '''
+# ----------------------------------- TORCHMETRICS -----------------------------------------------
+def _torch_precision(output, target, sigmoid_probs, logits, labels, average):
+    with torch.no_grad():
+        assert sigmoid_probs ^ logits, "In the single-label case, exactly one of the two must be true"
+        # The default Threshold for transforming probability or logit predictions to binary (0,1) predictions,
+        # in the case of binary or multi-label inputs is 0.5 and corresponds to input being probabilities.
+        pred = output if sigmoid_probs else torch.sigmoid(output)
+        precision = Precision(num_classes=len(labels), average=average, threshold=THRESHOLD)
+        return precision(pred, target)
 
-    '''
-    Score the prediction answers by comparing answers.csv and REFERENCE.csv in validation_set folder,
-    The scoring uses a F1 measure, which is an average of the nice F1 values from each classification
-    type. The specific score rules will be found on http://www.icbeb.org/Challenge.html.
-    Matrix A follows the format as:
-                                         Predicted
-                          Normal  AF  I-AVB  LBBB  RBBB  PAC  PVC  STD  STE
-                   Normal  N11   N12   N13   N14   N15   N16  N17  N18  N19
-                   AF      N21   N22   N23   N24   N25   N26  N27  N28  N29
-                   I-AVB   N31   N32   N33   N34   N35   N36  N37  N38  N39
-                   LBBB    N41   N42   N43   N44   N45   N46  N47  N48  N49
-    Reference      RBBB    N51   N52   N53   N54   N55   N56  N57  N58  N59
-                   PAC     N61   N62   N63   N64   N65   N66  N67  N68  N69
-                   PVC     N71   N72   N73   N74   N75   N76  N77  N78  N79
-                   STD     N81   N82   N83   N84   N85   N86  N87  N88  N89
-                   STE     N91   N92   N93   N94   N95   N96  N97  N98  N99
 
-    For each of the nine types, F1 is defined as:
-    Normal: F11=2*N11/(N1x+Nx1) AF: F12=2*N22/(N2x+Nx2) I-AVB: F13=2*N33/(N3x+Nx3) LBBB: F14=2*N44/(N4x+Nx4) RBBB: F15=2*N55/(N5x+Nx5)
-    PAC: F16=2*N66/(N6x+Nx6)    PVC: F17=2*N77/(N7x+Nx7)    STD: F18=2*N88/(N8x+Nx8)    STE: F19=2*N99/(N9x+Nx9)
+def _torch_roc_auc(output, target, sigmoid_probs, logits, labels, average):
+    """
+    The following parameter description applies for the multilabel case
+    For non-binary input, if the preds and target tensor have the same size the input will be interpretated as
+    multilabel and if preds have one dimension more than the target tensor the input will be interpretated as multiclass.
+    :param output: (N, C, ...) (multiclass) tensor with probabilities, where C is the number of classes.
+    :param sigmoid_probs: If the outputs are log sigmoid probs and do NOT necessarily sum to 1, set param to True
+    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
+    :param target: (N, ...) or (N, C, ...) with integer labels
+    :param labels: List of labels that index the classes in output
+    :param average: Either ‘macro’, 'micro', ‘weighted’, or None
+    :return: Area Under the Receiver Operating Characteristic Curve (ROC AUC) for the multilabel case
+    """
+    with torch.no_grad():
+        sigmoid_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
 
-    The final challenge score is defined as:
-    F1 = (F11+F12+F13+F14+F15+F16+F17+F18+F19)/9
+        # Pred should be a tensor with probabilities of shape (N, C, ...), where C is the number of classes.
+        pred = output if sigmoid_probs else torch.sigmoid(output)
 
-    In addition, we also calculate the F1 measures for each of the four sub-abnormal types:
-                AF: Faf=2*N22/(N2x+Nx2)                         Block: Fblock=2*(N33+N44+N55)/(N3x+Nx3+N4x+Nx4+N5x+Nx5)
-    Premature contraction: Fpc=2*(N66+N77)/(N6x+Nx6+N7x+Nx7)    ST-segment change: Fst=2*(N88+N99)/(N8x+Nx8+N9x+Nx9)
+        auroc = AUROC(num_classes=len(labels), average=average, pos_label=1)
+        return auroc(pred, target)
 
-    The static of predicted answers and the final score are saved to score.txt in local path.
-    '''
-    answers = dict()
-    reference = dict()
-    A = np.zeros((9, 9), dtype=np.float)
-    with open(answers_csv_path) as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            answers.setdefault(row['Recording'], []).append(row['Result'])
-        f.close()
-    with open(reference_csv_path) as ref:
-        reader = csv.DictReader(ref)
-        for row in reader:
-            reference.setdefault(row['Recording'], []).append(
-                [row['First_label'], row['Second_label'], row['Third_label']])
-        ref.close()
 
-    for key in answers.keys():
-        value = []
-        for item in answers[key]:
-            predict = np.int(item)
-        for item in reference[key][0]:
-            if item == '':
-                item = 0
-            value.append(np.int(item))
+def _torch_f1(output, target, sigmoid_probs, logits, labels, average):
+    """
+    The following parameter description applies for the multilabel case
+    :param output: (N, C, ...), accepts logits or probabilities from a model output or integer class values
+    :param sigmoid_probs: If the outputs are sigmoid probs and do NOT necessarily sum to 1, set param to True
+    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
+    :param target: dimension= (N) (long tensor)
+    :param labels: Needed for multiclass targets. List of labels that index the classes in output
+    :param average: Either ‘macro’,´micro', ‘weighted’, 'samples' or None
+    :return: F1 score for the multilabel case
+    """
+    with torch.no_grad():
+        assert sigmoid_probs ^ logits, "In the single-label case, exactly one of the two must be true"
+        # Function accepts logits or probabilities from a model output or integer class values in prediction.
+        # The default Threshold for transforming probability or logit predictions to binary (0,1) predictions,
+        # in the case of binary or multi-label inputs is 0.5 and corresponds to input being probabilities.
+        pred = output if sigmoid_probs else torch.sigmoid(output)
+        f1 = F1(num_classes=len(labels), average=average, threshold=THRESHOLD)
+        return f1(pred, target)
 
-        if predict in value:
-            A[predict - 1][predict - 1] += 1
-        else:
-            A[value[0] - 1][predict - 1] += 1
 
-    F11 = 2 * A[0][0] / (np.sum(A[0, :]) + np.sum(A[:, 0]))
-    F12 = 2 * A[1][1] / (np.sum(A[1, :]) + np.sum(A[:, 1]))
-    F13 = 2 * A[2][2] / (np.sum(A[2, :]) + np.sum(A[:, 2]))
-    F14 = 2 * A[3][3] / (np.sum(A[3, :]) + np.sum(A[:, 3]))
-    F15 = 2 * A[4][4] / (np.sum(A[4, :]) + np.sum(A[:, 4]))
-    F16 = 2 * A[5][5] / (np.sum(A[5, :]) + np.sum(A[:, 5]))
-    F17 = 2 * A[6][6] / (np.sum(A[6, :]) + np.sum(A[:, 6]))
-    F18 = 2 * A[7][7] / (np.sum(A[7, :]) + np.sum(A[:, 7]))
-    F19 = 2 * A[8][8] / (np.sum(A[8, :]) + np.sum(A[:, 8]))
+def weighted_torch_f1(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_f1 """
+    return _torch_f1(output, target, sigmoid_probs, logits, labels, average="weighted")
 
-    F1 = (F11 + F12 + F13 + F14 + F15 + F16 + F17 + F18 + F19) / 9
 
-    ## following is calculating scores for 4 types: AF, Block, Premature contraction, ST-segment change.
+def class_wise_torch_f1(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_f1 """
+    return _torch_f1(output, target, sigmoid_probs, logits, labels, average=None)
 
-    Faf = 2 * A[1][1] / (np.sum(A[1, :]) + np.sum(A[:, 1]))
-    Fblock = 2 * (A[2][2] + A[3][3] + A[4][4]) / (np.sum(A[2:5, :]) + np.sum(A[:, 2:5]))
-    Fpc = 2 * (A[5][5] + A[6][6]) / (np.sum(A[5:7, :]) + np.sum(A[:, 5:7]))
-    Fst = 2 * (A[7][7] + A[8][8]) / (np.sum(A[7:9, :]) + np.sum(A[:, 7:9]))
 
-    # print(A)
-    print('Total File Number: ', np.sum(A))
+def weighted_torch_roc_auc(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_auc """
+    return _torch_roc_auc(output, target, sigmoid_probs, logits, labels, average="weighted")
 
-    print("F11: ", F11)
-    print("F12: ", F12)
-    print("F13: ", F13)
-    print("F14: ", F14)
-    print("F15: ", F15)
-    print("F16: ", F16)
-    print("F17: ", F17)
-    print("F18: ", F18)
-    print("F19: ", F19)
-    print("F1: ", F1)
 
-    print("Faf: ", Faf)
-    print("Fblock: ", Fblock)
-    print("Fpc: ", Fpc)
-    print("Fst: ", Fst)
+def class_wise_torch_roc_auc(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_auc """
+    return _torch_roc_auc(output, target, sigmoid_probs, logits, labels, average=None)
 
-    with open('score.txt', 'w') as score_file:
-        # print (A, file=score_file)
-        print('Total File Number: %d\n' % (np.sum(A)), file=score_file)
-        print('F11: %0.3f' % F11, file=score_file)
-        print('F12: %0.3f' % F12, file=score_file)
-        print('F13: %0.3f' % F13, file=score_file)
-        print('F14: %0.3f' % F14, file=score_file)
-        print('F15: %0.3f' % F15, file=score_file)
-        print('F16: %0.3f' % F16, file=score_file)
-        print('F17: %0.3f' % F17, file=score_file)
-        print('F18: %0.3f' % F18, file=score_file)
-        print('F19: %0.3f\n' % F19, file=score_file)
-        print('F1: %0.3f\n' % F1, file=score_file)
-        print('Faf: %0.3f' % Faf, file=score_file)
-        print('Fblock: %0.3f' % Fblock, file=score_file)
-        print('Fpc: %0.3f' % Fpc, file=score_file)
-        print('Fst: %0.3f' % Fst, file=score_file)
 
-        score_file.close()
+def weighted_torch_precision(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_precision """
+    return _torch_precision(output, target, sigmoid_probs, logits, labels, average='weighted')
+
+
+def class_wise_torch_precision(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_precision """
+    return _torch_precision(output, target, sigmoid_probs, logits, labels, average=None)
 
 
 if __name__ == '__main__':

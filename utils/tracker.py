@@ -1,3 +1,4 @@
+import os.path
 from math import sqrt
 
 import matplotlib.pyplot as plt
@@ -6,8 +7,8 @@ import pandas as pd
 import seaborn as sns
 from torch.utils.tensorboard import SummaryWriter
 
-from model.multi_label_metrics import class_wise_confusion_matrices_multi_label
-from model.single_label_metrics import overall_confusion_matrix, class_wise_confusion_matrices_single_label
+from model.multi_label_metrics import class_wise_confusion_matrices_multi_label_sk
+from model.single_label_metrics import overall_confusion_matrix_sk, class_wise_confusion_matrices_single_label_sk
 
 smooth = 0  # 1e-6
 
@@ -238,7 +239,31 @@ class ConfusionMatrixTracker:
             fig_all_cms.clear()
             plt.close(fig_all_cms)
 
-    def _plot_cm_for_single_class(self, idx, ax, epoch):
+    def save_result_cms_to_file(self, path):
+        """
+            Writes the confusion matrices to the provided file
+            and should be called at the end of testing
+        """
+        if not self.multi_label_training:
+            # Plot the global confusion matrix and send it to the file
+            fig_overall_cm, ax = plt.subplots(figsize=(10, 7))
+            ax.set_title("Overall confusion matrix")
+            sns.heatmap(self._cm, annot=True, cmap='Spectral', ax=ax)
+            fig_overall_cm.savefig(os.path.join(path, 'overall_cm.pdf'))
+            fig_overall_cm.clear()
+            plt.close(fig_overall_cm)  # close the current figure
+
+        # Also create a one-containing-all-single-cms-figure
+        fig_all_cms, axs = plt.subplots(3, 3, figsize=(15, 8))
+        for idx, ax in enumerate(axs.flatten()):
+            # Plot the class-wise confusion matrices one-by-one
+            self._plot_cm_for_single_class(idx, ax)
+        fig_all_cms.tight_layout()
+        fig_all_cms.savefig(os.path.join(path, 'class_wise_cms.pdf'))
+        fig_all_cms.clear()
+        plt.close(fig_all_cms)
+
+    def _plot_cm_for_single_class(self, idx, ax, epoch=None):
         class_cm = self._class_wise_cms[idx]
 
         heatmap = sns.heatmap(class_cm, annot=True, cmap='Spectral', ax=ax)
@@ -262,8 +287,8 @@ if __name__ == '__main__':
     # Single Label
     output = [0, 2, 5, 6]
     target = [1, 8, 7, 6]
-    cm = overall_confusion_matrix(output, target, False, [0, 1, 2, 3, 4, 5, 6, 7, 8])
-    class_wise_cms = class_wise_confusion_matrices_single_label(output, target, False, [0, 1, 2, 3, 4, 5, 6, 7, 8])
+    cm = overall_confusion_matrix_sk(output, target, False, [0, 1, 2, 3, 4, 5, 6, 7, 8])
+    class_wise_cms = class_wise_confusion_matrices_single_label_sk(output, target, False, [0, 1, 2, 3, 4, 5, 6, 7, 8])
     tracker = ConfusionMatrixTracker(*[0, 1, 2, 3, 4, 5, 6, 7, 8], writer=SummaryWriter(log_dir="saved/tmp"),
                                      multi_label_training=False)
     tracker.update_cm(cm)
@@ -272,7 +297,7 @@ if __name__ == '__main__':
     # Multi Label
     output = [[0, 0, 0, 1, 0, 0, 1, 0, 0], [1, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0, 0]]
     target = [[1, 0, 0, 1, 0, 0, 1, 0, 0], [1, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 1, 0]]
-    class_wise_cms = class_wise_confusion_matrices_multi_label(output, target, False, [0, 1, 2, 3, 4, 5, 6, 7, 8])
+    class_wise_cms = class_wise_confusion_matrices_multi_label_sk(output, target, False, [0, 1, 2, 3, 4, 5, 6, 7, 8])
     tracker = ConfusionMatrixTracker(*[0, 1, 2, 3, 4, 5, 6, 7, 8], writer=SummaryWriter(log_dir="saved/tmp"),
                                      multi_label_training=True)
     tracker.update_class_wise_cms(class_wise_cms)

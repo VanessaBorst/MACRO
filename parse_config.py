@@ -36,11 +36,13 @@ class ConfigParser:
         self._log_dir = Path(os.path.join(get_project_root(), save_dir / 'log' / exper_name / str(run_id + details)))
         if mode is not None and mode=='test':
             assert resume is not None, "checkpoint must be provided for testing"
-            self._test_output_dir = Path(os.path.join(resume.parent, 'test_output'))
+            assert 'valid' in self.config['data_loader']['test_dir'].lower() or \
+                   'test' in self.config['data_loader']['test_dir'].lower(), "Path should link validation or test dir"
+            self._test_output_dir = Path(os.path.join(resume.parent, 'test_output')) if \
+                'test' in self.config['data_loader']['test_dir'].lower()                 \
+                else Path(os.path.join(resume.parent, 'valid_output'))
         else:
             self._test_output_dir = None    # For training not needed
-
-
 
         # make directory for saving checkpoints and log and test outputs (if needed).
         exist_ok = run_id == ''

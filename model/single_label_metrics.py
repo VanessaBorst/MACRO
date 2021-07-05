@@ -14,7 +14,11 @@ from sklearn.metrics import confusion_matrix, multilabel_confusion_matrix, \
 #       => Biases the classes towards the most populated class
 #       => Micro-Average Precision and Recall are the same values, therefore the MicroAverage F1-Score is also the same
 #           (and corresponds to the accuracy when all classes are considered)
+from torchmetrics import F1, Precision
+from torchmetrics.classification.auroc import AUROC
 
+
+# ----------------------------------- SKlearn Metric -----------------------------------------------
 
 def _convert_log_probs_to_prediction(log_prob_output):
     return torch.argmax(log_prob_output, dim=1)
@@ -29,7 +33,7 @@ def _convert_logits_to_prediction(logits):
     return torch.argmax(softmax_probs, dim=1)
 
 
-def _f1(output, target, log_probs, logits, labels, average):
+def _sk_f1(output, target, log_probs, logits, labels, average):
     """
     Compute the F1 score, also known as balanced F-score or F-measure.
     In the multi-class and multi-label case, this is the average of the F1 score of each class with
@@ -69,13 +73,13 @@ def _f1(output, target, log_probs, logits, labels, average):
         return f1_score(y_true=target, y_pred=pred, labels=labels, average=average)
 
 
-def _roc_auc(output, target, log_probs, logits, labels, average, multi_class_cfg, ):
+def _sk_roc_auc(output, target, log_probs, logits, labels, average, multi_class_cfg):
     """
     The following parameter description applies for the multiclass case
     :param output: dimension=(N,C)
         Per entry, the (log) probability estimates of each class should be contained and
         Later they MUST sum to 1 -> if log probs are provided instead of real probs, set log_prob param to True
-    :param log_probs: If the outputs are log probs and do NOT necessarily sum to 1, set param to True
+    :param log_probs: If the outputs are log softmax probs and do NOT necessarily sum to 1, set param to True
     :param logits:  If set to True, the vectors are expected to contain logits/raw scores
     :param target: dimension= (N)
         Per entry, a class index in the range [0, C-1] as integer (ground truth)
@@ -86,7 +90,7 @@ def _roc_auc(output, target, log_probs, logits, labels, average, multi_class_cfg
                     This does not take label imbalance into account.
         ‘weighted’: Calculate metrics for each label, and find their average, weighted by support
                     (the number of true instances for each label).
-    :param multi_class_cfg: Should be specified
+    :param multi_class_cfg: Must be specified
         'ovr': One-vs-rest. Computes the AUC of each class against the rest, sensitive to class imbalance even
             when average == 'macro', because class imbalance affects the composition of each of the ‘rest’ groupings.
         'ovo': One-vs-one. Computes the average AUC of all possible pairwise combinations of classes [5].
@@ -103,11 +107,13 @@ def _roc_auc(output, target, log_probs, logits, labels, average, multi_class_cfg
         # In both cases, the scores do not sum to one
         # Either they are logmax outputs or logits, so transform them
         softmax_probs = torch.nn.functional.softmax(output, dim=1)
+
         assert softmax_probs.shape[0] == len(target)
-        return roc_auc_score(y_true=target, y_score=softmax_probs, labels=labels, average=average, multi_class=multi_class_cfg)
+        return roc_auc_score(y_true=target, y_score=softmax_probs, labels=labels, average=average,
+                             multi_class=multi_class_cfg)
 
 
-def accuracy(output, target, log_probs, logits):
+def sk_accuracy(output, target, log_probs, logits):
     """
     Calculates the (TOP-1) accuracy for the multiclass case
 
@@ -135,7 +141,7 @@ def accuracy(output, target, log_probs, logits):
         return accuracy_score(y_true=target, y_pred=pred)
 
 
-def balanced_accuracy(output, target, log_probs, logits):
+def sk_balanced_accuracy(output, target, log_probs, logits):
     """
     Compute the balanced accuracy.
 
@@ -164,7 +170,7 @@ def balanced_accuracy(output, target, log_probs, logits):
         return balanced_accuracy_score(y_true=target, y_pred=pred)
 
 
-def top_k_acc(output, target, labels, k=3):
+def sk_top_k_acc(output, target, labels, k=3):
     """
     Calculates the TOP-k accuracy for the multiclass case
     A prediction is considered correct when the true label is associated with one of the k highest predicted scores
@@ -183,66 +189,56 @@ def top_k_acc(output, target, labels, k=3):
         return top_k_accuracy_score(y_true=target, y_score=output, k=k, labels=labels)
 
 
-def micro_f1(output, target, log_probs, logits, labels):
+def micro_sk_f1(output, target, log_probs, logits, labels):
     """See documentation for _f1
     Compute the f1-score using the global count of true positives / false negatives, etc.
     (Sums the number of true positives / false negatives for each class).
     """
-    return _f1(output, target, log_probs, logits, labels, "micro")
+    return _sk_f1(output, target, log_probs, logits, labels, "micro")
 
 
-def macro_f1(output, target, log_probs, logits, labels):
+def macro_sk_f1(output, target, log_probs, logits, labels):
     """See documentation for _f1
     Takes the average of the f1-score for each class: that's the avg / total result
     """
-    return _f1(output, target, log_probs, logits, labels, "macro")
+    return _sk_f1(output, target, log_probs, logits, labels, "macro")
 
 
-def weighted_f1(output, target, log_probs, logits, labels):
+def weighted_sk_f1(output, target, log_probs, logits, labels):
     """See documentation for _f1
     Compute a weighted average of the f1-score.
     Weights the f1-score by the support of the class:
     the more elements a class has, the more important the f1-score for this class in the computation.
     """
-    return _f1(output, target, log_probs, logits, labels, "weighted")
+    return _sk_f1(output, target, log_probs, logits, labels, "weighted")
 
 
-def class_wise_f1(output, target, log_probs, logits, labels):
+def class_wise_sk_f1(output, target, log_probs, logits, labels):
     """See documentation for _f1 """
-    return _f1(output, target, log_probs, logits, labels, None)
+    return _sk_f1(output, target, log_probs, logits, labels, None)
 
 
-def macro_roc_auc_ovo(output, target, log_probs, logits, labels):
+def macro_sk_roc_auc_ovo(output, target, log_probs, logits, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, target, log_probs, logits, labels, "macro", "ovo")
+    return _sk_roc_auc(output, target, log_probs, logits, labels, "macro", "ovo")
 
 
-def weighted_roc_auc_ovo(output, target, log_probs, logits, labels):
+def weighted_sk_roc_auc_ovo(output, target, log_probs, logits, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, target, log_probs, logits, labels, "weighted", "ovo")
+    return _sk_roc_auc(output, target, log_probs, logits, labels, "weighted", "ovo")
 
 
-# def class_wise_roc_auc_ovo(output, target, log_probs, logits, labels):
-#     """See documentation for _roc_auc """
-#     return _roc_auc(output, target, log_probs, logits, labels, None, "ovo")
-#
-#
-# def class_wise_roc_auc_ovr(output, target, log_probs, logits, labels):
-#     """See documentation for _roc_auc """
-#     return _roc_auc(output, target, log_probs, logits, labels, None, "ovr")
-
-
-def macro_roc_auc_ovr(output, target, log_probs, logits, labels):
+def macro_sk_roc_auc_ovr(output, target, log_probs, logits, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, target, log_probs, logits, labels, "macro", "ovr")
+    return _sk_roc_auc(output, target, log_probs, logits, labels, "macro", "ovr")
 
 
-def weighted_roc_auc_ovr(output, target, log_probs, logits, labels):
+def weighted_sk_roc_auc_ovr(output, target, log_probs, logits, labels):
     """See documentation for _roc_auc """
-    return _roc_auc(output, target, log_probs, logits, labels, "weighted", "ovr")
+    return _sk_roc_auc(output, target, log_probs, logits, labels, "weighted", "ovr")
 
 
-def overall_confusion_matrix(output, target, log_probs, logits, labels):
+def overall_confusion_matrix_sk(output, target, log_probs, logits, labels):
     """
         Creates a num_labels x num_labels sized confusion matrix whose i-th row and j-th column entry indicates
         the number of samples with true label being i-th class and predicted label being j-th class
@@ -268,7 +264,7 @@ def overall_confusion_matrix(output, target, log_probs, logits, labels):
         return df_cm
 
 
-def class_wise_confusion_matrices_single_label(output, target, log_probs, logits, labels):
+def class_wise_confusion_matrices_single_label_sk(output, target, log_probs, logits, labels):
     """
     Creates a 2x2 confusion matrix per class contained in labels
     CM(0,0) -> TN, CM(1,0) -> FN, CM(0,1) -> FP, CM(1,1) -> TP
@@ -298,6 +294,20 @@ def class_wise_confusion_matrices_single_label(output, target, log_probs, logits
                              for idx in range(0, len(class_wise_cms))]
         return df_class_wise_cms
 
+
+def sk_classification_summary(output, target, log_probs, logits, labels, output_dict,
+                              target_names=["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]):
+    with torch.no_grad():
+        assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
+        if log_probs:
+            pred = _convert_log_probs_to_prediction(output)
+        else:
+            pred = _convert_logits_to_prediction(output)
+        assert pred.shape[0] == len(target)
+        return classification_report(y_true=target, y_pred=pred, labels=labels, digits=3, target_names=target_names,
+                                     output_dict=output_dict)
+
+# ----------------------------------- Further Metrics -----------------------------------------------
 
 def cpsc_score(output, target, log_probs, logits):
     '''
@@ -414,17 +424,105 @@ def cpsc_score(output, target, log_probs, logits):
         return F1, Faf, Fblock, Fpc, Fst
 
 
-def classification_summary(output, target, log_probs, logits, labels, output_dict,
-                           target_names=["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]):
+# ----------------------------------- TORCHMETRICS -----------------------------------------------
+
+
+def _torch_precision(output, target, log_probs, logits, labels, average):
     with torch.no_grad():
         assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
+
         if log_probs:
             pred = _convert_log_probs_to_prediction(output)
         else:
             pred = _convert_logits_to_prediction(output)
+
         assert pred.shape[0] == len(target)
-        return classification_report(y_true=target, y_pred=pred, labels=labels, digits=3, target_names=target_names,
-                                     output_dict=output_dict)
+        precision = Precision(num_classes=len(labels), average=average)
+        return precision(pred, target)
+
+
+def _torch_roc_auc(output, target, log_probs, logits, labels, average):
+    """
+    The following parameter description applies for the multiclass case
+    For non-binary input, if the preds and target tensor have the same size the input will be interpretated as
+    multilabel and if preds have one dimension more than the target tensor the input will be interpretated as multiclass.
+    :param output: (N, C, ...) (multiclass) tensor with probabilities, where C is the number of classes.
+    :param log_probs: If the outputs are log softmax probs and do NOT necessarily sum to 1, set param to True
+    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
+    :param target: (N, ...) or (N, C, ...) with integer labels
+    :param labels: List of labels that index the classes in output
+    :param average: Either ‘macro’, ‘weighted’ or None (´micro' only works for multilabel)
+        None:       The scores for each class are returned
+        ‘macro’:    Computes metric for each class and uniformly averages them
+        ‘weighted’: Computes metric for each class and does a weighted-average, where each class is weighted by
+                    their support (accounts for class imbalance)
+    :return: Area Under the Receiver Operating Characteristic Curve (ROC AUC) for the multiclass case
+    """
+    with torch.no_grad():
+        # In the multiclass case, y_score corresponds to an array of shape (n_samples, n_classes) of class
+        # estimates. The class estimates must sum to 1 across the possible classes
+        assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
+        # In both cases, the scores do not sum to one
+        # Either they are logmax outputs or logits, so transform them
+        softmax_probs = torch.nn.functional.softmax(output, dim=1)
+
+        assert softmax_probs.shape[0] == len(target)
+        auroc = AUROC(num_classes=len(labels), average=average)
+        return auroc(softmax_probs, target)
+
+
+def _torch_f1(output, target, log_probs, logits, labels, average):
+    """
+    The following parameter description applies for the multiclass case
+    :param output: (N, C, ...), accepts logits or probabilities from a model output or integer class values
+    :param log_probs: If the outputs are log softmax probs and do NOT necessarily sum to 1, set param to True
+    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
+    :param target: dimension= (N) (long tensor)
+    :param labels: Needed for multiclass targets. List of labels that index the classes in output
+    :param average: Either ‘macro’,´micro', ‘weighted’, 'samples' or None
+    :return: F1 score for the multilabel case
+    """
+    with torch.no_grad():
+        assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
+        # If preds has an extra dimension as in the case of multi-class scores we perform an argmax on dim=1.
+        # Hence it should be possible to pass the raw logits or logsoftmax scores
+        # In practice, an error is raised ("The highest label in `preds` should be smaller than `num_classes`.) because
+        # it is checked BEFORE the argmax, i.e., on the logits
+        softmax_probs = torch.nn.functional.softmax(output, dim=1)
+        # Instead of probs, the converted integer values can also be passed, i.e., _convert_logits_to_prediction(output)
+        f1 = F1(num_classes=len(labels), average=average)
+        return f1(softmax_probs, target)
+
+
+def weighted_torch_f1(output, target, log_probs, logits, labels):
+    """See documentation for _torch_f1 """
+    return _torch_f1(output, target, log_probs, logits, labels, average="weighted")
+
+
+def class_wise_torch_f1(output, target, log_probs, logits, labels):
+    """See documentation for _torch_f1 """
+    return _torch_f1(output, target, log_probs, logits, labels, average=None)
+
+
+def weighted_torch_roc_auc(output, target, log_probs, logits, labels):
+    """See documentation for _torch_auc """
+    # Seems to be consistent to sklearn's 'weighted_roc_auc_ovr', may differ from 'weighted_roc_auc_ovo',
+    return _torch_roc_auc(output, target, log_probs, logits, labels, average="weighted")
+
+
+def class_wise_torch_roc_auc(output, target, log_probs, logits, labels):
+    """See documentation for _torch_auc """
+    return _torch_roc_auc(output, target, log_probs, logits, labels, average=None)
+
+
+def class_wise_torch_precision(output, target, log_probs, logits, labels):
+    """See documentation for _torch_auc """
+    return _torch_precision(output, target, log_probs, logits, labels, average=None)
+
+
+def weighted_torch_precision(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_precision """
+    return _torch_precision(output, target, sigmoid_probs, logits, labels, average='weighted')
 
 
 if __name__ == '__main__':
@@ -438,5 +536,5 @@ if __name__ == '__main__':
 
     test = roc_auc_score(y_true=target, y_score=output, labels=[0,1,2,3,4,5,6,7,8], average=None, multi_class="ovo")
 
-    print("Finihed")
+    print("Finished")
 

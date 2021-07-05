@@ -16,8 +16,8 @@ from torch.profiler import tensorboard_trace_handler
 
 from base import BaseTrainer
 from model import multi_label_metrics, single_label_metrics
-from model.multi_label_metrics import class_wise_confusion_matrices_multi_label, THRESHOLD
-from model.single_label_metrics import class_wise_confusion_matrices_single_label, overall_confusion_matrix
+from model.multi_label_metrics import class_wise_confusion_matrices_multi_label_sk, THRESHOLD
+from model.single_label_metrics import class_wise_confusion_matrices_single_label_sk, overall_confusion_matrix_sk
 from utils import inf_loop, plot_grad_flow_lines, plot_grad_flow_bars
 from utils.tracker import MetricTracker, ConfusionMatrixTracker
 
@@ -477,24 +477,24 @@ class ECGTrainer(BaseTrainer):
 
     def _do_cm_updates(self, cm_tracker, output, target):
         if not self.multi_label_training:
-            upd_cm = overall_confusion_matrix(output=output,
-                                              target=target,
-                                              log_probs=self._param_dict['log_probs'],
-                                              logits=self._param_dict['logits'],
-                                              labels=self._param_dict['labels'])
+            upd_cm = overall_confusion_matrix_sk(output=output,
+                                                 target=target,
+                                                 log_probs=self._param_dict['log_probs'],
+                                                 logits=self._param_dict['logits'],
+                                                 labels=self._param_dict['labels'])
             cm_tracker.update_cm(upd_cm)
-            upd_class_wise_cms = class_wise_confusion_matrices_single_label(output=output,
-                                                                            target=target,
-                                                                            log_probs=self._param_dict['log_probs'],
-                                                                            logits=self._param_dict['logits'],
-                                                                            labels=self._param_dict['labels'])
+            upd_class_wise_cms = class_wise_confusion_matrices_single_label_sk(output=output,
+                                                                               target=target,
+                                                                               log_probs=self._param_dict['log_probs'],
+                                                                               logits=self._param_dict['logits'],
+                                                                               labels=self._param_dict['labels'])
         else:
-            upd_class_wise_cms = class_wise_confusion_matrices_multi_label(output=output,
-                                                                           target=target,
-                                                                           sigmoid_probs=self._param_dict[
+            upd_class_wise_cms = class_wise_confusion_matrices_multi_label_sk(output=output,
+                                                                              target=target,
+                                                                              sigmoid_probs=self._param_dict[
                                                                                'sigmoid_probs'],
-                                                                           logits=self._param_dict['logits'],
-                                                                           labels=self._param_dict['labels'])
+                                                                              logits=self._param_dict['logits'],
+                                                                              labels=self._param_dict['labels'])
         cm_tracker.update_class_wise_cms(upd_class_wise_cms)
 
     def _handle_cm_at_epoch_end(self, cm_tracker, epoch, det_outputs, det_targets, str_mode):
@@ -513,17 +513,17 @@ class ECGTrainer(BaseTrainer):
 
     def _create_report_summary(self, det_outputs, det_targets, epoch):
         if self.multi_label_training:
-            summary_dict = multi_label_metrics.classification_summary(output=det_outputs, target=det_targets,
-                                                                      sigmoid_probs=self._param_dict["sigmoid_probs"],
-                                                                      logits=self._param_dict["logits"],
-                                                                      labels=self._param_dict["labels"],
-                                                                      output_dict=True)
+            summary_dict = multi_label_metrics.sk_classification_summary(output=det_outputs, target=det_targets,
+                                                                         sigmoid_probs=self._param_dict["sigmoid_probs"],
+                                                                         logits=self._param_dict["logits"],
+                                                                         labels=self._param_dict["labels"],
+                                                                         output_dict=True)
         else:
-            summary_dict = single_label_metrics.classification_summary(output=det_outputs, target=det_targets,
-                                                                       log_probs=self._param_dict["log_probs"],
-                                                                       logits=self._param_dict["logits"],
-                                                                       labels=self._param_dict["labels"],
-                                                                       output_dict=True)
+            summary_dict = single_label_metrics.sk_classification_summary(output=det_outputs, target=det_targets,
+                                                                          log_probs=self._param_dict["log_probs"],
+                                                                          logits=self._param_dict["logits"],
+                                                                          labels=self._param_dict["labels"],
+                                                                          output_dict=True)
 
         return "Summary Report for Epoch " + str(epoch) + ":\n" + pd.DataFrame(summary_dict).to_string()
 

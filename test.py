@@ -15,10 +15,9 @@ from tqdm import tqdm
 
 import data_loader.data_loaders as module_data
 import model.loss as module_loss
-from logger import TensorboardWriter
 from model import multi_label_metrics, single_label_metrics
-from model.multi_label_metrics import class_wise_confusion_matrices_multi_label, THRESHOLD
-from model.single_label_metrics import overall_confusion_matrix, class_wise_confusion_matrices_single_label
+from model.multi_label_metrics import class_wise_confusion_matrices_multi_label_sk, THRESHOLD
+from model.single_label_metrics import overall_confusion_matrix_sk, class_wise_confusion_matrices_single_label_sk
 from parse_config import ConfigParser
 
 # fix random seeds for reproducibility
@@ -60,7 +59,7 @@ def main(config):
 
     # Load the model from the checkpoint
     logger.info('Loading checkpoint: {} ...'.format(config.resume))
-    checkpoint = torch.load(config.resume)
+    checkpoint = torch.load(config.resume, map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
     state_dict = checkpoint['state_dict']
     if config['n_gpu'] > 1:
         model = torch.nn.DataParallel(model)
@@ -73,7 +72,7 @@ def main(config):
 
     # get function handles of loss and metrics
     # Important: The method config['loss'] must exist in the loss module (<module 'model.loss' >)
-    # Equivalently, all metrics specified in the context must exist in the metrics modul
+    # Equivalently, all metrics specified in the context must exist in the metrics module
     loss_fn = getattr(module_loss, config['loss']['type'])
     # if config['arch']['args']['multi_label_training']:
     #     metrics_iter = [getattr(module_metric, met) for met in config['metrics']['ml']['per_iteration'].keys()]
@@ -88,21 +87,32 @@ def main(config):
 
     # HARD-CODE the metrics to calc here
     if config['arch']['args']['multi_label_training']:
-        metrics_iter = [getattr(module_metric, met) for met in ['subset_accuracy']]
-        metrics_epoch = [getattr(module_metric, met) for met in ['cpsc_score', 'weighted_f1', 'weighted_roc_auc']]
-        metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_f1', 'class_wise_roc_auc']]
+        metrics_iter = [getattr(module_metric, met) for met in ['sk_subset_accuracy']]
+        metrics_epoch = [getattr(module_metric, met) for met in ['cpsc_score',
+                                                                 'weighted_sk_f1', 'weighted_torch_f1',
+                                                                 'weighted_sk_roc_auc', 'weighted_torch_roc_auc',
+                                                                 'weighted_torch_precision']]
+        metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_sk_f1', 'class_wise_torch_f1',
+                                                                            'class_wise_sk_roc_auc', 'class_wise_torch_roc_auc',
+                                                                            'class_wise_torch_precision']]
     else:
-        metrics_iter = [getattr(module_metric, met) for met in ['accuracy']]
-        metrics_epoch = [getattr(module_metric, met) for met in ['cpsc_score', 'weighted_f1']]
-        metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_f1']]
+        metrics_iter = [getattr(module_metric, met) for met in ['sk_accuracy']]
+        metrics_epoch = [getattr(module_metric, met) for met in ['cpsc_score',
+                                                                 'weighted_sk_f1', 'weighted_torch_f1',
+                                                                 'weighted_sk_roc_auc_ovr', 'weighted_sk_roc_auc_ovo',
+                                                                 'weighted_torch_roc_auc',
+                                                                 'weighted_torch_precision']]
+        metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_sk_f1', 'class_wise_torch_f1',
+                                                                            'class_wise_torch_roc_auc',
+                                                                            'class_wise_torch_precision']]
 
     multi_label_training = config['arch']['args']['multi_label_training']
     class_labels = data_loader.dataset.class_labels
 
-    total_loss = 0.0
-    total_metrics_iter = torch.zeros(len(metrics_iter))
-    total_metrics_epoch = torch.zeros(len(metrics_epoch))
-    total_metrics_epoch_class_wise = torch.zeros(len(metrics_epoch_class_wise))
+    # total_loss = 0.0
+    # total_metrics_iter = torch.zeros(len(metrics_iter))
+    # total_metrics_epoch = torch.zeros(len(metrics_epoch))
+    # total_metrics_epoch_class_wise = torch.zeros(len(metrics_epoch_class_wise))
 
     # Store potential parameters needed for metrics
     _param_dict = {
@@ -119,10 +129,10 @@ def main(config):
     }
 
     # Setup visualization writer instance
-    writer = TensorboardWriter(config.test_output_dir, logger, config['trainer']['tensorboard'])
+    # writer = TensorboardWriter(config.test_output_dir, logger, config['trainer']['tensorboard'])
 
     # Set up confusion matrices tracker
-    cm_tracker = ConfusionMatrixTracker(*class_labels, writer=writer,
+    cm_tracker = ConfusionMatrixTracker(*class_labels, writer=None,
                                         multi_label_training=multi_label_training)
 
     # Set up metric tracker
@@ -132,7 +142,7 @@ def main(config):
     metric_tracker = MetricTracker(keys_iter=['loss'] + keys_iter, keys_epoch=keys_epoch,
                                    keys_epoch_class_wise=keys_epoch_class_wise,
                                    labels=class_labels,
-                                   writer=writer)
+                                   writer=None)
 
     with torch.no_grad():
 
@@ -178,8 +188,8 @@ def main(config):
                 param_name: _param_dict[param_name] for param_name in additional_args
             }
             loss = loss_fn(output=output, target=target, **additional_kwargs)
-            batch_size = data.shape[0]
-            total_loss += loss.item() * batch_size
+            # batch_size = data.shape[0]
+            # total_loss += loss.item() * batch_size
             metric_tracker.iter_update('loss', loss.item(), n=output.shape[0])
 
             # Compute the the iteration-based metrics on test set
@@ -193,14 +203,14 @@ def main(config):
                 }
                 metric_tracker.iter_update(met.__name__, met(target=detached_target, output=detached_output,
                                                              **additional_kwargs), n=output.shape[0])
-                total_metrics_iter[i] += met(output=detached_output, target=detached_target,
-                                             **additional_kwargs) * batch_size
+                # total_metrics_iter[i] += met(output=detached_output, target=detached_target,
+                #                              **additional_kwargs) * batch_size
 
-    n_samples = len(data_loader.sampler)
-    log = {'loss': total_loss / n_samples}
-    log.update({
-        met.__name__: total_metrics_iter[i].item() / n_samples for i, met in enumerate(metrics_iter)
-    })
+    # n_samples = len(data_loader.sampler)
+    # log = {'loss': total_loss / n_samples}
+    # log.update({
+    #     met.__name__: total_metrics_iter[i].item() / n_samples for i, met in enumerate(metrics_iter)
+    # })
 
     # Get detached tensors from the list for further evaluation
     # For this, create a tensor from the dynamically filled list
@@ -242,30 +252,30 @@ def main(config):
                                                                      **additional_kwargs))
 
     # ------------ Confusion matrices ------------------------
-    # Dump the confusion matrices into a pickle file and send them to the writer
+    # Dump the confusion matrices into a pickle file and write figures of them to file
     # 1) Update the confusion matrices maintained by the ClassificationTracker
     if not multi_label_training:
-        upd_cm = overall_confusion_matrix(output=det_outputs,
-                                          target=det_targets,
-                                          log_probs=_param_dict['log_probs'],
-                                          logits=_param_dict['logits'],
-                                          labels=_param_dict['labels'])
+        upd_cm = overall_confusion_matrix_sk(output=det_outputs,
+                                             target=det_targets,
+                                             log_probs=_param_dict['log_probs'],
+                                             logits=_param_dict['logits'],
+                                             labels=_param_dict['labels'])
         cm_tracker.update_cm(upd_cm)
-        upd_class_wise_cms = class_wise_confusion_matrices_single_label(output=det_outputs,
-                                                                        target=det_targets,
-                                                                        log_probs=_param_dict['log_probs'],
-                                                                        logits=_param_dict['logits'],
-                                                                        labels=_param_dict['labels'])
+        upd_class_wise_cms = class_wise_confusion_matrices_single_label_sk(output=det_outputs,
+                                                                           target=det_targets,
+                                                                           log_probs=_param_dict['log_probs'],
+                                                                           logits=_param_dict['logits'],
+                                                                           labels=_param_dict['labels'])
     else:
-        upd_class_wise_cms = class_wise_confusion_matrices_multi_label(output=det_outputs,
-                                                                       target=det_targets,
-                                                                       sigmoid_probs=_param_dict[
+        upd_class_wise_cms = class_wise_confusion_matrices_multi_label_sk(output=det_outputs,
+                                                                          target=det_targets,
+                                                                          sigmoid_probs=_param_dict[
                                                                            'sigmoid_probs'],
-                                                                       logits=_param_dict['logits'],
-                                                                       labels=_param_dict['labels'])
+                                                                          logits=_param_dict['logits'],
+                                                                          labels=_param_dict['labels'])
     cm_tracker.update_class_wise_cms(upd_class_wise_cms)
-    # 2) Explicitly send the confusion matrices to the SummaryWriter/TensorboardWriter
-    cm_tracker.send_cms_to_writer(epoch=0)
+    # 2) Explicitly write a plot of the confusion matrices to a file
+    cm_tracker.save_result_cms_to_file(config.test_output_dir)
     # Moreover, save them as pickle
     path_name = os.path.join(config.test_output_dir, "cms_test_model.p")
     with open(path_name, 'wb') as cm_file:
@@ -284,8 +294,8 @@ def main(config):
         pred_classes = torch.argmax(det_outputs, dim=1)
         classes = torch.nn.functional.one_hot(pred_classes, len(class_labels))
 
-    # Create the figure
-    str_mode = "Test"
+    # Create the figure and write it to a file
+    str_mode = "Test" if 'test' in str(config.test_output_dir).lower() else "Validation"
     fig_output_classes, ax = plt.subplots(figsize=(10, 20))
     # Define the colors
     colors = ["lightgray", "gray"]
@@ -297,79 +307,77 @@ def main(config):
     colorbar.set_ticks([0.25, 0.75])
     colorbar.set_ticklabels(['0', '1'])
     ax.set_xlabel("Class ID")
-    ax.set_ylabel(str(str_mode).capitalize() + "Test Sample ID")
-    writer.add_figure("Predicted output class(es) per " + str(str_mode).lower() + " sample",
-                           ax.get_figure(), global_step=0)
+    ax.set_ylabel(str(str_mode).capitalize() + " Sample ID")
+    fig_output_classes.savefig(os.path.join(config.test_output_dir, "Predicted_classes.pdf"))
     fig_output_classes.clear()
     plt.close(fig_output_classes)
 
     # ------------------- Summary Report -------------------
     if multi_label_training:
-        summary_dict = multi_label_metrics.classification_summary(output=det_outputs, target=det_targets,
-                                                                  sigmoid_probs=_param_dict["sigmoid_probs"],
-                                                                  logits=_param_dict["logits"],
-                                                                  labels=_param_dict["labels"],
-                                                                  output_dict=True)
+        summary_dict = multi_label_metrics.sk_classification_summary(output=det_outputs, target=det_targets,
+                                                                     sigmoid_probs=_param_dict["sigmoid_probs"],
+                                                                     logits=_param_dict["logits"],
+                                                                     labels=_param_dict["labels"],
+                                                                     output_dict=True)
     else:
-        summary_dict = single_label_metrics.classification_summary(output=det_outputs, target=det_targets,
-                                                                   log_probs=_param_dict["log_probs"],
-                                                                   logits=_param_dict["logits"],
-                                                                   labels=_param_dict["labels"],
-                                                                   output_dict=True)
+        summary_dict = single_label_metrics.sk_classification_summary(output=det_outputs, target=det_targets,
+                                                                      log_probs=_param_dict["log_probs"],
+                                                                      logits=_param_dict["logits"],
+                                                                      labels=_param_dict["labels"],
+                                                                      output_dict=True)
 
     # ------------------------------------Final Test Steps ---------------------------------------------
-    df_summary = pd.DataFrame.from_dict(summary_dict)
-    df_class_wise_metrics = pd.DataFrame(
+    df_sklearn_summary = pd.DataFrame.from_dict(summary_dict)
+    df_metric_results = metric_tracker.result(include_epoch_metrics=True)
+
+
+    df_class_wise_results = pd.DataFrame(
         columns=['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'weighted avg'])
-    df_class_wise_metrics = pd.concat([df_class_wise_metrics, df_summary[
+    df_class_wise_results = pd.concat([df_class_wise_results, df_sklearn_summary[
         ['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'weighted avg']]])
 
-    test_log = metric_tracker.result(include_epoch_metrics=True)
-
-    new_log = test_log.loc[test_log.index.str.startswith(('class_wise', 'weighted'))]['mean'].to_frame()
-    new_log.index = new_log.index.set_names('metric')
-    new_log.reset_index(inplace=True)
-    # new_log['metric'] = new_log['metric'].apply(lambda x: str(x).replace("class_wise_", "").replace("_class", ""))
+    df_class_wise_metrics = df_metric_results.loc[df_metric_results.index.str.startswith(('class_wise', 'weighted'))]['mean'].to_frame()
+    df_class_wise_metrics.index = df_class_wise_metrics.index.set_names('metric')
+    df_class_wise_metrics.reset_index(inplace=True)
+    # df_class_wise_metrics['metric'] = df_class_wise_metrics['metric'].apply(lambda x: str(x).replace("class_wise_", "").replace("_class", ""))
 
     metric_names = [met.__name__.replace("class_wise_", "") for met in metrics_epoch_class_wise]
     for metric_name in metric_names:
-        temp_df = new_log.loc[new_log.metric.str.contains((metric_name))].transpose()
-        temp_df = temp_df.rename(columns=temp_df.iloc[0]).drop(temp_df.index[0])
-        temp_df.rename(index={'mean': metric_name}, inplace=True)
-        cols = temp_df.columns.tolist()
+        df_temp = df_class_wise_metrics.loc[df_class_wise_metrics.metric.str.contains(metric_name)].transpose()
+        df_temp = df_temp.rename(columns=df_temp.iloc[0]).drop(df_temp.index[0])
+        df_temp.rename(index={'mean': metric_name}, inplace=True)
+        cols = df_temp.columns.tolist()
         cols.append(cols.pop(0))
-        temp_df = temp_df[cols]
-        temp_df.columns = df_class_wise_metrics.columns
-        df_class_wise_metrics=pd.concat([df_class_wise_metrics, temp_df], axis=0)
+        df_temp = df_temp[cols]
+        df_temp.columns = df_class_wise_results.columns
+        df_class_wise_results = pd.concat([df_class_wise_results, df_temp], axis=0)
 
-    idx = df_class_wise_metrics.index.drop('support').tolist() + ['support']
-    df_class_wise_metrics = df_class_wise_metrics.reindex(idx)
+    idx = df_class_wise_results.index.drop('support').tolist() + ['support']
+    df_class_wise_results = df_class_wise_results.reindex(idx)
+    df_class_wise_results.loc['support'] = df_class_wise_results.loc['support'].apply(int)
 
-    df_single_metrics = test_log.loc[~test_log.index.str.startswith(('class_wise', 'weighted'))]['mean'].to_frame().transpose().rename(index={'mean': 'value'}, inplace=True)
-    df_single_metrics.rename(index={'mean': 'value'}, inplace=True)
+    df_single_metric_results = df_metric_results.loc[~df_metric_results.index.str.startswith(
+        ('class_wise', 'weighted'))]['mean'].to_frame().transpose()
+    df_single_metric_results.rename(index={'mean': 'value'}, inplace=True)
 
     with open(os.path.join(config.test_output_dir,'eval_class_wise.p'), 'wb') as file:
-        pickle.dump(df_class_wise_metrics, file)
+        pickle.dump(df_class_wise_results, file)
 
     with open(os.path.join(config.test_output_dir,'eval_single_metrics.p'), 'wb') as file:
-        pickle.dump(df_single_metrics, file)
+        pickle.dump(df_single_metric_results, file)
 
     with open(os.path.join(config.test_output_dir, 'eval_results.tex'), 'a') as file:
-        df_class_wise_metrics.to_latex(buf=file, index=True,  bold_rows=True, float_format="{:0.3f}".format)
-        df_single_metrics.to_latex(buf=file, index=True,  bold_rows=True, float_format="{:0.3f}".format)
+        df_class_wise_results.to_latex(buf=file, index=True,  bold_rows=True, float_format="{:0.3f}".format)
+        df_single_metric_results.to_latex(buf=file, index=True,  bold_rows=True, float_format="{:0.3f}".format)
 
-
-
-
-    final_log = pd.concat(pd.DataFrame.from_dict(log), test_log)
-    final_log = pd.concat(pd.DataFrame.from_dict(summary_dict), final_log)
     end = time.time()
     ty_res = time.gmtime(end - start)
     res = time.strftime("%H hours, %M minutes, %S seconds", ty_res)
 
-    epoch_log = {'Runtime': res}
-    epoch_info = ', '.join(f"{key}: {value}" for key, value in epoch_log.items())
-    logger_info = f"{epoch_info}\n{final_log}\n"
+    eval_log = {'Runtime': res}
+    eval_info_single_metrics = ', '.join(f"{key}: {str(value).split('Name')[0].split('value')[1]}" for key, value in df_single_metric_results.items())
+    eval_info_class_wise_metrics = ', '.join(f"{key}: {value}" for key, value in df_class_wise_results.items())
+    logger_info = f"{eval_log}\n{eval_info_single_metrics}\n{eval_info_class_wise_metrics}\n"
     logger.info(logger_info)
 
 
