@@ -15,9 +15,9 @@ from tqdm import tqdm
 
 import data_loader.data_loaders as module_data
 import model.loss as module_loss
-from model import multi_label_metrics, single_label_metrics
-from model.multi_label_metrics import class_wise_confusion_matrices_multi_label_sk, THRESHOLD
-from model.single_label_metrics import overall_confusion_matrix_sk, class_wise_confusion_matrices_single_label_sk
+from evaluation import multi_label_metrics, single_label_metrics
+from evaluation.multi_label_metrics import class_wise_confusion_matrices_multi_label_sk, THRESHOLD
+from evaluation.single_label_metrics import overall_confusion_matrix_sk, class_wise_confusion_matrices_single_label_sk
 from parse_config import ConfigParser
 
 # fix random seeds for reproducibility
@@ -38,9 +38,9 @@ def main(config):
         import model.baseline_model_variableConvs as module_arch
 
     if config['arch']['args']['multi_label_training']:
-        import model.multi_label_metrics as module_metric
+        import evaluation.multi_label_metrics as module_metric
     else:
-        import model.single_label_metrics as module_metric
+        import evaluation.single_label_metrics as module_metric
 
     logger = config.get_logger('test')
 

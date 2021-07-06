@@ -69,6 +69,7 @@ class BaseTrainer:
         Full training logic
         """
         not_improved_count = 0
+        epoch_idx_best = 0
         for epoch in range(self.start_epoch, self.epochs + 1):
             # train_log is a df
             train_log = self._train_epoch(epoch)
@@ -92,6 +93,7 @@ class BaseTrainer:
                     log_best = log_mean
                     not_improved_count = 0
                     best = True
+                    epoch_idx_best = epoch
                 else:
                     not_improved_count += 1
                     self.logger.info("Not improved for " + str(not_improved_count) + " epochs")
@@ -99,6 +101,7 @@ class BaseTrainer:
                 if not_improved_count > self.early_stop:
                     self.logger.info("Validation performance didn\'t improve for {} epochs. "
                                      "Training stops.".format(self.early_stop))
+                    self.logger.info("Best Validation performance achieved in epoch {}.".format(epoch_idx_best))
                     break
 
             if epoch % self.save_period == 0:

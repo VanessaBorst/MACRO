@@ -5,7 +5,6 @@ import time
 from contextlib import nullcontext
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import seaborn as sns
 import torch
@@ -15,9 +14,9 @@ from torch._C._autograd import ProfilerActivity
 from torch.profiler import tensorboard_trace_handler
 
 from base import BaseTrainer
-from model import multi_label_metrics, single_label_metrics
-from model.multi_label_metrics import class_wise_confusion_matrices_multi_label_sk, THRESHOLD
-from model.single_label_metrics import class_wise_confusion_matrices_single_label_sk, overall_confusion_matrix_sk
+from evaluation import multi_label_metrics, single_label_metrics
+from evaluation.multi_label_metrics import class_wise_confusion_matrices_multi_label_sk, THRESHOLD
+from evaluation.single_label_metrics import class_wise_confusion_matrices_single_label_sk, overall_confusion_matrix_sk
 from utils import inf_loop, plot_grad_flow_lines, plot_grad_flow_bars
 from utils.tracker import MetricTracker, ConfusionMatrixTracker
 

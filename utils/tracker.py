@@ -7,8 +7,8 @@ import pandas as pd
 import seaborn as sns
 from torch.utils.tensorboard import SummaryWriter
 
-from model.multi_label_metrics import class_wise_confusion_matrices_multi_label_sk
-from model.single_label_metrics import overall_confusion_matrix_sk, class_wise_confusion_matrices_single_label_sk
+from evaluation.multi_label_metrics import class_wise_confusion_matrices_multi_label_sk
+from evaluation.single_label_metrics import overall_confusion_matrix_sk, class_wise_confusion_matrices_single_label_sk
 
 smooth = 0  # 1e-6
 

@@ -42,9 +42,9 @@ def main(config):
         import model.baseline_model_variableConvs as module_arch
 
     if config['arch']['args']['multi_label_training']:
-        import model.multi_label_metrics as module_metric
+        import evaluation.multi_label_metrics as module_metric
     else:
-        import model.single_label_metrics as module_metric
+        import evaluation.single_label_metrics as module_metric
 
     # config is of type parse_config.ConfigParser
     logger = config.get_logger('train')
