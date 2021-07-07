@@ -32,8 +32,18 @@ class ConfigParser:
         details = "_{}_bs{}{}".format("ml" if self.config['arch']['args']['multi_label_training'] else "sl",
                                       self.config['data_loader']['args']['batch_size'],
                                       self.config['run_details'])
-        self._save_dir = Path(os.path.join(get_project_root(), save_dir / 'models' / exper_name / str(run_id + details)))
-        self._log_dir = Path(os.path.join(get_project_root(), save_dir / 'log' / exper_name / str(run_id + details)))
+
+        # Training
+        if mode is None or mode=='train':
+            self._save_dir = Path(
+                os.path.join(get_project_root(), save_dir / 'models' / exper_name / str(run_id + details)))
+            self._log_dir = Path(
+                os.path.join(get_project_root(), save_dir / 'log' / exper_name / str(run_id + details)))
+        else:
+            self._save_dir=None
+            self._log_dir=None
+
+        # Testing
         if mode is not None and mode=='test':
             assert resume is not None, "checkpoint must be provided for testing"
             assert 'valid' in self.config['data_loader']['test_dir'].lower() or \
@@ -46,13 +56,16 @@ class ConfigParser:
 
         # make directory for saving checkpoints and log and test outputs (if needed).
         exist_ok = run_id == ''
-        self.save_dir.mkdir(parents=True, exist_ok=exist_ok)
-        self.log_dir.mkdir(parents=True, exist_ok=exist_ok)
+        if self._save_dir is not None:
+            self.save_dir.mkdir(parents=True, exist_ok=exist_ok)
+        if self._log_dir is not None:
+            self.log_dir.mkdir(parents=True, exist_ok=exist_ok)
         if self.test_output_dir is not None:
             self.test_output_dir.mkdir(parents=True, exist_ok=True)
 
         # save updated config file to the checkpoint dir
-        write_json(self.config, self.save_dir / 'config.json')
+        if self._save_dir is not None:
+            write_json(self.config, self.save_dir / 'config.json')
 
         # configure logging module
         setup_logging(self.log_dir)
@@ -156,7 +169,7 @@ class ConfigParser:
         return self._test_output_dir
 
     def _do_some_sanity_checks(self):
-        if self.config["loss"] == "BCE_with_logits" or self.config["loss"] == "balanced_BCE_with_logits":
+        if self.config["loss"]["type"] == "BCE_with_logits" or self.config["loss"]["type"] == "balanced_BCE_with_logits":
             assert self.config["arch"]["args"]["multi_label_training"] \
                    and not self.config["arch"]["args"]["apply_final_activation"] \
                    and not self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
@@ -164,7 +177,7 @@ class ConfigParser:
                    and self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
                                                                                     "fit to the rest of the " \
                                                                                     "configuration"
-        elif self.config["loss"] == "BCE":
+        elif self.config["loss"]["type"] == "BCE":
             assert self.config["arch"]["args"]["multi_label_training"] \
                    and self.config["arch"]["args"]["apply_final_activation"] \
                    and self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
@@ -172,7 +185,7 @@ class ConfigParser:
                    and not self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
                                                                                         "fit to the rest of the " \
                                                                                         "configuration "
-        elif self.config["loss"] == "nll_loss":
+        elif self.config["loss"]["type"] == "nll_loss":
             assert not self.config["arch"]["args"]["multi_label_training"] \
                    and self.config["arch"]["args"]["apply_final_activation"] \
                    and not self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
@@ -180,7 +193,7 @@ class ConfigParser:
                    and not self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
                                                                                         "fit to the rest of the " \
                                                                                         "configuration "
-        elif self.config["loss"] == "cross_entropy_loss":
+        elif self.config["loss"]["type"] == "cross_entropy_loss" or self.config["loss"]["type"] == "balanced_cross_entropy":
             assert not self.config["arch"]["args"]["multi_label_training"] \
                    and not self.config["arch"]["args"]["apply_final_activation"] \
                    and not self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \

@@ -52,7 +52,7 @@ def setup_logging(save_dir, log_config_path='logger/logger_config.json', default
         # modify logging paths based on run config
         for _, handler in config['handlers'].items():
             # Handlers send the log records (created by loggers) to the appropriate destination.
-            if 'filename' in handler:
+            if 'filename' in handler and save_dir is not None:
                 handler['filename'] = str(save_dir / handler['filename'])
 
         logging.config.dictConfig(config)

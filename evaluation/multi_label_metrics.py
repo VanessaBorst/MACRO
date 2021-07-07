@@ -356,7 +356,7 @@ def _convert_multi_label_logits_to_single_prediction(logits_output):
     softmax_probs = torch.nn.functional.softmax(logits_output, dim=1)
     # Should be the same as directly taking the maximum of raw logits
     assert (torch.argmax(softmax_probs, dim=1) == torch.argmax(logits_output, dim=1)).all()
-    assert torch.argmax(softmax_probs, dim=1) == torch.argmax(torch.nn.functional.sigmoid(logits_output, dim=1), dim=1)
+    assert (torch.argmax(softmax_probs, dim=1) == torch.argmax(torch.sigmoid(logits_output), dim=1)).all()
     return torch.argmax(softmax_probs, dim=1)
 
 
@@ -558,6 +558,11 @@ def _torch_accuracy(output, target, sigmoid_probs, logits, labels, average):
 def class_wise_torch_accuracy(output, target, sigmoid_probs, logits, labels):
     """See documentation for _torch_accuracy """
     return _torch_accuracy(output, target, sigmoid_probs, logits, labels, average=None)
+
+
+def weighted_torch_accuracy(output, target, log_probs, logits, labels):
+    """See documentation for _torch_accuracy """
+    return _torch_accuracy(output, target, log_probs, logits, labels, average="weighted")
 
 
 def weighted_torch_f1(output, target, sigmoid_probs, logits, labels):

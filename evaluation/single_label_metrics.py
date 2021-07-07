@@ -532,6 +532,11 @@ def class_wise_torch_accuracy(output, target, log_probs, logits, labels):
     return _torch_accuracy(output, target, log_probs, logits, labels, average=None)
 
 
+def weighted_torch_accuracy(output, target, log_probs, logits, labels):
+    """See documentation for _torch_accuracy """
+    return _torch_accuracy(output, target, log_probs, logits, labels, average="weighted")
+
+
 def weighted_torch_f1(output, target, log_probs, logits, labels):
     """See documentation for _torch_f1 """
     return _torch_f1(output, target, log_probs, logits, labels, average="weighted")

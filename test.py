@@ -91,7 +91,8 @@ def main(config):
         metrics_epoch = [getattr(module_metric, met) for met in ['cpsc_score',
                                                                  'weighted_sk_f1', 'weighted_torch_f1',
                                                                  'weighted_sk_roc_auc', 'weighted_torch_roc_auc',
-                                                                 'weighted_torch_precision']]
+                                                                 'weighted_torch_precision',
+                                                                 'weighted_torch_accuracy']]
         metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_sk_f1', 'class_wise_torch_f1',
                                                                             'class_wise_sk_roc_auc', 'class_wise_torch_roc_auc',
                                                                             'class_wise_torch_precision',
@@ -102,7 +103,8 @@ def main(config):
                                                                  'weighted_sk_f1', 'weighted_torch_f1',
                                                                  'weighted_sk_roc_auc_ovr', 'weighted_sk_roc_auc_ovo',
                                                                  'weighted_torch_roc_auc',
-                                                                 'weighted_torch_precision']]
+                                                                 'weighted_torch_precision',
+                                                                 'weighted_torch_accuracy']]
         metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_sk_f1', 'class_wise_torch_f1',
                                                                             'class_wise_torch_roc_auc',
                                                                             'class_wise_torch_precision',
