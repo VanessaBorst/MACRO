@@ -94,7 +94,8 @@ def main(config):
                                                                  'weighted_torch_precision']]
         metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_sk_f1', 'class_wise_torch_f1',
                                                                             'class_wise_sk_roc_auc', 'class_wise_torch_roc_auc',
-                                                                            'class_wise_torch_precision']]
+                                                                            'class_wise_torch_precision',
+                                                                            'class_wise_torch_accuracy']]
     else:
         metrics_iter = [getattr(module_metric, met) for met in ['sk_accuracy']]
         metrics_epoch = [getattr(module_metric, met) for met in ['cpsc_score',
@@ -104,7 +105,8 @@ def main(config):
                                                                  'weighted_torch_precision']]
         metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_sk_f1', 'class_wise_torch_f1',
                                                                             'class_wise_torch_roc_auc',
-                                                                            'class_wise_torch_precision']]
+                                                                            'class_wise_torch_precision',
+                                                                            'class_wise_torch_accuracy']]
 
     multi_label_training = config['arch']['args']['multi_label_training']
     class_labels = data_loader.dataset.class_labels

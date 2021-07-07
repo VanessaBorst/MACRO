@@ -24,3 +24,11 @@ print(torch.mul(gru_output, attention_weights))
 attention_out = (gru_output*attention_weights).sum(axis=1)
 print("Output:")
 print(attention_out)
+
+
+logits = torch.Tensor([[-1.99, 1.0, -2.34453, 7.3345],  [-2.99, 1.45, -6.34453, 2.4]])
+softmax_out = torch.nn.functional.softmax(logits, dim=1)
+logsoftmax_out = torch.nn.functional.log_softmax(logits, dim=1)
+recovered_softmax = torch.exp(logsoftmax_out)
+assert torch.isclose(softmax_out, recovered_softmax).all()
+

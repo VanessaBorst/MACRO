@@ -20,7 +20,7 @@ from sklearn.metrics import multilabel_confusion_matrix, \
 
 # Details:
 # https://datascience.stackexchange.com/questions/15989/micro-average-vs-macro-average-performance-in-a-multiclass-classification-settin/16001
-from torchmetrics import AUROC, F1, Precision
+from torchmetrics import AUROC, F1, Precision, Accuracy
 
 THRESHOLD = 0.5
 
@@ -356,6 +356,7 @@ def _convert_multi_label_logits_to_single_prediction(logits_output):
     softmax_probs = torch.nn.functional.softmax(logits_output, dim=1)
     # Should be the same as directly taking the maximum of raw logits
     assert (torch.argmax(softmax_probs, dim=1) == torch.argmax(logits_output, dim=1)).all()
+    assert torch.argmax(softmax_probs, dim=1) == torch.argmax(torch.nn.functional.sigmoid(logits_output, dim=1), dim=1)
     return torch.argmax(softmax_probs, dim=1)
 
 
@@ -531,6 +532,32 @@ def _torch_f1(output, target, sigmoid_probs, logits, labels, average):
         pred = output if sigmoid_probs else torch.sigmoid(output)
         f1 = F1(num_classes=len(labels), average=average, threshold=THRESHOLD)
         return f1(pred, target)
+
+
+def _torch_accuracy(output, target, sigmoid_probs, logits, labels, average):
+    """
+    The following parameter description applies for the multilabel case
+    :param output: (N, C, ...), accepts logits or probabilities from a model output or integer class values
+    :param sigmoid_probs: If the outputs are sigmoid probs and do NOT necessarily sum to 1, set param to True
+    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
+    :param target: dimension= (N) (long tensor)
+    :param labels: Needed for multiclass targets. List of labels that index the classes in output
+    :param average: Either ‘macro’,´micro', ‘weighted’, 'samples' or None
+    :return: F1 score for the multilabel case
+    """
+    with torch.no_grad():
+        assert sigmoid_probs ^ logits, "In the single-label case, exactly one of the two must be true"
+        # Function accepts logits or probabilities from a model output or integer class values in prediction.
+        # The default Threshold for transforming probability or logit predictions to binary (0,1) predictions,
+        # in the case of binary or multi-label inputs is 0.5 and corresponds to input being probabilities.
+        pred = output if sigmoid_probs else torch.sigmoid(output)
+        accuracy = Accuracy(num_classes=len(labels), average=average, threshold=THRESHOLD)
+        return accuracy(pred, target)
+
+
+def class_wise_torch_accuracy(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_accuracy """
+    return _torch_accuracy(output, target, sigmoid_probs, logits, labels, average=None)
 
 
 def weighted_torch_f1(output, target, sigmoid_probs, logits, labels):

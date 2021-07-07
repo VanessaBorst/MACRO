@@ -14,7 +14,7 @@ from sklearn.metrics import confusion_matrix, multilabel_confusion_matrix, \
 #       => Biases the classes towards the most populated class
 #       => Micro-Average Precision and Recall are the same values, therefore the MicroAverage F1-Score is also the same
 #           (and corresponds to the accuracy when all classes are considered)
-from torchmetrics import F1, Precision
+from torchmetrics import F1, Precision, Accuracy
 from torchmetrics.classification.auroc import AUROC
 
 
@@ -106,10 +106,15 @@ def _sk_roc_auc(output, target, log_probs, logits, labels, average, multi_class_
         assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
         # In both cases, the scores do not sum to one
         # Either they are logmax outputs or logits, so transform them
-        softmax_probs = torch.nn.functional.softmax(output, dim=1)
+        if logits:
+            # Apply softmax on the logits
+            probs = torch.nn.functional.softmax(output, dim=1)
+        else:
+            # Transform log(softmax(x)) to become softmax(x)
+            probs = torch.exp(output)
 
-        assert softmax_probs.shape[0] == len(target)
-        return roc_auc_score(y_true=target, y_score=softmax_probs, labels=labels, average=average,
+        assert probs.shape[0] == len(target)
+        return roc_auc_score(y_true=target, y_score=probs, labels=labels, average=average,
                              multi_class=multi_class_cfg)
 
 
@@ -426,7 +431,6 @@ def cpsc_score(output, target, log_probs, logits):
 
 # ----------------------------------- TORCHMETRICS -----------------------------------------------
 
-
 def _torch_precision(output, target, log_probs, logits, labels, average):
     with torch.no_grad():
         assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
@@ -464,11 +468,14 @@ def _torch_roc_auc(output, target, log_probs, logits, labels, average):
         assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
         # In both cases, the scores do not sum to one
         # Either they are logmax outputs or logits, so transform them
-        softmax_probs = torch.nn.functional.softmax(output, dim=1)
+        if logits:
+            probs = torch.nn.functional.softmax(output, dim=1)
+        else:
+            probs = torch.exp(output)
 
-        assert softmax_probs.shape[0] == len(target)
+        assert probs.shape[0] == len(target)
         auroc = AUROC(num_classes=len(labels), average=average)
-        return auroc(softmax_probs, target)
+        return auroc(probs, target)
 
 
 def _torch_f1(output, target, log_probs, logits, labels, average):
@@ -484,14 +491,45 @@ def _torch_f1(output, target, log_probs, logits, labels, average):
     """
     with torch.no_grad():
         assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
-        # If preds has an extra dimension as in the case of multi-class scores we perform an argmax on dim=1.
-        # Hence it should be possible to pass the raw logits or logsoftmax scores
-        # In practice, an error is raised ("The highest label in `preds` should be smaller than `num_classes`.) because
-        # it is checked BEFORE the argmax, i.e., on the logits
-        softmax_probs = torch.nn.functional.softmax(output, dim=1)
-        # Instead of probs, the converted integer values can also be passed, i.e., _convert_logits_to_prediction(output)
+        # Instead of probs, the converted integer values can be passed as well, i.e., _convert_logits_to_prediction(output)
+        if log_probs:
+            pred = _convert_log_probs_to_prediction(output)
+        else:
+            pred = _convert_logits_to_prediction(output)
+
+        assert pred.shape[0] == len(target)
+
         f1 = F1(num_classes=len(labels), average=average)
-        return f1(softmax_probs, target)
+        return f1(pred, target)
+
+
+def _torch_accuracy(output, target, log_probs, logits, labels, average):
+    """
+    The following parameter description applies for the multiclass case
+    :param output: (N, C, ...), accepts logits or probabilities from a model output or integer class values
+    :param log_probs: If the outputs are log softmax probs and do NOT necessarily sum to 1, set param to True
+    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
+    :param target: dimension= (N) (long tensor)
+    :param labels: Needed for multiclass targets. List of labels that index the classes in output
+    :param average: Either ‘macro’,´micro', ‘weighted’, 'samples' or None
+    :return: F1 score for the multilabel case
+    """
+    with torch.no_grad():
+        assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
+        if log_probs:
+            pred = _convert_log_probs_to_prediction(output)
+        else:
+            pred = _convert_logits_to_prediction(output)
+
+        assert pred.shape[0] == len(target)
+
+        accuracy = Accuracy(num_classes=len(labels), average=average)
+        return accuracy(pred, target)
+
+
+def class_wise_torch_accuracy(output, target, log_probs, logits, labels):
+    """See documentation for _torch_accuracy """
+    return _torch_accuracy(output, target, log_probs, logits, labels, average=None)
 
 
 def weighted_torch_f1(output, target, log_probs, logits, labels):

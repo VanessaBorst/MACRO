@@ -1,19 +1,20 @@
 {
-  "name": "CPSC_BaselineModel",
-  "run_details": "_weightedBCE",
+  "name": "CPSC_BaselineModel_VariableConvs",
+  "run_details": "_numCNN_5",
   "n_gpu": 1,
   "arch": {
-    "type": "BaselineModel",
+    "type": "BaselineModelVariableConvs",
     "args": {
       "apply_final_activation": false,
-      "multi_label_training": true
+      "multi_label_training": true,
+      "num_cnn_blocks": 5
     }
   },
   "data_loader": {
     "type": "ECGDataLoader",
     "args": {
       "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000",
-      "batch_size": 32,
+      "batch_size": 64,
       "shuffle": true,
       "validation_split": 0.25,
       "num_workers": 4,
