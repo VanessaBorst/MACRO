@@ -384,7 +384,7 @@ def main(config):
     with open(os.path.join(config.test_output_dir,'eval_single_metrics.p'), 'wb') as file:
         pickle.dump(df_single_metric_results, file)
 
-    with open(os.path.join(config.test_output_dir, 'eval_results.tex'), 'a') as file:
+    with open(os.path.join(config.test_output_dir, 'eval_results.tex'), 'w') as file:
         df_class_wise_results.to_latex(buf=file, index=True,  bold_rows=True, float_format="{:0.3f}".format)
         df_single_metric_results.to_latex(buf=file, index=True,  bold_rows=True, float_format="{:0.3f}".format)
 
