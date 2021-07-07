@@ -283,19 +283,33 @@ def main(config):
         pickle.dump(all_cms, cm_file)
 
     # ------------------- Predicted Scores and Classes -------------------
+    str_mode = "Test" if 'test' in str(config.test_output_dir).lower() else "Validation"
     if multi_label_training:
         if _param_dict['logits']:
-            sigmoid_probs = torch.sigmoid(det_outputs)
-            classes = torch.where(sigmoid_probs > THRESHOLD, 1, 0)
+            probs = torch.sigmoid(det_outputs)
+            classes = torch.where(probs > THRESHOLD, 1, 0)
         else:
+            probs = det_outputs
             classes = torch.where(det_outputs > THRESHOLD, 1, 0)
     else:
+        if _param_dict['logits']:
+            probs = torch.softmax(det_outputs, dim=1)
+        else:
+            probs = det_outputs
         # Use the argmax (doesn't matter if the outputs are probs or logits)
         pred_classes = torch.argmax(det_outputs, dim=1)
         classes = torch.nn.functional.one_hot(pred_classes, len(class_labels))
 
+    # 1) Predicted Probabilities
+    fig_output_probs, ax = plt.subplots(figsize=(10, 20))
+    sns.heatmap(data=probs.detach().cpu(), ax=ax)
+    ax.set_xlabel("Class ID")
+    ax.set_ylabel(str(str_mode).capitalize() + " Sample ID")
+    fig_output_probs.savefig(os.path.join(config.test_output_dir, "Predicted_probs.pdf"))
+    fig_output_probs.clear()
+    plt.close(fig_output_probs)
+    # 2) Predicted Classes
     # Create the figure and write it to a file
-    str_mode = "Test" if 'test' in str(config.test_output_dir).lower() else "Validation"
     fig_output_classes, ax = plt.subplots(figsize=(10, 20))
     # Define the colors
     colors = ["lightgray", "gray"]
