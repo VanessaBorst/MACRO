@@ -4,7 +4,6 @@ from torchinfo import summary
 from base import BaseModel
 from layers.ContextualAttention import ContextualAttention
 from layers.BasicBlock1d import BasicBlock1d
-from utils import plot_record_from_np_array
 
 
 class BaselineModelWithSkipConnections(BaseModel):
@@ -24,20 +23,13 @@ class BaselineModelWithSkipConnections(BaseModel):
         self.inplanes = input_channel
         self._conv_blocks = nn.ModuleList([
             nn.Sequential(
-                BasicBlock1d(in_channels=self.inplanes, out_channels=12, apply_final_activation=False,
-                             down_sample=down_sample)
+                BasicBlock1d(in_channels=self.inplanes, out_channels=12,
+                             last_kernel_size=24, down_sample=down_sample)
             ) for _ in range(num_blocks)]
         )
         # Last block has a convolutional pooling with kernel size 48!
-        self._last_conv_block = nn.Sequential(
-            nn.Conv1d(in_channels=12, out_channels=12, kernel_size=3, padding=1),
-            nn.LeakyReLU(0.3),
-            nn.Conv1d(in_channels=12, out_channels=12, kernel_size=3, padding=1),
-            nn.LeakyReLU(0.3),
-            nn.Conv1d(in_channels=12, out_channels=12, kernel_size=48, stride=2, padding=23),
-            nn.LeakyReLU(0.3),
-            nn.Dropout(0.2)
-        )
+        self._last_conv_block = BasicBlock1d(in_channels=12, out_channels=12,
+                                             last_kernel_size=48, down_sample=down_sample)
 
         # Without last option the input would have to be (seq_len, batch, input_size)
         # With batch_first it can be of the shape (batch, seq_len, input/feature_size)
@@ -80,5 +72,5 @@ class BaselineModelWithSkipConnections(BaseModel):
 
 
 if __name__ == "__main__":
-    model = BaselineModelWithSkipConnections(apply_final_activation=True, multi_label_training=True)
+    model = BaselineModelWithSkipConnections(down_sample="conv", apply_final_activation=True, multi_label_training=True)
     summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "num_params"])

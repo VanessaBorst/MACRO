@@ -1,13 +1,13 @@
 {
   "name": "CPSC_BaselineWithSkips",
-  "run_details": "_weightedCE_lr10e-3_pool",
+  "run_details": "_weightedBCE_lr10e-3_conv",
   "n_gpu": 1,
   "arch": {
     "type": "BaselineModelWithSkipConnections",
     "args": {
       "apply_final_activation": false,
-      "multi_label_training": false,
-      "down_sample": "pool"
+      "multi_label_training": true,
+      "down_sample": "conv"
     }
   },
   "data_loader": {
@@ -32,8 +32,8 @@
     }
   },
   "loss": {
-    "type": "balanced_cross_entropy",
-    "add_args": ["class_weights", "device"]
+    "type": "balanced_BCE_with_logits",
+    "add_args": ["pos_weights", "device"]
   },
   "metrics": {
     "sl": {
