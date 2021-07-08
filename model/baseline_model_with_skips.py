@@ -2,32 +2,28 @@ import torch.nn as nn
 from torchinfo import summary
 
 from base import BaseModel
-from layers.contextualAttention import ContextualAttention
+from layers.ContextualAttention import ContextualAttention
+from layers.BasicBlock1d import BasicBlock1d
 from utils import plot_record_from_np_array
 
 
-class BaselineModelVariableConvs(BaseModel):
-    def __init__(self, apply_final_activation, multi_label_training, num_cnn_blocks, num_classes=9):
+class BaselineModelWithSkipConnections(BaseModel):
+    def __init__(self, apply_final_activation, multi_label_training, num_blocks=4, input_channel=12, num_classes=9):
         """
         :param apply_final_activation: whether the Sigmoid(sl) or the LogSoftmax(ml) should be applied at the end
         :param multi_label_training: if true, Sigmoid is used as final activation, else the LogSoftmax
         :param num_classes: Num of classes to classify
-        :param num_cnn_blocks: Num of CNN blocks to use
+        :param num_blocks: Num of CNN blocks to use
         """
         super().__init__()
         self._apply_final_activation = apply_final_activation
+
+        self.inplanes = input_channel
         self._conv_blocks = nn.ModuleList([
             nn.Sequential(
-                # Keras Code -> Input shape (7200, 12) -> in_channel = 12
-                # x = Convolution1D(12, 3, padding='same')(main_input) -> Stride 1 as default
-                nn.Conv1d(in_channels=12, out_channels=12, kernel_size=3, padding=1),
-                nn.LeakyReLU(0.3),
-                nn.Conv1d(in_channels=12, out_channels=12, kernel_size=3, padding=1),
-                nn.LeakyReLU(0.3),
-                nn.Conv1d(in_channels=12, out_channels=12, kernel_size=24, stride=2, padding=11),
-                nn.LeakyReLU(0.3),
-                nn.Dropout(0.2)
-            ) for _ in range(num_cnn_blocks-1)]
+                # self._make_layer(block=BasicBlock1d, out_planes=12, stride=2)
+                BasicBlock1d(in_channels=self.inplanes, out_channels=12, apply_final_activation=False)
+            ) for _ in range(num_blocks)]
         )
         # Last block has a convolutional pooling with kernel size 48!
         self._last_conv_block = nn.Sequential(
@@ -54,7 +50,6 @@ class BaselineModelVariableConvs(BaseModel):
         self._contextual_attention = ContextualAttention(gru_dimension=12, attention_dimension=24)
 
         self._batchNorm = nn.Sequential(
-            # The batch normalization layer has 24*2=48 trainable and 24*2=48 non-trainable parameters
             nn.BatchNorm1d(24),
             nn.LeakyReLU(0.3),
             nn.Dropout(0.2)
@@ -64,6 +59,32 @@ class BaselineModelVariableConvs(BaseModel):
 
         if apply_final_activation:
             self._final_activation = nn.Sigmoid() if multi_label_training else nn.LogSoftmax(dim=1)
+
+    # def _make_layer(self, block, out_planes, stride=1):
+    #     downsample = None
+    #     if stride != 1 or self.inplanes != out_planes:
+    #         downsample = nn.Sequential(
+    #             nn.Conv1d(self.inplanes, out_planes, kernel_size=1, stride=stride, bias=False),
+    #             nn.BatchNorm1d(out_planes),
+    #         )
+    #
+    #     # TODO: Manage stride here
+    #     return block(in_channels=self.inplanes, out_channels=out_planes, apply_final_activation=False, downsample=downsample)
+
+    def _make_layer_complex(self, block, out_planes, num_basic_blocks, stride=1):
+        downsample = None
+        if stride != 1 or self.inplanes != out_planes:
+            downsample = nn.Sequential(
+                nn.Conv1d(self.inplanes, out_planes, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm1d(out_planes),
+            )
+
+        layers = []
+        layers.append(block(self.inplanes, out_planes, stride, downsample))
+        self.inplanes = out_planes
+        for _ in range(1, num_basic_blocks):
+            layers.append(block(self.inplanes, out_planes))
+        return nn.Sequential(*layers)
 
     def forward(self, x):
         for _, conv_block in enumerate(self._conv_blocks):
@@ -82,5 +103,5 @@ class BaselineModelVariableConvs(BaseModel):
 
 
 if __name__ == "__main__":
-    model = BaselineModelVariableConvs(apply_final_activation=True, multi_label_training=True, num_cnn_blocks=6)
+    model = BaselineModelWithSkipConnections(apply_final_activation=True, multi_label_training=True)
     summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "num_params"])

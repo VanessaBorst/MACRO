@@ -1,26 +1,38 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchinfo import summary
 
 
 class BasicBlock1d(nn.Module):
-    def __init__(self, in_channels, out_channels, apply_final_activation, downsample):
+
+    def __init__(self, in_channels, out_channels, apply_final_activation): #, downsample):
         # For Baseline: in_channels = out_channels = 12
         super().__init__()
         self._apply_final_activation = apply_final_activation
 
-        self._conv1 = nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, padding=1),
-        self._lrelu1 = nn.LeakyReLU(0.3),
-        self._conv2 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, padding=1),
-        self._lrelu2 = nn.LeakyReLU(0.3),
-        self._conv3 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=24, stride=2, padding=11),
-        self._lrelu3 = nn.LeakyReLU(0.3),
+        self._conv1 = nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, padding=1)
+        self._lrelu1 = nn.LeakyReLU(0.3)
+        self._conv2 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, padding=1)
+        self._lrelu2 = nn.LeakyReLU(0.3)
+        self._conv3 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=24, stride=2, padding=11)
+        self._lrelu3 = nn.LeakyReLU(0.3)
         self._dropout = nn.Dropout(0.2)
 
         if apply_final_activation:
             self._final_activation = nn.LeakyReLU(0.3)
 
-        self._downsample = downsample
+        self._downsample = self._convolutional_downsample()
+
+    def _convolutional_downsample(self):
+        in_planes = self._conv1.in_channels
+        out_planes = self._conv3.out_channels
+        # The block is keeping the channel amount of 12 but decreases the seq len by a factor of 2
+        downsample = nn.Sequential(
+            nn.Conv1d(in_planes, out_planes, kernel_size=1, stride=2, bias=False),
+            nn.BatchNorm1d(out_planes)
+        )
+        return downsample
 
     def forward(self, x):
         residual = x
@@ -31,8 +43,8 @@ class BasicBlock1d(nn.Module):
         out = self._conv3(out)
         out = self._lrelu3(out)
         out = self._dropout(out)
-        if self.downsample is not None:
-            residual = self.downsample(x)
+        if self._downsample is not None:
+            residual = self._downsample(x)
         out += residual
         if self._apply_final_activation:
             out = self._final_activation(out)
@@ -40,6 +52,8 @@ class BasicBlock1d(nn.Module):
 
 
 
-
+if __name__ == "__main__":
+    model = BasicBlock1d(in_channels=12, out_channels=12, apply_final_activation=True)
+    summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "num_params"])
 
 

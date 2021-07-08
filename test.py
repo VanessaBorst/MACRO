@@ -34,6 +34,8 @@ def main(config):
         import model.baseline_model_woRNN_woAttention as module_arch
     elif config['arch']['type'] == 'BaselineModel':
         import model.baseline_model as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithSkipConnections':
+        import model.baseline_model_with_skips as module_arch
     else:
         import model.baseline_model_variableConvs as module_arch
 

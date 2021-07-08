@@ -1,9 +1,9 @@
 {
-  "name": "CPSC_BaselineModel_DEBUG",
-  "run_details": "",
+  "name": "CPSC_BaselineWithSkips",
+  "run_details": "_unweightedBCE_lr10e-4",
   "n_gpu": 1,
   "arch": {
-    "type": "BaselineModel",
+    "type": "BaselineModelWithSkipConnections",
     "args": {
       "apply_final_activation": false,
       "multi_label_training": true
@@ -13,13 +13,14 @@
     "type": "ECGDataLoader",
     "args": {
       "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000",
-      "batch_size": 8,
+      "batch_size": 64,
       "shuffle": true,
       "validation_split": 0.25,
-      "num_workers": 4
+      "num_workers": 4,
+      "pin_memory": true
     },
     "overfit_single_batch": false,
-    "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/eq_len_72000"
+    "test_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000/valid"
   },
   "optimizer": {
     "type": "Adam",
@@ -30,47 +31,32 @@
     }
   },
   "loss": {
-    "type": "balanced_BCE_with_logits",
-    "add_args": ["pos_weights", "device"]
+    "type": "BCE_with_logits",
+    "add_args": []
   },
   "metrics": {
     "sl": {
       "per_iteration": {
-        "accuracy": ["log_probs", "logits"]
+        "sk_accuracy": ["log_probs", "logits"]
       },
       "per_epoch": [
         "cpsc_score",
-        "balanced_accuracy",
-        "mirco_f1",
-        "macro_f1",
-        "weighted_f1",
-        "macro_roc_auc_ovo",
-        "weighted_roc_auc_ovo",
-        "macro_roc_auc_ovr",
-        "weighted_roc_auc_ovr"
+        "weighted_sk_f1"
       ],
       "per_epoch_class_wise": [
-        "class_wise_f1"
+        "class_wise_sk_f1"
       ]
     },
     "ml": {
       "per_iteration": {
-        "subset_accuracy": ["sigmoid_probs", "logits"]
+        "sk_subset_accuracy": ["sigmoid_probs", "logits"]
       },
       "per_epoch": [
         "cpsc_score",
-        "mirco_f1",
-        "macro_f1",
-        "weighted_f1",
-        "macro_roc_auc_ovo",
-        "weighted_roc_auc_ovo",
-        "macro_roc_auc_ovr",
-        "weighted_roc_auc_ovr"
+        "weighted_sk_f1"
       ],
       "per_epoch_class_wise": [
-        "class_wise_f1",
-        "class_wise_roc_auc_ovr",
-        "class_wise_roc_auc_ovo"
+        "class_wise_sk_f1"
       ]
     },
     "additional_metrics_args": {
@@ -88,8 +74,8 @@
     }
   },
   "trainer": {
-    "epochs": 300,
-    "save_dir": "saved/",
+    "epochs": 500,
+    "save_dir": "savedVM/",
     "save_period": 1,
     "verbosity": 2,
     "monitor": "max val_cpsc_F1",
