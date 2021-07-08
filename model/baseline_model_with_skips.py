@@ -8,7 +8,8 @@ from utils import plot_record_from_np_array
 
 
 class BaselineModelWithSkipConnections(BaseModel):
-    def __init__(self, apply_final_activation, multi_label_training, num_blocks=4, input_channel=12, num_classes=9):
+    def __init__(self, apply_final_activation, multi_label_training, down_sample="conv",
+                 num_blocks=4, input_channel=12, num_classes=9):
         """
         :param apply_final_activation: whether the Sigmoid(sl) or the LogSoftmax(ml) should be applied at the end
         :param multi_label_training: if true, Sigmoid is used as final activation, else the LogSoftmax
@@ -18,11 +19,13 @@ class BaselineModelWithSkipConnections(BaseModel):
         super().__init__()
         self._apply_final_activation = apply_final_activation
 
+        assert down_sample == "conv" or down_sample == "pool", "Downsampling should either be conv or pool"
+
         self.inplanes = input_channel
         self._conv_blocks = nn.ModuleList([
             nn.Sequential(
-                # self._make_layer(block=BasicBlock1d, out_planes=12, stride=2)
-                BasicBlock1d(in_channels=self.inplanes, out_channels=12, apply_final_activation=False)
+                BasicBlock1d(in_channels=self.inplanes, out_channels=12, apply_final_activation=False,
+                             down_sample=down_sample)
             ) for _ in range(num_blocks)]
         )
         # Last block has a convolutional pooling with kernel size 48!
@@ -59,32 +62,6 @@ class BaselineModelWithSkipConnections(BaseModel):
 
         if apply_final_activation:
             self._final_activation = nn.Sigmoid() if multi_label_training else nn.LogSoftmax(dim=1)
-
-    # def _make_layer(self, block, out_planes, stride=1):
-    #     downsample = None
-    #     if stride != 1 or self.inplanes != out_planes:
-    #         downsample = nn.Sequential(
-    #             nn.Conv1d(self.inplanes, out_planes, kernel_size=1, stride=stride, bias=False),
-    #             nn.BatchNorm1d(out_planes),
-    #         )
-    #
-    #     # TODO: Manage stride here
-    #     return block(in_channels=self.inplanes, out_channels=out_planes, apply_final_activation=False, downsample=downsample)
-
-    def _make_layer_complex(self, block, out_planes, num_basic_blocks, stride=1):
-        downsample = None
-        if stride != 1 or self.inplanes != out_planes:
-            downsample = nn.Sequential(
-                nn.Conv1d(self.inplanes, out_planes, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm1d(out_planes),
-            )
-
-        layers = []
-        layers.append(block(self.inplanes, out_planes, stride, downsample))
-        self.inplanes = out_planes
-        for _ in range(1, num_basic_blocks):
-            layers.append(block(self.inplanes, out_planes))
-        return nn.Sequential(*layers)
 
     def forward(self, x):
         for _, conv_block in enumerate(self._conv_blocks):

@@ -6,9 +6,10 @@ from torchinfo import summary
 
 class BasicBlock1d(nn.Module):
 
-    def __init__(self, in_channels, out_channels, apply_final_activation): #, downsample):
+    def __init__(self, in_channels, out_channels, apply_final_activation, down_sample):
         # For Baseline: in_channels = out_channels = 12
         super().__init__()
+
         self._apply_final_activation = apply_final_activation
 
         self._conv1 = nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, padding=1)
@@ -22,7 +23,7 @@ class BasicBlock1d(nn.Module):
         if apply_final_activation:
             self._final_activation = nn.LeakyReLU(0.3)
 
-        self._downsample = self._convolutional_downsample()
+        self._downsample = self._convolutional_downsample() if down_sample == 'conv' else self._pooled_downsample()
 
     def _convolutional_downsample(self):
         in_planes = self._conv1.in_channels
@@ -32,6 +33,11 @@ class BasicBlock1d(nn.Module):
             nn.Conv1d(in_planes, out_planes, kernel_size=1, stride=2, bias=False),
             nn.BatchNorm1d(out_planes)
         )
+        return downsample
+
+    def _pooled_downsample(self):
+        # The block is keeping the channel amount of 12 but decreases the seq len by a factor of 2
+        downsample = nn.MaxPool1d(kernel_size=2, stride=2)
         return downsample
 
     def forward(self, x):
