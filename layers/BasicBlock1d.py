@@ -51,7 +51,6 @@ class BasicBlock1d(nn.Module):
         return out
 
 
-
 if __name__ == "__main__":
     model = BasicBlock1d(in_channels=12, out_channels=12, last_kernel_size=48, down_sample="conv")
     summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "num_params"])

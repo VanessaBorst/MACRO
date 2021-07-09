@@ -356,7 +356,10 @@ def _convert_multi_label_logits_to_single_prediction(logits_output):
     softmax_probs = torch.nn.functional.softmax(logits_output, dim=1)
     # Should be the same as directly taking the maximum of raw logits
     assert (torch.argmax(softmax_probs, dim=1) == torch.argmax(logits_output, dim=1)).all()
-    assert (torch.argmax(softmax_probs, dim=1) == torch.argmax(torch.sigmoid(logits_output), dim=1)).all()
+    # In very seldom cases the following is not true, probably because of numerical instability:
+    # torch.sigmoid(torch.Tensor([7.4171776772])) == torch.sigmoid(torch.Tensor([7.4171915054,]))
+    # even though the first logit is smaller!
+    # assert (torch.argmax(softmax_probs, dim=1) == torch.argmax(torch.sigmoid(logits_output), dim=1)).all()
     return torch.argmax(softmax_probs, dim=1)
 
 
