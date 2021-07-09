@@ -10,7 +10,7 @@ from utils import get_project_root, read_json, write_json
 
 
 class ConfigParser:
-    def __init__(self, config, resume=None, modification=None, mode=None, run_id=None):
+    def __init__(self, config, resume=None, modification=None, mode=None, use_tune=False, run_id=None):
         """
         class to parse configuration json file. Handles hyperparameters for training, initializations of modules, checkpoint saving
         and logging module.
@@ -22,6 +22,7 @@ class ConfigParser:
         # load config file and apply modification
         self._config = _update_config(config, modification)
         self.resume = resume
+        self._use_tune = use_tune
 
         # set save_dir where trained model and log will be saved.
         save_dir = Path(self.config['trainer']['save_dir'])
@@ -67,7 +68,8 @@ class ConfigParser:
         if self._save_dir is not None:
             write_json(self.config, self.save_dir / 'config.json')
 
-        # configure logging module
+        #if not self._use_tune:
+        # configure logging module if tuning is not active, else do it within the train method
         setup_logging(self.log_dir)
         self.log_levels = {
             0: logging.WARNING,
@@ -105,7 +107,7 @@ class ConfigParser:
 
         # parse custom cli options into dictionary
         modification = {opt.target: getattr(args, _get_opt_name(opt.flags)) for opt in options}
-        return cls(config, resume, modification, mode)
+        return cls(config, resume, modification, mode, args.tune)
 
     def init_obj(self, name, module, *args, **kwargs):
         """
@@ -119,7 +121,7 @@ class ConfigParser:
         module_name = self[name]['type']  # e.g., MnistDataLoader
         module_args = dict(self[name]['args'])  # e.g., {'data_dir': 'data/', 'batch_size': 4, ..., 'seq_len': 72000}
         # kwargs, i.e., single_batch for the data_loader
-        assert all([k not in module_args for k in kwargs]), 'Overwriting kwargs given in config file is not allowed'
+        # assert all([k not in module_args for k in kwargs]), 'Overwriting kwargs given in config file is not allowed'
         module_args.update(kwargs)
         # Gets a named attribute (here named "module_name") from an object (here from the given data-loader module)
         return getattr(module, module_name)(*args, **module_args)

@@ -1,3 +1,4 @@
+import os
 import random
 from abc import abstractmethod
 
@@ -6,14 +7,14 @@ import torch
 from numpy import inf
 
 from logger import TensorboardWriter
-
+from ray import tune
 
 class BaseTrainer:
     """
     Base class for all trainers:
     Handles checkpoint saving/resuming, training process logging, and more (including early stopping)
     """
-    def __init__(self, model, criterion, optimizer, config):
+    def __init__(self, model, criterion, optimizer, config, use_tune=False):
         self.config = config
         # create a logger with name "trainer" and the verbosity specified in the config.json
         self.logger = config.get_logger('trainer', config['trainer']['verbosity'])
@@ -32,6 +33,8 @@ class BaseTrainer:
         self.try_run = cfg_trainer['try_run']
         self.profiler_active = cfg_trainer['profiler_active']
 
+        self._use_tune = use_tune
+
         # configuration to monitor model performance and save best
         if self.monitor == 'off':
             self.mnt_mode = 'off'
@@ -47,10 +50,16 @@ class BaseTrainer:
 
         self.start_epoch = 1
 
-        self.checkpoint_dir = config.save_dir
+        if not self._use_tune:
+            self.checkpoint_dir = config.save_dir
+        else:
+            self.checkpoint_dir = tune.get_trial_dir()
 
-        # setup visualization writer instance                
-        self.writer = TensorboardWriter(config.log_dir, self.logger, cfg_trainer['tensorboard'])
+        if not self._use_tune:
+            # setup visualization writer instance
+            self.writer = TensorboardWriter(config.log_dir, self.logger, cfg_trainer['tensorboard'])
+        else:
+            self.writer = None
 
         if config.resume is not None:
             self._resume_checkpoint(config.resume)

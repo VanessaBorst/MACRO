@@ -6,8 +6,7 @@
     "type": "BaselineModelWithSkipConnections",
     "args": {
       "apply_final_activation": false,
-      "multi_label_training": true,
-      "down_sample": "conv"
+      "multi_label_training": true
     }
   },
   "data_loader": {

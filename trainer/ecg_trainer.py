@@ -3,6 +3,7 @@ import os
 import pickle
 import time
 from contextlib import nullcontext
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -20,6 +21,7 @@ from evaluation.single_label_metrics import class_wise_confusion_matrices_single
 from utils import inf_loop, plot_grad_flow_lines, plot_grad_flow_bars
 from utils.tracker import MetricTracker, ConfusionMatrixTracker
 
+from ray import tune
 
 class ECGTrainer(BaseTrainer):
     """
@@ -27,8 +29,8 @@ class ECGTrainer(BaseTrainer):
     """
 
     def __init__(self, model, criterion, metric_ftns_iter, metric_ftns_epoch, metric_ftns_epoch_class_wise, optimizer,
-                 config, device, data_loader, valid_data_loader=None, lr_scheduler=None, len_epoch=None):
-        super().__init__(model, criterion, optimizer, config)
+                 config, device, data_loader, valid_data_loader=None, lr_scheduler=None, use_tune=False, len_epoch=None):
+        super().__init__(model, criterion, optimizer, config, use_tune)
         self.config = config
         self.device = device
         self.metrics_iter = metric_ftns_iter
@@ -114,7 +116,8 @@ class ECGTrainer(BaseTrainer):
             targets_all_labels_list = [] if not self.multi_label_training else None
 
         # Set the writer object to training mode
-        self.writer.set_mode('train')
+        if self.writer is not None:
+            self.writer.set_mode('train')
         # Moreover, set the epoch number for the MetricTracker
         self.train_metrics.epoch = epoch
 
@@ -151,6 +154,8 @@ class ECGTrainer(BaseTrainer):
         start = time.time()
 
         if self.profiler_active:
+            main_path = self.config.log_dir if not self._use_tune else \
+                Path(tune.get_trial_dir().replace('/models/', '/log/'))
             context_manager = torch.profiler.profile(
                 activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
                 schedule=torch.profiler.schedule(
@@ -158,7 +163,7 @@ class ECGTrainer(BaseTrainer):
                     warmup=2,
                     active=10,
                     repeat=2),
-                on_trace_ready=tensorboard_trace_handler(self.config.log_dir),
+                on_trace_ready=tensorboard_trace_handler(main_path),
                 with_stack=True
             )
         else:
@@ -182,7 +187,7 @@ class ECGTrainer(BaseTrainer):
 
                 if type(output) is tuple:
                     output, attention_weights = output
-                    if self.try_run:
+                    if self.try_run and self.writer is not None:
                         self._send_attention_weights_to_writer(
                             attention_weights=attention_weights.detach().cpu().numpy()[:, :, 0],
                             batch_idx=batch_idx, epoch=epoch, str_mode="training")
@@ -215,7 +220,8 @@ class ECGTrainer(BaseTrainer):
                     plot_grad_flow_bars(named_parameters=self.model.named_parameters(), ax=ax_gradient_bars)
 
                 self.optimizer.step()
-                self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
+                if self.writer is not None:
+                    self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
 
                 # Iteratively update the loss and the metrics with the MetricTracker for each batch
                 self._do_iter_update(metric_tracker=self.train_metrics, output=detached_output,
@@ -233,7 +239,7 @@ class ECGTrainer(BaseTrainer):
                 if batch_idx == self.len_epoch:  # or self.overfit_single_batch:
                     break
 
-        if self.try_run:
+        if self.try_run and self.writer is not None:
             # At the end of the epoch, send the gradient flows of the current epoch to the TensorboardWriter
             fig_gradient_flow_lines.tight_layout()
             fig_gradient_flow_bars.tight_layout()
@@ -318,7 +324,8 @@ class ECGTrainer(BaseTrainer):
         targets_all_labels_list = [] if not self.multi_label_training else None
 
         # Set the writer object to validation mode
-        self.writer.set_mode('valid')
+        if self.writer is not None:
+            self.writer.set_mode('valid')
         # Moreover, set the epoch number for the MetricTracker
         self.valid_metrics.epoch = epoch
 
@@ -360,7 +367,8 @@ class ECGTrainer(BaseTrainer):
                 }
                 loss = self.criterion(target=target, output=output, **additional_kwargs)
 
-                self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx)
+                if self.writer is not None:
+                    self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx)
 
                 # Iteratively update the loss and the metrics with the MetricTracker
                 self._do_iter_update(metric_tracker=self.valid_metrics, output=detached_output,
@@ -382,13 +390,19 @@ class ECGTrainer(BaseTrainer):
                                                            track_cms=False)
         # track_cms=  (epoch == 1 or epoch % self.epoch_log_step_valid == 0))
 
-        if self.try_run:
+        if self.try_run and self.writer is not None:
             # Add histogram of model parameters to the tensorboard
             for name, p in self.model.named_parameters():
                 self.writer.add_histogram(name, p, bins='auto')
 
         # For validation, the metrics are contained each epoch
         valid_log = self.valid_metrics.result(include_epoch_metrics=True)
+
+        if self._use_tune:
+            # Report some metrics back to Ray Tune. Specifically, we send the validation loss and CPSC F1 score back to
+            # Ray Tune. Ray Tune can then use these metrics to decide which hyperparameter configuration lead to the
+            # best results. These metrics can also be used to stop bad performing trials early
+            tune.report(val_loss=valid_log['mean']["loss"], val_cpsc_F1=valid_log['mean']["cpsc_F1"])
 
         # # Also log the confusion matrix-related information to the valid log
         # valid_cm_information = dict({"overall_cm": "\n" + str(self.valid_cms.cm)},
@@ -464,7 +478,7 @@ class ECGTrainer(BaseTrainer):
                                                                          **additional_kwargs))
 
         # ------------------- Predicted Scores and Classes -------------------
-        if self.try_run:
+        if self.try_run and self.writer is not None:
             # Plot heatmaps of the predicted scores for each training/validation sample to verify if they change
             self._send_pred_scores_to_writer(epoch, det_outputs.numpy(), mode)
             # Plot heatmaps of the predicted classes for easier interpretability as well
@@ -502,8 +516,11 @@ class ECGTrainer(BaseTrainer):
         # At the end of each epoch, explicitly send the confusion matrices to the SummaryWriter/TensorboardWriter
         cm_tracker.send_cms_to_writer(epoch=epoch)
         # Moreover, save them as pickle
-        path_name = os.path.join(self.config.log_dir, "cms_" + str(str_mode) + "_epoch_" + str(epoch) + ".p")
-        with open(path_name, 'wb') as cm_file:
+        if not self._use_tune:
+            main_path = self.config.log_dir
+        else:
+            main_path = Path(tune.get_trial_dir().replace('/models/', '/log/'))
+        with open(os.path.join(main_path, "cms_" + str(str_mode) + "_epoch_" + str(epoch) + ".p"), 'wb') as cm_file:
             all_cms = [self.valid_cms.cm, self.valid_cms.class_wise_cms]
             pickle.dump(all_cms, cm_file)
             # Can later be loaded as follows:

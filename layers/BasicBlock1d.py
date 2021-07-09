@@ -19,7 +19,13 @@ class BasicBlock1d(nn.Module):
         self._lrelu3 = nn.LeakyReLU(0.3)
         self._dropout = nn.Dropout(0.2)
 
-        self._downsample = self._convolutional_downsample() if down_sample == 'conv' else self._pooled_downsample()
+        self._downsample = None
+        if down_sample == 'conv':
+            self._downsample = self._convolutional_downsample()
+        elif down_sample == 'max_pool':
+            self._downsample = self._max_pooled_downsample()
+        elif down_sample == 'avg_pool':
+            self._downsample = self._avg_pooled_downsample()
 
     def _convolutional_downsample(self):
         in_planes = self._conv1.in_channels
@@ -31,9 +37,14 @@ class BasicBlock1d(nn.Module):
         )
         return downsample
 
-    def _pooled_downsample(self):
+    def _max_pooled_downsample(self):
         # The block is keeping the channel amount of 12 but decreases the seq len by a factor of 2
         downsample = nn.MaxPool1d(kernel_size=2, stride=2)
+        return downsample
+
+    def _avg_pooled_downsample(self):
+        # The block is keeping the channel amount of 12 but decreases the seq len by a factor of 2
+        downsample = nn.AvgPool1d(kernel_size=2, stride=2)
         return downsample
 
     def forward(self, x):

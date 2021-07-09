@@ -285,20 +285,26 @@ class ConfusionMatrixTracker:
 
 if __name__ == '__main__':
     # Single Label
-    output = [0, 2, 5, 6]
-    target = [1, 8, 7, 6]
-    cm = overall_confusion_matrix_sk(output, target, False, [0, 1, 2, 3, 4, 5, 6, 7, 8])
-    class_wise_cms = class_wise_confusion_matrices_single_label_sk(output, target, False, [0, 1, 2, 3, 4, 5, 6, 7, 8])
-    tracker = ConfusionMatrixTracker(*[0, 1, 2, 3, 4, 5, 6, 7, 8], writer=SummaryWriter(log_dir="saved/tmp"),
-                                     multi_label_training=False)
-    tracker.update_cm(cm)
-    tracker.update_class_wise_cms(class_wise_cms)
+    # output = [0, 2, 5, 6]
+    # target = [1, 8, 7, 6]
+    # cm = overall_confusion_matrix_sk(output, target, False, [0, 1, 2, 3, 4, 5, 6, 7, 8])
+    # class_wise_cms = class_wise_confusion_matrices_single_label_sk(output, target, False, [0, 1, 2, 3, 4, 5, 6, 7, 8])
+    # tracker = ConfusionMatrixTracker(*[0, 1, 2, 3, 4, 5, 6, 7, 8], writer=SummaryWriter(log_dir="saved/tmp"),
+    #                                  multi_label_training=False)
+    # tracker.update_cm(cm)
+    # tracker.update_class_wise_cms(class_wise_cms)
+    #
+    # # Multi Label
+    # output = [[0, 0, 0, 1, 0, 0, 1, 0, 0], [1, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0, 0]]
+    # target = [[1, 0, 0, 1, 0, 0, 1, 0, 0], [1, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 1, 0]]
+    # class_wise_cms = class_wise_confusion_matrices_multi_label_sk(output, target, False, [0, 1, 2, 3, 4, 5, 6, 7, 8])
+    # tracker = ConfusionMatrixTracker(*[0, 1, 2, 3, 4, 5, 6, 7, 8], writer=SummaryWriter(log_dir="saved/tmp"),
+    #                                  multi_label_training=True)
+    # tracker.update_class_wise_cms(class_wise_cms)
+    # tracker.send_cms_to_writer(epoch=0)
 
-    # Multi Label
-    output = [[0, 0, 0, 1, 0, 0, 1, 0, 0], [1, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0, 0]]
-    target = [[1, 0, 0, 1, 0, 0, 1, 0, 0], [1, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 1, 0]]
-    class_wise_cms = class_wise_confusion_matrices_multi_label_sk(output, target, False, [0, 1, 2, 3, 4, 5, 6, 7, 8])
-    tracker = ConfusionMatrixTracker(*[0, 1, 2, 3, 4, 5, 6, 7, 8], writer=SummaryWriter(log_dir="saved/tmp"),
-                                     multi_label_training=True)
-    tracker.update_class_wise_cms(class_wise_cms)
-    tracker.send_cms_to_writer(epoch=0)
+    temp = MetricTracker(["loss"], ["cpsc"], ["F1"], [0,1,2,3,4,5])
+    temp.iter_update("loss", 5)
+    temp.epoch_update("cpsc", 78.5)
+    result = temp.result(include_epoch_metrics=True)
+    print("done")

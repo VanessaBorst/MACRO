@@ -18,7 +18,8 @@ class BaselineModelWithSkipConnections(BaseModel):
         super().__init__()
         self._apply_final_activation = apply_final_activation
 
-        assert down_sample == "conv" or down_sample == "pool", "Downsampling should either be conv or pool"
+        assert down_sample == "conv" or down_sample == "max_pool" or down_sample == "avg_pool", \
+            "Downsampling should either be conv or some pooling"
 
         self.inplanes = input_channel
         self._conv_blocks = nn.ModuleList([
