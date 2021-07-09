@@ -75,7 +75,7 @@
   },
   "trainer": {
     "epochs": 500,
-    "save_dir": "savedVM/",
+    "save_dir": "savedTest/",
     "save_period": 1,
     "verbosity": 2,
     "monitor": "max val_cpsc_F1",
