@@ -14,7 +14,7 @@ do
     python3.8 test.py --resume "$dir/model_best.pth" --test_dir "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000/valid"
 done
 
-for dir in $(find savedVM/models/CPSC_BaselineWithSkips -mindepth 1 -maxdepth 1 -type d )
+for dir in $(find savedVM/models/CPSC_BaselineWithSkips -mindepth 1 -maxdepth 1 -type d -name 0*)
 do
     echo "Evaluating $dir ..."
     python3.8 test.py --resume "$dir/model_best.pth" --test_dir "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000/valid"
