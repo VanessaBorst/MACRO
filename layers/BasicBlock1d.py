@@ -33,19 +33,22 @@ class BasicBlock1d(nn.Module):
         assert down_sample == "conv" or in_channels == out_channels, \
             "With different amount of in and out channels, pooling can not be used for aligning the residual tensor"
 
+        self._in_channels = in_channels
+        self._out_channels = out_channels
+
         # If stride is 1 and the kernel_size uneven, an additional one-sided 0 is needed to keep/half dimension
+        one_sided_padding = nn.ConstantPad1d((0, 1), 0)
         if stride == 1 and mid_kernels_size % 2 == 0:
-            one_sided_padding = nn.ConstantPad1d((0, 1), 0)
             self._conv1 = nn.Sequential(
                 one_sided_padding,
                 nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=mid_kernels_size,
-                          padding=calc_same_padding_for_stride_one(dilation=1, kernel_size=mid_kernels_size))
+                          padding=calc_same_padding_for_stride_one(dilation=1, kernel_size=mid_kernels_size)-1)
             )
             self._lrelu1 = nn.LeakyReLU(0.3)
             self._conv2 = nn.Sequential(
                 one_sided_padding,
                 nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=mid_kernels_size,
-                          padding=calc_same_padding_for_stride_one(dilation=1, kernel_size=mid_kernels_size))
+                          padding=calc_same_padding_for_stride_one(dilation=1, kernel_size=mid_kernels_size)-1)
             )
             self._lrelu2 = nn.LeakyReLU(0.3)
         else:
@@ -56,33 +59,48 @@ class BasicBlock1d(nn.Module):
                                     padding=calc_same_padding_for_stride_one(dilation=1, kernel_size=mid_kernels_size))
             self._lrelu2 = nn.LeakyReLU(0.3)
 
-        # For stride 2, no distinction must be made between even and uneven kernel sizes
-        padding_last = (last_kernel_size-1)//2 if stride == 2 \
-            else calc_same_padding_for_stride_one(dilation=1, kernel_size=last_kernel_size)
-        self._conv3 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=last_kernel_size,
-                                stride=stride, padding=padding_last)
+        # For stride 2, a distinction must be made between even and uneven kernel sizes as well
+        if stride == 2:
+            if last_kernel_size % 2 == 0: #and x ungerade
+                padding_last = calc_same_padding_for_stride_one(dilation=1, kernel_size=last_kernel_size)
+            else:
+                padding_last = (last_kernel_size - 1) // 2
+            self._conv3 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=last_kernel_size,
+                                    stride=stride, padding=padding_last)
+        else:
+            if last_kernel_size % 2 == 0:
+                self._conv3 = nn.Sequential(
+                    one_sided_padding,
+                    nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=last_kernel_size,
+                              padding=calc_same_padding_for_stride_one(dilation=1, kernel_size=last_kernel_size)-1)
+                )
+            else:
+                self._conv3 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels,
+                                        kernel_size=last_kernel_size,
+                                        padding=calc_same_padding_for_stride_one(dilation=1,
+                                                                                 kernel_size=last_kernel_size))
+
         self._lrelu3 = nn.LeakyReLU(0.3)
         self._dropout = nn.Dropout(drop_out)
 
         self._downsample = None
 
-        if stride == 1:
+        if stride == 1 and in_channels == out_channels:
             # No downsampling needed
-            self._downsample=None
+            self._downsample = None
         elif down_sample == 'conv':
-            self._downsample = self._convolutional_downsample()
+            self._downsample = self._convolutional_downsample(stride=stride)
         elif down_sample == 'max_pool':
             self._downsample = self._max_pooled_downsample()
         elif down_sample == 'avg_pool':
             self._downsample = self._avg_pooled_downsample()
 
-    def _convolutional_downsample(self):
-        in_planes = self._conv1.in_channels
-        out_planes = self._conv3.out_channels
-        # The block is keeping the channel amount of 12 but decreases the seq len by a factor of 2
+    def _convolutional_downsample(self, stride):
+        # The block is potentially changing the channel amount of 12
+        # For stride ==1, down_sample is None, but for stride 2 it decreases the seq len by a factor of 2
         downsample = nn.Sequential(
-            nn.Conv1d(in_planes, out_planes, kernel_size=1, stride=2, bias=False),
-            nn.BatchNorm1d(out_planes)
+            nn.Conv1d(self._in_channels, self._out_channels, kernel_size=1, stride=stride, bias=False),
+            nn.BatchNorm1d(self._out_channels)
         )
         return downsample
 
@@ -112,7 +130,6 @@ class BasicBlock1d(nn.Module):
 
 
 if __name__ == "__main__":
-    model = BasicBlock1d(in_channels=12, out_channels=12, last_kernel_size=48, down_sample="conv")
+    model = BasicBlock1d(in_channels=12, out_channels=32, mid_kernels_size=5, last_kernel_size=21, stride=1,
+                         down_sample='conv', drop_out=0.2)
     summary(model, input_size=(2, 12, 1125), col_names=["input_size", "output_size", "num_params"])
-
-

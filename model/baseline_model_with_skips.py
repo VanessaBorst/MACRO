@@ -5,7 +5,7 @@ from base import BaseModel
 from layers.ContextualAttention import ContextualAttention
 from layers.BasicBlock1d import BasicBlock1d
 
-
+# /1_5_0.2_0.3_24_64_3_3_13_44_1_1_conv_23-22-57
 class BaselineModelWithSkipConnections(BaseModel):
     def __init__(self, apply_final_activation, multi_label_training, input_channel=12, num_classes=9,
                  num_first_conv_blocks=4, num_second_conv_blocks=1,
@@ -25,6 +25,10 @@ class BaselineModelWithSkipConnections(BaseModel):
         self._apply_final_activation = apply_final_activation
 
         # Do some checks to directly stop certain Ray Tune trial combinations
+        assert num_first_conv_blocks + num_second_conv_blocks <= 8, "The total amount of conv blocks shouldn't exceed 8"
+        assert out_channel_first_conv_blocks <= out_channel_second_conv_blocks, \
+            "The depth/amount of channels should stay the same or increase, but it should not decrease"
+        # General sanity check
         assert down_sample == "conv" or down_sample == "max_pool" or down_sample == "avg_pool", \
             "Downsampling should either be conv or max_pool or avg_pool"
 
@@ -107,5 +111,21 @@ class BaselineModelWithSkipConnections(BaseModel):
 
 
 if __name__ == "__main__":
-    model = BaselineModelWithSkipConnections(down_sample="conv", apply_final_activation=True, multi_label_training=True)
+    model = BaselineModelWithSkipConnections(apply_final_activation=False, multi_label_training=True, input_channel=12,
+                                             down_sample="conv",
+                                             drop_out_first_conv_blocks=0.2,
+                                             drop_out_second_conv_blocks=0.3,
+                                             last_kernel_size_first_conv_blocks=13,
+                                             last_kernel_size_second_conv_blocks=44,
+                                             mid_kernel_size_first_conv_blocks=3,
+                                             mid_kernel_size_second_conv_blocks=3,
+                                             num_first_conv_blocks=2,
+                                             num_second_conv_blocks=6,
+                                             out_channel_first_conv_blocks=24,
+                                             out_channel_second_conv_blocks=64,
+                                             stride_first_conv_blocks=2,
+                                             stride_second_conv_blocks=2
+                                             )
+        #2_6_0.2_0.3_24_64_3_3_13_44_2_2_conv_23
+
     summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "num_params"])

@@ -10,12 +10,14 @@ import ray
 import torch
 import numpy as np
 from ax.service.ax_client import AxClient
+from jinja2.nodes import List
+from optuna.samplers import TPESampler
 from ray import tune
-from ray.tune import CLIReporter
+from ray.tune import CLIReporter, Callback
 from ray.tune.schedulers import ASHAScheduler
 from ray.tune.suggest.ax import AxSearch
 from ray.tune.suggest.optuna import OptunaSearch
-from ray.tune.stopper import ExperimentPlateauStopper, TrialPlateauStopper, CombinedStopper
+from ray.tune.stopper import ExperimentPlateauStopper, TrialPlateauStopper, CombinedStopper, FunctionStopper
 
 import data_loader.data_loaders as module_data_loader
 import model.loss as module_loss
@@ -45,32 +47,38 @@ _set_seed(SEED)
 
 
 # Define custom functions for conditional Tune Search Spaces
+# Problem: Does not work with Optuna or Ax, only when not passing an search algo.
+# ==> Currently tune.sample_from() only works with random search (the default).
+# (https://github.com/ray-project/ray/issues/13614)
 
 # 1) The total amount of conv blocks should not exceed 7
 def _get_poss_num_second_conv_blocks(spec):
     poss_nums = [1, 2, 3, 4, 5, 6]
-    return [item for item in poss_nums if item + spec.config.num_first_conv_blocks <= 7]
+    poss_nums = [item for item in poss_nums if 8 >= item + spec.config.num_first_conv_blocks >= 4]
+    return np.random.choice(poss_nums)
 
 
-# 2) The depth/amonut of channels should stay the same or increase, but it should not decrease
+# 2) The depth/amount of channels should stay the same or increase, but it should not decrease
 def _get_poss_second_conv_blocks_depth(spec):
-    poss_depths = [12, 24, 32, 64, 128]
-    return [item for item in poss_depths if item >= spec.config.out_channel_first_conv_blocks]
+    poss_depths = [12, 24, 32, 64] #, 128]
+    poss_depths = [item for item in poss_depths if item >= spec.config.out_channel_first_conv_blocks]
+    return np.random.choice(poss_depths)
 
 
 # 3) With different amounts of in and out channels in a block, pooling can not be used for aligning the residual tensor
 def _get_poss_down_samples(spec):
     if spec.config.out_channel_first_conv_blocks != 12 or \
             spec.config.out_channel_first_conv_blocks != spec.config.out_channel_second_conv_blocks:
-        return ["conv"]
+        return "conv"
     else:
-        return ["conv", "max_pool", "avg_pool"]
+        return np.random.choice(["conv", "max_pool", "avg_pool"])
 
 
-def tuning_params(name):
+# Sample from can not be used with SearchAlgo other than the default
+def random_search_tuning_params(name):
     if name == "BaselineModelWithSkipConnections":
         return {
-            "num_first_conv_blocks": tune.randint(1, 6),
+            "num_first_conv_blocks": tune.randint(2, 6),
             "num_second_conv_blocks": tune.sample_from(_get_poss_num_second_conv_blocks),
             "drop_out_first_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
             "drop_out_second_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
@@ -80,9 +88,34 @@ def tuning_params(name):
             "mid_kernel_size_second_conv_blocks": tune.choice([3, 5, 7]),
             "last_kernel_size_first_conv_blocks": tune.randint(10, 24),
             "last_kernel_size_second_conv_blocks": tune.randint(20, 50),
+            "stride_first_conv_blocks": 2 , #tune.randint(1, 2),
+            "stride_second_conv_blocks": 2, #tune.randint(1, 2),
+            "down_sample": tune.sample_from(_get_poss_down_samples)
+            # "dilation_first_conv_blocks": tune.randint(1, 3),
+            # "dilation_second_conv_blocks": tune.randint(1, 3),
+            # "expansion_first_conv_blocks": tune.choice(["1", "mul 2", "add 32"]),
+            # "expansion_second_conv_blocks": tune.choice(["1", "mul 2", "add 32"]),
+        }
+    else:
+        return None
+
+
+def tuning_params(name):
+    if name == "BaselineModelWithSkipConnections":
+        return {
+            "num_first_conv_blocks": tune.randint(1, 6),
+            "num_second_conv_blocks": tune.randint(1, 6),
+            "drop_out_first_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
+            "drop_out_second_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
+            "out_channel_first_conv_blocks": tune.choice([12, 24, 32, 64]),
+            "out_channel_second_conv_blocks": tune.choice([12, 24, 32, 64, 128]),
+            "mid_kernel_size_first_conv_blocks": tune.choice([3, 5, 7]),
+            "mid_kernel_size_second_conv_blocks": tune.choice([3, 5, 7]),
+            "last_kernel_size_first_conv_blocks": tune.randint(10, 24),
+            "last_kernel_size_second_conv_blocks": tune.randint(20, 50),
             "stride_first_conv_blocks": tune.randint(1, 2),
             "stride_second_conv_blocks": tune.randint(1, 2),
-            "down_sample": tune.sample_from(_get_poss_down_samples)
+            "down_sample": tune.choice(["conv", "max_pool", "avg_pool"]),
             # "dilation_first_conv_blocks": tune.randint(1, 3),
             # "dilation_second_conv_blocks": tune.randint(1, 3),
             # "expansion_first_conv_blocks": tune.choice(["1", "mul 2", "add 32"]),
@@ -103,9 +136,16 @@ def hyper_study(main_config, tune_config, num_tune_samples):
         file_name += datetime.now().strftime('%H-%M-%S.%f')
         return file_name
 
+    data_dir = main_config['data_loader']['args']['data_dir']
+    full_data_dir = os.path.join(str(get_project_root()), data_dir)
+    data_loader = main_config.init_obj('data_loader', module_data_loader, data_dir=full_data_dir,
+                                       single_batch=config['data_loader'].get('overfit_single_batch', False))
+    valid_data_loader = data_loader.split_validation()
+
     def train_fn(config, checkpoint_dir=None):
         # model = getattr(models, config["model_name"])(**config)
-        train_model(config=main_config, tune_config=config, checkpoint_dir=checkpoint_dir, use_tune=True)
+        train_model(config=main_config, tune_config=config, train_dl=data_loader, valid_dl=valid_data_loader,
+                    checkpoint_dir=checkpoint_dir, use_tune=True)
 
     ray.init(_temp_dir=os.path.join(get_project_root(), 'ray_tmp'))
 
@@ -124,7 +164,8 @@ def hyper_study(main_config, tune_config, num_tune_samples):
         time_attr='training_iteration',
         metric=mnt_metric,  # The training result objective value attribute. Stopping procedures will use this.
         mode=mnt_mode,
-        max_t=trainer.get('epochs', 300),  # Trials will be stopped after max_t time units (determined by time_attr)
+        max_t=100,
+        # trainer.get('epochs', 120),  # Trials will be stopped after max_t time units (determined by time_attr)
         grace_period=1,  # Only stop trials at least this old in time.
         reduction_factor=2)
 
@@ -182,12 +223,12 @@ def hyper_study(main_config, tune_config, num_tune_samples):
 
     optuna_searcher = OptunaSearch(metric=mnt_metric, mode=mnt_mode,
                                    points_to_evaluate=initial_param_suggestions,
-                                   seed=SEED)
+                                   sampler=TPESampler(seed=SEED))
 
     # ax = AxClient(enforce_sequential_optimization=False)  # (https://ax.dev/tutorials/raytune_pytorch_cnn.html)
-    ax_searcher = AxSearch(metric=mnt_metric, mode=mnt_mode,
-                           points_to_evaluate=initial_param_suggestions,
-                           parameter_constraints=["num_first_conv_blocks + num_second_conv_blocks <= 7"])
+    # ax_searcher = AxSearch(ax_client=ax, metric=mnt_metric, mode=mnt_mode,
+    #                        points_to_evaluate=initial_param_suggestions,
+    #                        parameter_constraints=["num_first_conv_blocks + num_second_conv_blocks <= 7"])
 
     analysis = tune.run(
         run_or_experiment=train_fn,
@@ -196,18 +237,19 @@ def hyper_study(main_config, tune_config, num_tune_samples):
         trial_dirname_creator=name_trial,  # trial_name
         local_dir="ray_results",
 
-        scheduler=scheduler,
-        # metric=mnt_metric,
-        # mode=mnt_mode,
+        # scheduler=scheduler,
+        metric=mnt_metric,
+        mode=mnt_mode,
         stop=CombinedStopper(experiment_stopper, trial_stopper),
-        # keep_checkpoints_num=10,
+        keep_checkpoints_num=10,
         checkpoint_score_attr=f"{mnt_mode}-{mnt_metric}",
 
         config={**tune_config},
         resources_per_trial={"cpu": 4 if torch.cuda.is_available() else 1,
-                             "gpu": 0.25 if torch.cuda.is_available() else 0},
-        search_alg=optuna_searcher,
-        max_failures=1,  # retry when error, e.g. OutOfMemory
+                             "gpu": 0.5 if torch.cuda.is_available() else 0},
+        # search_alg=optuna_searcher,
+        max_failures=3,  # retry when error, e.g. OutOfMemory, default is 0
+        # raise_on_failed_trial=False,
         verbose=1,
 
         progress_reporter=reporter,
@@ -217,7 +259,7 @@ def hyper_study(main_config, tune_config, num_tune_samples):
     print("Best hyperparameters found were: ", analysis.best_config)
 
 
-def train_model(config, tune_config=None, checkpoint_dir=None, use_tune=False):
+def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoint_dir=None, use_tune=False):
     # config: type: ConfigParser -> can be used as usual
     # tune_config: type: Dict -> contains the tune params with the samples values,
     #               e.g. {'num_first_conv_blocks': 8, 'num_second_conv_blocks': 9, ...}
@@ -251,14 +293,12 @@ def train_model(config, tune_config=None, checkpoint_dir=None, use_tune=False):
 
     # setup data_loader instances if not already done because use_tune is enabled
     if use_tune:
-        data_dir = config['data_loader']['args']['data_dir']
-        full_data_dir = os.path.join(str(get_project_root()), data_dir)
-        data_loader = config.init_obj('data_loader', module_data_loader, data_dir=full_data_dir,
-                                      single_batch=config['data_loader'].get('overfit_single_batch', False))
+        data_loader = train_dl
+        valid_data_loader = valid_dl
     else:
         data_loader = config.init_obj('data_loader', module_data_loader,
                                       single_batch=config['data_loader'].get('overfit_single_batch', False))
-    valid_data_loader = data_loader.split_validation()
+        valid_data_loader = data_loader.split_validation()
 
     # build model architecture, then print to console
     if not use_tune:
@@ -337,7 +377,7 @@ if __name__ == '__main__':
     ]
     config = ConfigParser.from_args(args=args, options=options)
     if config.use_tune:
-        tuning_params = tuning_params(name=config["arch"]["type"])
+        tuning_params = random_search_tuning_params(name=config["arch"]["type"])
         hyper_study(main_config=config, tune_config=tuning_params, num_tune_samples=100)
     else:
         tune_config = {

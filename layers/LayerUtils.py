@@ -11,5 +11,5 @@ def calc_padding(desired_output_size, input_size, stride, dilation, kernel_size)
 
 
 def calc_same_padding_for_stride_one(dilation, kernel_size):
-    # (window_size - (input_size - 1) * stride - dilation * (kernel_size - 1) - 1) / (-2)
     return (dilation * (kernel_size - 1) + 1) // 2
+
