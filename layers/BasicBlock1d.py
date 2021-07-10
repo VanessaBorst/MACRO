@@ -35,51 +35,30 @@ class BasicBlock1d(nn.Module):
 
         self._in_channels = in_channels
         self._out_channels = out_channels
+        self._stride = stride
+        self._mid_kernels_size=mid_kernels_size
+        self._last_kernel_size=last_kernel_size
 
         # If stride is 1 and the kernel_size uneven, an additional one-sided 0 is needed to keep/half dimension
-        one_sided_padding = nn.ConstantPad1d((0, 1), 0)
-        if stride == 1 and mid_kernels_size % 2 == 0:
-            self._conv1 = nn.Sequential(
-                one_sided_padding,
-                nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=mid_kernels_size,
-                          padding=calc_same_padding_for_stride_one(dilation=1, kernel_size=mid_kernels_size)-1)
-            )
-            self._lrelu1 = nn.LeakyReLU(0.3)
-            self._conv2 = nn.Sequential(
-                one_sided_padding,
-                nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=mid_kernels_size,
-                          padding=calc_same_padding_for_stride_one(dilation=1, kernel_size=mid_kernels_size)-1)
-            )
-            self._lrelu2 = nn.LeakyReLU(0.3)
-        else:
-            self._conv1 = nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=mid_kernels_size,
-                                    padding=calc_same_padding_for_stride_one(dilation=1, kernel_size=mid_kernels_size))
-            self._lrelu1 = nn.LeakyReLU(0.3)
-            self._conv2 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=mid_kernels_size,
-                                    padding=calc_same_padding_for_stride_one(dilation=1, kernel_size=mid_kernels_size))
-            self._lrelu2 = nn.LeakyReLU(0.3)
+        self._one_sided_padding = nn.ConstantPad1d((0, 1), 0)
 
-        # For stride 2, a distinction must be made between even and uneven kernel sizes as well
-        if stride == 2:
-            if last_kernel_size % 2 == 0: #and x ungerade
-                padding_last = calc_same_padding_for_stride_one(dilation=1, kernel_size=last_kernel_size)
-            else:
-                padding_last = (last_kernel_size - 1) // 2
-            self._conv3 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=last_kernel_size,
-                                    stride=stride, padding=padding_last)
-        else:
-            if last_kernel_size % 2 == 0:
-                self._conv3 = nn.Sequential(
-                    one_sided_padding,
-                    nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=last_kernel_size,
-                              padding=calc_same_padding_for_stride_one(dilation=1, kernel_size=last_kernel_size)-1)
-                )
-            else:
-                self._conv3 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels,
-                                        kernel_size=last_kernel_size,
-                                        padding=calc_same_padding_for_stride_one(dilation=1,
-                                                                                 kernel_size=last_kernel_size))
+        half_mid_kernel = calc_same_padding_for_stride_one(dilation=1, kernel_size=mid_kernels_size)  # k//2
+        half_mid_kernel_minus_1 = (mid_kernels_size - 1) // 2
+        self._half_mid_kernel_padding = nn.ConstantPad1d((half_mid_kernel, half_mid_kernel), 0)
+        self._half_mid_kernel_padding_minus_1 = nn.ConstantPad1d((half_mid_kernel_minus_1, half_mid_kernel_minus_1), 0)
 
+        half_last_kernel = calc_same_padding_for_stride_one(dilation=1, kernel_size=last_kernel_size)  # k//2
+        half_last_kernel_minus_1 = (last_kernel_size - 1) // 2
+        self._half_last_kernel_padding = nn.ConstantPad1d((half_last_kernel, half_last_kernel), 0)
+        self._half_last_kernel_padding_minus_1 = nn.ConstantPad1d((half_last_kernel_minus_1, half_last_kernel_minus_1), 0)
+
+        self._conv1 = nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=mid_kernels_size)
+        self._lrelu1 = nn.LeakyReLU(0.3)
+        self._conv2 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=mid_kernels_size)
+        self._lrelu2 = nn.LeakyReLU(0.3)
+
+        self._conv3 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=last_kernel_size,
+                                stride=stride)
         self._lrelu3 = nn.LeakyReLU(0.3)
         self._dropout = nn.Dropout(drop_out)
 
@@ -115,11 +94,37 @@ class BasicBlock1d(nn.Module):
         return downsample
 
     def forward(self, x):
+        # Handle padding explicit
         residual = x
+        # Conv1 and Conv2 have stride 1
+        if self._mid_kernels_size % 2 == 0:
+            x = self._one_sided_padding(x)
+            x = self._half_mid_kernel_padding_minus_1(x)
+        else:
+            x = self._half_mid_kernel_padding(x)
         out = self._conv1(x)
         out = self._lrelu1(out)
+        if self._mid_kernels_size % 2 == 0:
+            out = self._one_sided_padding(out)
+            out = self._half_mid_kernel_padding_minus_1(out)
+        else:
+            out = self._half_mid_kernel_padding(out)
         out = self._conv2(out)
         out = self._lrelu2(out)
+        # Conv3 usually has stride 2
+        if self._stride==2:
+            if self._last_kernel_size % 2 == 0  and out.shape[2] % 2 != 0:
+                out = self._half_last_kernel_padding(out)
+            else:
+                out = self._half_last_kernel_padding_minus_1(out)
+        else:
+            if self._last_kernel_size % 2 == 0:
+                print("Case 1")
+                out = self._one_sided_padding(out)
+                out = self._half_last_kernel_padding_minus_1(out)
+            else:
+                print("Case 2")
+                out = self._half_last_kernel_padding(out)
         out = self._conv3(out)
         out = self._lrelu3(out)
         out = self._dropout(out)
