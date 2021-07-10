@@ -6,12 +6,16 @@ import pickle
 import random
 from pathlib import Path
 
+import ray
 import torch
 import numpy as np
+from ax.service.ax_client import AxClient
 from ray import tune
 from ray.tune import CLIReporter
 from ray.tune.schedulers import ASHAScheduler
+from ray.tune.suggest.ax import AxSearch
 from ray.tune.suggest.optuna import OptunaSearch
+from ray.tune.stopper import ExperimentPlateauStopper, TrialPlateauStopper, CombinedStopper
 
 import data_loader.data_loaders as module_data_loader
 import model.loss as module_loss
@@ -40,36 +44,60 @@ SEED = 123
 _set_seed(SEED)
 
 
+# Define custom functions for conditional Tune Search Spaces
+
+# 1) The total amount of conv blocks should not exceed 7
+def _get_poss_num_second_conv_blocks(spec):
+    poss_nums = [1, 2, 3, 4, 5, 6]
+    return [item for item in poss_nums if item + spec.config.num_first_conv_blocks <= 7]
+
+
+# 2) The depth/amonut of channels should stay the same or increase, but it should not decrease
+def _get_poss_second_conv_blocks_depth(spec):
+    poss_depths = [12, 24, 32, 64, 128]
+    return [item for item in poss_depths if item >= spec.config.out_channel_first_conv_blocks]
+
+
+# 3) With different amounts of in and out channels in a block, pooling can not be used for aligning the residual tensor
+def _get_poss_down_samples(spec):
+    if spec.config.out_channel_first_conv_blocks != 12 or \
+            spec.config.out_channel_first_conv_blocks != spec.config.out_channel_second_conv_blocks:
+        return ["conv"]
+    else:
+        return ["conv", "max_pool", "avg_pool"]
+
+
 def tuning_params(name):
     if name == "BaselineModelWithSkipConnections":
         return {
-            "down_sample": tune.choice(["conv", "max_pool", "avg_pool"]),
-            "num_blocks": tune.randint(3, 7),
+            "num_first_conv_blocks": tune.randint(1, 6),
+            "num_second_conv_blocks": tune.sample_from(_get_poss_num_second_conv_blocks),
+            "drop_out_first_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
+            "drop_out_second_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
+            "out_channel_first_conv_blocks": tune.choice([12, 24, 32, 64]),
+            "out_channel_second_conv_blocks": tune.sample_from(_get_poss_second_conv_blocks_depth),
+            "mid_kernel_size_first_conv_blocks": tune.choice([3, 5, 7]),
+            "mid_kernel_size_second_conv_blocks": tune.choice([3, 5, 7]),
+            "last_kernel_size_first_conv_blocks": tune.randint(10, 24),
+            "last_kernel_size_second_conv_blocks": tune.randint(20, 50),
+            "stride_first_conv_blocks": tune.randint(1, 2),
+            "stride_second_conv_blocks": tune.randint(1, 2),
+            "down_sample": tune.sample_from(_get_poss_down_samples)
+            # "dilation_first_conv_blocks": tune.randint(1, 3),
+            # "dilation_second_conv_blocks": tune.randint(1, 3),
+            # "expansion_first_conv_blocks": tune.choice(["1", "mul 2", "add 32"]),
+            # "expansion_second_conv_blocks": tune.choice(["1", "mul 2", "add 32"]),
         }
-        # return {
-        #     "num_first_conv_blocks": tune.randint(1, 10),
-        #     "num_second_conv_blocks": tune.randint(1, 10),
-        #     "mid_kernel_size_first_conv_blocks":  tune.randint(3, 6),
-        #     "mid_kernel_size_first_conv_blocks": tune.randint(15, 30),
-        #     "mid_kernel_size_second_conv_blocks": tune.randint(3, 6),
-        #     "mid_kernel_size_second_conv_blocks": tune.randint(45, 60),
-        #     "stride_first_conv_blocks": tune.randint(1, 4),
-        #     "stride_second_conv_blocks": tune.randint(1, 4),
-        #     "dilation_first_conv_blocks": tune.randint(1, 3),
-        #     "dilation_second_conv_blocks": tune.randint(1, 3),
-        #     "expansion_first_conv_blocks": tune.choice(["1", "mul 2", "add 32"]),
-        #     "expansion_second_conv_blocks": tune.choice(["1", "mul 2", "add 32"]),
-        #     "down_sample": tune.choice(["conv", "max_pool", "avg_pool"])
-        # }
     else:
         return None
 
 
 def hyper_study(main_config, tune_config, num_tune_samples):
-    def name_dir(trial):
+    def name_trial(trial):
         file_name = f""
         for key in tune_config.keys():
-            file_name += f"{key[:8] if len(key) > 8 else key}={trial.config[key]}_"
+            # file_name += f"{key[:8] if len(key) > 8 else key}={trial.config[key]}_"
+            file_name += f"{trial.config[key]}_"
         if len(file_name) > 240:
             file_name = file_name[:240]
         file_name += datetime.now().strftime('%H-%M-%S.%f')
@@ -79,42 +107,113 @@ def hyper_study(main_config, tune_config, num_tune_samples):
         # model = getattr(models, config["model_name"])(**config)
         train_model(config=main_config, tune_config=config, checkpoint_dir=checkpoint_dir, use_tune=True)
 
-    mode = "max"
-    metric = "val_cpsc_F1"
+    ray.init(_temp_dir=os.path.join(get_project_root(), 'ray_tmp'))
 
+    trainer = main_config['trainer']
+    early_stop = trainer.get('monitor', 'off')
+    if early_stop != 'off':
+        mnt_mode, mnt_metric = early_stop.split()
+    else:
+        mnt_mode = "min"
+        mnt_metric = "val_loss"
+
+    # The idea behind SHA (Algorithm 1) is simple: allocate a small budget to each configuration, evaluate all
+    # configurations and keep the top 1/reduction_factor, increase the budget per configuration by a factor of
+    # reduction_factor, and repeat until the maximum per-configuration budget of R is reached
     scheduler = ASHAScheduler(
-        metric="val_cpsc_F1",
-        mode="max",
-        max_t=500,
-        grace_period=4,
+        time_attr='training_iteration',
+        metric=mnt_metric,  # The training result objective value attribute. Stopping procedures will use this.
+        mode=mnt_mode,
+        max_t=trainer.get('epochs', 300),  # Trials will be stopped after max_t time units (determined by time_attr)
+        grace_period=1,  # Only stop trials at least this old in time.
         reduction_factor=2)
-    # reporter = CLIReporter(
-    #     # parameter_columns=["l1", "l2", "lr", "batch_size"],
-    #     metric_columns=["val_loss", "val_cpsc_F1", "training_iteration"])
 
-    #stopping_criteria = {"training_iteration": 300}
+    reporter = CLIReporter(
+        parameter_columns={
+            "num_first_conv_blocks": "Num 1st",
+            "num_second_conv_blocks": "Num 2nd",
+            "drop_out_first_conv_blocks": "Drop 1st",
+            "drop_out_second_conv_blocks": "Drop 2nd",
+            "out_channel_first_conv_blocks": "Out 1st",
+            "out_channel_second_conv_blocks": "Out 2nd",
+            "mid_kernel_size_first_conv_blocks": "Mid kernel 1st",
+            "mid_kernel_size_second_conv_blocks": "Mid kernel 2nd",
+            "last_kernel_size_first_conv_blocks": "Last kernel 1st",
+            "last_kernel_size_second_conv_blocks": "Last kernel 2nd",
+            "stride_first_conv_blocks": "S 1st",
+            "stride_second_conv_blocks": "S 2nd",
+            "down_sample": "ds"
+        },
+        metric_columns=["val_loss", "val_cpsc_F1", "training_iteration"])
+
+    experiment_stopper = ExperimentPlateauStopper(
+        metric=mnt_metric,
+        mode=mnt_mode,
+        patience=trainer.get('early_stop', 5),  # Number of epochs to wait for a change in the top models
+        top=10  # The number of best models to consider.
+    )
+
+    trial_stopper = TrialPlateauStopper(
+        metric=mnt_metric,
+        mode=mnt_mode,
+        std=0.01,  # Maximum metric standard deviation to decide if a trial plateaued.
+        num_results=10,  # trainer.get('early_stop', 5),  # Number of results to consider for stdev calculation.
+        grace_period=1,  # Minimum number of timesteps before a trial can be early stopped
+    )
+
+    initial_param_suggestions = [
+        {
+
+            "num_first_conv_blocks": 4,
+            "num_second_conv_blocks": 1,
+            "drop_out_first_conv_blocks": 0.2,
+            "drop_out_second_conv_blocks": 0.2,
+            "out_channel_first_conv_blocks": 12,
+            "out_channel_second_conv_blocks": 12,
+            "mid_kernel_size_first_conv_blocks": 3,
+            "mid_kernel_size_second_conv_blocks": 3,
+            "last_kernel_size_first_conv_blocks": 24,
+            "last_kernel_size_second_conv_blocks": 48,
+            "stride_first_conv_blocks": 2,
+            "stride_second_conv_blocks": 2,
+            "down_sample": "conv"
+        }
+    ]
+
+    optuna_searcher = OptunaSearch(metric=mnt_metric, mode=mnt_mode,
+                                   points_to_evaluate=initial_param_suggestions,
+                                   seed=SEED)
+
+    # ax = AxClient(enforce_sequential_optimization=False)  # (https://ax.dev/tutorials/raytune_pytorch_cnn.html)
+    ax_searcher = AxSearch(metric=mnt_metric, mode=mnt_mode,
+                           points_to_evaluate=initial_param_suggestions,
+                           parameter_constraints=["num_first_conv_blocks + num_second_conv_blocks <= 7"])
+
     analysis = tune.run(
-        train_fn,
+        run_or_experiment=train_fn,
         num_samples=num_tune_samples,
+        name=main_config.save_dir,  # experiment_name
+        trial_dirname_creator=name_trial,  # trial_name
         local_dir="ray_results",
-        name=main_config.save_dir,
-        trial_dirname_creator=name_dir,
 
-        metric=metric,
-        mode=mode,
-        keep_checkpoints_num=10,
-        checkpoint_score_attr=f"{mode}-{metric}",
+        scheduler=scheduler,
+        # metric=mnt_metric,
+        # mode=mnt_mode,
+        stop=CombinedStopper(experiment_stopper, trial_stopper),
+        # keep_checkpoints_num=10,
+        checkpoint_score_attr=f"{mnt_mode}-{mnt_metric}",
 
         config={**tune_config},
-        resources_per_trial={"gpu": 1},
-        # search_alg=HyperOptSearch(),
-        search_alg=OptunaSearch(),
-        # scheduler=ASHAScheduler(grace_period=const_config["epochs"]),
-        max_failures=5,  # retry when error, e.g. OutOfMemory
+        resources_per_trial={"cpu": 4 if torch.cuda.is_available() else 1,
+                             "gpu": 0.25 if torch.cuda.is_available() else 0},
+        search_alg=optuna_searcher,
+        max_failures=1,  # retry when error, e.g. OutOfMemory
         verbose=1,
-        #stop=stopping_criteria
-        #progress_reporter=reporter
+
+        progress_reporter=reporter,
+        log_to_file=True
     )
+
     print("Best hyperparameters found were: ", analysis.best_config)
 
 
@@ -141,7 +240,7 @@ def train_model(config, tune_config=None, checkpoint_dir=None, use_tune=False):
     if use_tune:
         # Adapt the save path for the logging since it differs from trial to trial
         log_dir = Path(tune.get_trial_dir().replace('/models/', '/log/'))
-        log_dir.mkdir(parents=True)
+        log_dir.mkdir(parents=True, exist_ok=True)
         update_logging_setup_for_tune(log_dir)
         # Update the config if a checkpoint is passed by Tune
         if checkpoint_dir is not None:
@@ -154,7 +253,7 @@ def train_model(config, tune_config=None, checkpoint_dir=None, use_tune=False):
     if use_tune:
         data_dir = config['data_loader']['args']['data_dir']
         full_data_dir = os.path.join(str(get_project_root()), data_dir)
-        data_loader = config.init_obj('data_loader', module_data_loader, data_dir = full_data_dir,
+        data_loader = config.init_obj('data_loader', module_data_loader, data_dir=full_data_dir,
                                       single_batch=config['data_loader'].get('overfit_single_batch', False))
     else:
         data_loader = config.init_obj('data_loader', module_data_loader,
@@ -237,8 +336,24 @@ if __name__ == '__main__':
         # options added here can be modified by command line flags.
     ]
     config = ConfigParser.from_args(args=args, options=options)
-    if config._use_tune:
+    if config.use_tune:
         tuning_params = tuning_params(name=config["arch"]["type"])
-        hyper_study(main_config=config, tune_config=tuning_params, num_tune_samples=5)
+        hyper_study(main_config=config, tune_config=tuning_params, num_tune_samples=100)
     else:
-        train_model(config)
+        tune_config = {
+
+            "num_first_conv_blocks": 4,
+            "num_second_conv_blocks": 1,
+            "drop_out_first_conv_blocks": 0.2,
+            "drop_out_second_conv_blocks": 0.2,
+            "out_channel_first_conv_blocks": 12,
+            "out_channel_second_conv_blocks": 12,
+            "mid_kernel_size_first_conv_blocks": 3,
+            "mid_kernel_size_second_conv_blocks": 3,
+            "last_kernel_size_first_conv_blocks": 24,
+            "last_kernel_size_second_conv_blocks": 48,
+            "stride_first_conv_blocks": 2,
+            "stride_second_conv_blocks": 2,
+            "down_sample": "conv"
+        }
+        train_model(config, tune_config)

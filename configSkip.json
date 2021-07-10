@@ -1,6 +1,6 @@
 {
   "name": "CPSC_BaselineWithSkips",
-  "run_details": "_weightedBCE_lr10e-3_conv",
+  "run_details": "_weightedBCE",
   "n_gpu": 1,
   "arch": {
     "type": "BaselineModelWithSkipConnections",
@@ -16,7 +16,7 @@
       "batch_size": 64,
       "shuffle": true,
       "validation_split": 0.25,
-      "num_workers": 4,
+      "num_workers": 1,
       "pin_memory": true
     },
     "overfit_single_batch": false,
@@ -74,7 +74,7 @@
     }
   },
   "trainer": {
-    "epochs": 500,
+    "epochs": 300,
     "save_dir": "savedVM/",
     "save_period": 1,
     "verbosity": 2,

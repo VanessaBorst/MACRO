@@ -1,6 +1,7 @@
 import os
 import random
 from abc import abstractmethod
+from pathlib import Path
 
 import numpy.random
 import torch
@@ -53,7 +54,7 @@ class BaseTrainer:
         if not self._use_tune:
             self.checkpoint_dir = config.save_dir
         else:
-            self.checkpoint_dir = tune.get_trial_dir()
+            self.checkpoint_dir = Path(tune.get_trial_dir())
 
         if not self._use_tune:
             # setup visualization writer instance

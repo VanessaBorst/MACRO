@@ -7,8 +7,14 @@ from layers.BasicBlock1d import BasicBlock1d
 
 
 class BaselineModelWithSkipConnections(BaseModel):
-    def __init__(self, apply_final_activation, multi_label_training, down_sample="conv",
-                 num_blocks=4, input_channel=12, num_classes=9):
+    def __init__(self, apply_final_activation, multi_label_training, input_channel=12, num_classes=9,
+                 num_first_conv_blocks=4, num_second_conv_blocks=1,
+                 drop_out_first_conv_blocks=0.2, drop_out_second_conv_blocks=0.2,
+                 out_channel_first_conv_blocks=12, out_channel_second_conv_blocks=12,
+                 mid_kernel_size_first_conv_blocks=3, mid_kernel_size_second_conv_blocks=3,
+                 last_kernel_size_first_conv_blocks=24, last_kernel_size_second_conv_blocks=48,
+                 stride_first_conv_blocks=2, stride_second_conv_blocks=2,
+                 down_sample="conv"):
         """
         :param apply_final_activation: whether the Sigmoid(sl) or the LogSoftmax(ml) should be applied at the end
         :param multi_label_training: if true, Sigmoid is used as final activation, else the LogSoftmax
@@ -18,25 +24,49 @@ class BaselineModelWithSkipConnections(BaseModel):
         super().__init__()
         self._apply_final_activation = apply_final_activation
 
+        # Do some checks to directly stop certain Ray Tune trial combinations
         assert down_sample == "conv" or down_sample == "max_pool" or down_sample == "avg_pool", \
-            "Downsampling should either be conv or some pooling"
+            "Downsampling should either be conv or max_pool or avg_pool"
 
-        self.inplanes = input_channel
-        self._conv_blocks = nn.ModuleList([
-            nn.Sequential(
-                BasicBlock1d(in_channels=self.inplanes, out_channels=12,
-                             last_kernel_size=24, down_sample=down_sample)
-            ) for _ in range(num_blocks)]
+        self._first_conv_blocks_1 = BasicBlock1d(in_channels=input_channel, out_channels=out_channel_first_conv_blocks,
+                                                 mid_kernels_size=mid_kernel_size_first_conv_blocks,
+                                                 last_kernel_size=last_kernel_size_first_conv_blocks,
+                                                 stride=stride_first_conv_blocks,
+                                                 down_sample=down_sample,
+                                                 drop_out=drop_out_first_conv_blocks)
+        self._first_conv_blocks_2 = nn.ModuleList([
+            BasicBlock1d(in_channels=out_channel_first_conv_blocks, out_channels=out_channel_first_conv_blocks,
+                         mid_kernels_size=mid_kernel_size_first_conv_blocks,
+                         last_kernel_size=last_kernel_size_first_conv_blocks,
+                         stride=stride_first_conv_blocks,
+                         down_sample=down_sample,
+                         drop_out=drop_out_first_conv_blocks)
+            for _ in range(num_first_conv_blocks - 1)]
         )
-        # Last block has a convolutional pooling with kernel size 48!
-        self._last_conv_block = BasicBlock1d(in_channels=12, out_channels=12,
-                                             last_kernel_size=48, down_sample=down_sample)
+
+        self._second_conv_blocks_1 = BasicBlock1d(in_channels=out_channel_first_conv_blocks,
+                                                  out_channels=out_channel_second_conv_blocks,
+                                                  mid_kernels_size=mid_kernel_size_second_conv_blocks,
+                                                  last_kernel_size=last_kernel_size_second_conv_blocks,
+                                                  stride=stride_second_conv_blocks,
+                                                  down_sample=down_sample,
+                                                  drop_out=drop_out_second_conv_blocks)
+        self._second_conv_blocks_2 = nn.ModuleList([
+            BasicBlock1d(in_channels=out_channel_second_conv_blocks, out_channels=out_channel_second_conv_blocks,
+                         mid_kernels_size=mid_kernel_size_second_conv_blocks,
+                         last_kernel_size=last_kernel_size_second_conv_blocks,
+                         stride=stride_second_conv_blocks,
+                         down_sample=down_sample,
+                         drop_out=drop_out_second_conv_blocks)
+            for _ in range(num_second_conv_blocks - 1)]
+        )
 
         # Without last option the input would have to be (seq_len, batch, input_size)
         # With batch_first it can be of the shape (batch, seq_len, input/feature_size)
         # input_size = feature_size per timestamp outputted by the CNNs
         # hidden_size = gru_hidden_dim
-        self._biGRU = nn.GRU(input_size=12, hidden_size=12, num_layers=1, bidirectional=True, batch_first=True)
+        self._biGRU = nn.GRU(input_size=out_channel_second_conv_blocks, hidden_size=12,
+                             num_layers=1, bidirectional=True, batch_first=True)
 
         self._biGru_activation_do = nn.Sequential(
             nn.LeakyReLU(0.3),
@@ -57,9 +87,13 @@ class BaselineModelWithSkipConnections(BaseModel):
             self._final_activation = nn.Sigmoid() if multi_label_training else nn.LogSoftmax(dim=1)
 
     def forward(self, x):
-        for _, conv_block in enumerate(self._conv_blocks):
+        x = self._first_conv_blocks_1(x)
+        for _, conv_block in enumerate(self._first_conv_blocks_2):
             x = conv_block(x)
-        x = self._last_conv_block(x)
+        x = self._second_conv_blocks_1(x)
+        for _, conv_block in enumerate(self._second_conv_blocks_2):
+            x = conv_block(x)
+
         x = x.permute(0, 2, 1)  # switch seq_length and feature_size for the BiGRU
         x, last_hidden_state = self._biGRU(x)
         x = self._biGru_activation_do(x)

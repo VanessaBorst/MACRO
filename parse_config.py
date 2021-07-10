@@ -170,6 +170,10 @@ class ConfigParser:
     def test_output_dir(self):
         return self._test_output_dir
 
+    @property
+    def use_tune(self):
+        return self._use_tune
+
     def _do_some_sanity_checks(self):
         if self.config["loss"]["type"] == "BCE_with_logits" or self.config["loss"]["type"] == "balanced_BCE_with_logits":
             assert self.config["arch"]["args"]["multi_label_training"] \
