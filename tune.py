@@ -230,6 +230,8 @@ def hyper_study(main_config, tune_config, num_tune_samples):
     #                        points_to_evaluate=initial_param_suggestions,
     #                        parameter_constraints=["num_first_conv_blocks + num_second_conv_blocks <= 7"])
 
+
+
     analysis = tune.run(
         run_or_experiment=train_fn,
         num_samples=num_tune_samples,
@@ -237,16 +239,16 @@ def hyper_study(main_config, tune_config, num_tune_samples):
         trial_dirname_creator=name_trial,  # trial_name
         local_dir="ray_results",
 
-        # scheduler=scheduler,
-        metric=mnt_metric,
-        mode=mnt_mode,
+        scheduler=scheduler,
+        # metric=mnt_metric,
+        # mode=mnt_mode,
         stop=CombinedStopper(experiment_stopper, trial_stopper),
         keep_checkpoints_num=10,
         checkpoint_score_attr=f"{mnt_mode}-{mnt_metric}",
 
         config={**tune_config},
-        resources_per_trial={"cpu": 4 if torch.cuda.is_available() else 1,
-                             "gpu": 0.5 if torch.cuda.is_available() else 0},
+        resources_per_trial={"cpu": 8 if torch.cuda.is_available() else 1,
+                             "gpu": 1 if torch.cuda.is_available() else 0},
         # search_alg=optuna_searcher,
         max_failures=3,  # retry when error, e.g. OutOfMemory, default is 0
         # raise_on_failed_trial=False,

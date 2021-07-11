@@ -63,7 +63,7 @@ class BasicBlock1d(nn.Module):
         self._dropout = nn.Dropout(drop_out)
 
         self._downsample = None
-
+        self._poooled_downsample = False
         if stride == 1 and in_channels == out_channels:
             # No downsampling needed
             self._downsample = None
@@ -71,8 +71,10 @@ class BasicBlock1d(nn.Module):
             self._downsample = self._convolutional_downsample(stride=stride)
         elif down_sample == 'max_pool':
             self._downsample = self._max_pooled_downsample()
+            self._poooled_downsample = True
         elif down_sample == 'avg_pool':
             self._downsample = self._avg_pooled_downsample()
+            self._poooled_downsample = True
 
     def _convolutional_downsample(self, stride):
         # The block is potentially changing the channel amount of 12
@@ -112,29 +114,31 @@ class BasicBlock1d(nn.Module):
         out = self._conv2(out)
         out = self._lrelu2(out)
         # Conv3 usually has stride 2
-        if self._stride==2:
+        if self._stride == 2:
             if self._last_kernel_size % 2 == 0  and out.shape[2] % 2 != 0:
                 out = self._half_last_kernel_padding(out)
             else:
                 out = self._half_last_kernel_padding_minus_1(out)
         else:
             if self._last_kernel_size % 2 == 0:
-                print("Case 1")
                 out = self._one_sided_padding(out)
                 out = self._half_last_kernel_padding_minus_1(out)
             else:
-                print("Case 2")
                 out = self._half_last_kernel_padding(out)
         out = self._conv3(out)
         out = self._lrelu3(out)
         out = self._dropout(out)
         if self._downsample is not None:
+            if self._poooled_downsample:
+                # Stride is two and kernel size is two as well
+                if residual.shape[2] % 2 != 0:
+                    residual = nn.ConstantPad1d((1, 1), 0)(residual)
             residual = self._downsample(residual)
         out += residual
         return out
 
 
 if __name__ == "__main__":
-    model = BasicBlock1d(in_channels=12, out_channels=32, mid_kernels_size=5, last_kernel_size=21, stride=1,
-                         down_sample='conv', drop_out=0.2)
+    model = BasicBlock1d(in_channels=12, out_channels=12, mid_kernels_size=3, last_kernel_size=44, stride=2,
+                         down_sample='avg_pool', drop_out=0.2)
     summary(model, input_size=(2, 12, 1125), col_names=["input_size", "output_size", "num_params"])
