@@ -25,9 +25,9 @@ class BaselineModelWithSkipConnections(BaseModel):
         self._apply_final_activation = apply_final_activation
 
         # Do some checks to directly stop certain Ray Tune trial combinations
-        assert num_first_conv_blocks + num_second_conv_blocks <= 8, "The total amount of conv blocks shouldn't exceed 8"
-        assert out_channel_first_conv_blocks <= out_channel_second_conv_blocks, \
-            "The depth/amount of channels should stay the same or increase, but it should not decrease"
+        # assert 4 <= num_first_conv_blocks + num_second_conv_blocks <= 8, "The amount of conv blocks should be in [4,8]"
+        # assert out_channel_first_conv_blocks <= out_channel_second_conv_blocks, \
+        #     "The depth/amount of channels should stay the same or increase, but it should not decrease"
         # General sanity check
         assert down_sample == "conv" or down_sample == "max_pool" or down_sample == "avg_pool", \
             "Downsampling should either be conv or max_pool or avg_pool"
