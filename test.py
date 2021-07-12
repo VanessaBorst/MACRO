@@ -1,6 +1,7 @@
 import argparse
 import collections
 import inspect
+import json
 import os
 import pickle
 import time
@@ -28,7 +29,7 @@ SEED = 123
 _set_seed(SEED)
 
 
-def main(config):
+def main(config, tune_config=None):
     # Conditional inputs depending on the config
     if config['arch']['type'] == 'BaselineModelWoRnnWoAttention':
         import model.baseline_model_woRNN_woAttention as module_arch
@@ -56,7 +57,10 @@ def main(config):
     )
 
     # build model architecture
-    model = config.init_obj('arch', module_arch)
+    if tune_config is None:
+        model = config.init_obj('arch', module_arch)
+    else:
+        model = config.init_obj('arch', module_arch, **tune_config)
     logger.info(model)
 
     # Load the model from the checkpoint
@@ -128,10 +132,10 @@ def main(config):
         "log_probs": config["metrics"]["additional_metrics_args"].get("log_probs", False),
         "logits": config["metrics"]["additional_metrics_args"].get("logits", False),
         "pos_weights": data_loader.dataset.get_ml_pos_weights(
-            idx_list=list(range(len(data_loader.sampler)))),
+            idx_list=list(range(len(data_loader.sampler))), mode='test'),
         "class_weights": data_loader.dataset.get_inverse_class_frequency(
             idx_list=list(range(len(data_loader.sampler))),
-            multi_label_training=multi_label_training)
+            multi_label_training=multi_label_training, mode='test')
     }
 
     # Setup visualization writer instance
@@ -409,6 +413,7 @@ if __name__ == '__main__':
                       help='path to latest checkpoint (default: None)')
     args.add_argument('-d', '--device', default=None, type=str,
                       help='indices of GPUs to enable (default: all)')
+    args.add_argument('-t', '--tune', action='store_true', help='Use when model was derived during tuning')
 
     # custom cli options to modify configuration from default values given in json file.
     CustomArgs = collections.namedtuple('CustomArgs', 'flags type target')
@@ -418,4 +423,10 @@ if __name__ == '__main__':
     ]
 
     config = ConfigParser.from_args(args=args, options=options, mode='test')
-    main(config)
+    if config.use_tune:
+        tune_config_path = os.path.join(config.test_output_dir, "../params.json")
+        with open(tune_config_path, 'r') as file:
+            tune_config = json.load(file)
+    else:
+        tune_config = None
+    main(config, tune_config)

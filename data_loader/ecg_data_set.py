@@ -4,6 +4,7 @@ import operator
 import os
 import pickle
 import pickle as pk
+from pathlib import Path
 from typing import Tuple, List
 
 import numpy as np
@@ -11,6 +12,8 @@ import pandas as pd
 import torch
 from sklearn.utils import compute_class_weight
 from torch.utils.data import Dataset
+
+from utils import get_project_root
 
 
 class ECGDataset(Dataset):
@@ -86,7 +89,7 @@ class ECGDataset(Dataset):
         # Return both as as ndarray
         return class_freqs.values, class_dist.values
 
-    def get_ml_pos_weights(self, idx_list, mode=None, log_dir=None):
+    def get_ml_pos_weights(self, idx_list, mode=None):
         """
         Can be used to determine  the class frequencies and the target classes distribution
         :param idx_list: list of ids, should contain all ids contained in the train, valid or test set
@@ -95,36 +98,51 @@ class ECGDataset(Dataset):
         :return:  Pos weights, one weight per class
 
         """
-        classes = []
-        record_names = []
-        for idx in idx_list:
-            _, _, _, classes_one_hot, record_name = self.__getitem__(idx)
-            classes.append(classes_one_hot)
-            record_names.append(record_name)
+        if mode == "test" and "test" not in self._input_dir:
+            # Catch the case where the model is tested on the validation set
+            file_name = "data_loader/pos_weights_ml_valid.p"
+        else:
+            file_name = "data_loader/pos_weights_ml_" + mode + ".p"
 
-        # Dump to pickle
-        if mode is not None and log_dir is not None:
-            with open(os.path.join(log_dir, 'Record_names_' + str(mode)) + ".p", 'wb') as file:
-                pickle.dump(record_names, file)
+        file_name = os.path.join(get_project_root(), file_name)
+        if os.path.isfile(file_name):
+            with open(file_name, "rb") as file:
+                df = pickle.load(file)
+            # inverse_class_freqs = df['Inverse_class_freq']
+        else:
+            classes = []
+            record_names = []
+            for idx in idx_list:
+                _, _, _, classes_one_hot, record_name = self.__getitem__(idx)
+                classes.append(classes_one_hot)
+                record_names.append(record_name)
 
-        # Get the class freqs as Pandas series
-        class_freqs = pd.DataFrame(classes).sum()
+            # Dump the record names to pickle to ensure they are the same between VMs
+            if mode is not None:
+                with open(os.path.join(Path('data_loader'), 'Record_names_' + str(mode)) + ".p", 'wb') as file:
+                    pickle.dump(record_names, file)
 
-        # Calculate the number of pos and negative samples per class
-        df = pd.DataFrame({'num_pos_samples': class_freqs})
+            # Get the class freqs as Pandas series
+            class_freqs = pd.DataFrame(classes).sum()
 
-        # Each class should occur at least ones
-        assert not df['num_pos_samples'].isin([0]).any(), "Each class should occur at least ones"
+            # Calculate the number of pos and negative samples per class
+            df = pd.DataFrame({'num_pos_samples': class_freqs})
 
-        df['num_neg_samples'] = df.apply(lambda row: len(idx_list) - row.values).values
-        df["ratio_neg_to_pos"] = df.num_neg_samples / (df.num_pos_samples)
-        # If num_pos_samples can be 0, a dummy term needs to be added to it to avoid dividing by 0
-        # df["ratio_neg_to_pos"] = df.num_neg_samples / (df.num_pos_samples + 1e-5)
+            # Each class should occur at least ones
+            assert not df['num_pos_samples'].isin([0]).any(), "Each class should occur at least ones"
+
+            df['num_neg_samples'] = df.apply(lambda row: len(idx_list) - row.values).values
+            df["ratio_neg_to_pos"] = df.num_neg_samples / (df.num_pos_samples)
+            # If num_pos_samples can be 0, a dummy term needs to be added to it to avoid dividing by 0
+            # df["ratio_neg_to_pos"] = df.num_neg_samples / (df.num_pos_samples + 1e-5)
+
+            with open(Path(file_name), "wb") as file:
+                pickle.dump(df, file)
 
         # Return the ratio as as ndarray
         return df["ratio_neg_to_pos"].values
 
-    def get_inverse_class_frequency(self, idx_list, multi_label_training):
+    def get_inverse_class_frequency(self, idx_list, multi_label_training, mode):
         """
         Can be used to determine the inverse class frequencies
         :param idx_list: list of ids, should contain all ids contained in the train, valid or test set
@@ -132,56 +150,48 @@ class ECGDataset(Dataset):
 
         :return:  Inverse class frequencies
         """
+        if mode == "test" and "test" not in self._input_dir:
+            # Catch the case where the model is tested on the validation set
+            file_name = "data_loader/class_freq_ml_valid.p" if multi_label_training \
+                else "data_loader/class_freq_sl_valid.p"
+        else:
+            file_name = "data_loader/class_freq_ml_" + mode + ".p" if multi_label_training \
+                else "data_loader/class_freq_sl_" + mode + ".p"
+        file_name = os.path.join(get_project_root(), file_name)
 
-        classes = []
-        for idx in idx_list:
-            _, _, first_class_encoded, classes_one_hot, record_name = self.__getitem__(idx)
-            if multi_label_training:
-                classes.append(classes_one_hot)
-            else:
-                # Only consider the first label
-                classes_one_hot[:] = 0
-                classes_one_hot[first_class_encoded] = 1
-                classes.append(classes_one_hot)
+        if os.path.isfile(file_name):
+            with open(file_name, "rb") as file:
+                df = pickle.load(file)
+            inverse_class_freqs = df['Inverse_class_freq']
+        else:
+            classes = []
+            for idx in idx_list:
+                _, _, first_class_encoded, classes_one_hot, record_name = self.__getitem__(idx)
+                if multi_label_training:
+                    classes.append(classes_one_hot)
+                else:
+                    # Only consider the first label
+                    classes_one_hot[:] = 0
+                    classes_one_hot[first_class_encoded] = 1
+                    classes.append(classes_one_hot)
 
-        # Get the class freqs as Pandas series
-        class_freqs = pd.DataFrame(classes).sum()
+            # Get the class freqs as Pandas series
+            class_freqs = pd.DataFrame(classes).sum()
 
-        # Each class should occur at least ones
-        assert not class_freqs.isin([0]).any(), "Each class should occur at least ones"
+            # Each class should occur at least ones
+            assert not class_freqs.isin([0]).any(), "Each class should occur at least ones"
 
-        # Calculate the inverse class freqs
-        inverse_class_freqs = class_freqs.apply(lambda x: class_freqs.sum() / x)
+            # Calculate the inverse class freqs
+            inverse_class_freqs = class_freqs.apply(lambda x: class_freqs.sum() / x)
+
+            df = pd.concat([class_freqs, inverse_class_freqs], axis=1)
+            df.columns = ['Class_freq', 'Inverse_class_freq']
+
+            with open(Path(file_name), "wb") as file:
+                pickle.dump(df, file)
 
         # Return them as as ndarray
         return inverse_class_freqs.values
-
-    def get_inverse_class_frequency_old(self, idx_list, multi_label_training):
-        """
-        Can be used to determine the inverse class frequencies
-        :param idx_list: list of ids, should contain all ids contained in the train, valid or test set
-        :param multi_label_training: If true, all labels are considered, otherwise only the first label is counted
-
-        :return:  Inverse class frequencies
-        """
-
-        classes = []
-        for idx in idx_list:
-            _, classes_encoded, first_class_encoded, classes_one_hot, record_name = self.__getitem__(idx)
-            if multi_label_training:
-                classes.append(json.loads(classes_encoded))
-            else:
-                # Only consider the first label
-                classes.append(first_class_encoded)
-
-        # Flatten the classes to a one-dimensional array in the ML case
-        if multi_label_training:
-            classes = functools.reduce(operator.iconcat, classes, [])
-        # TODO the above is not completely correct in the ML case,
-        #  since the following method interprets the array length as number of samples
-        class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(classes), y=classes)
-
-        return class_weights
 
 
 if __name__ == '__main__':

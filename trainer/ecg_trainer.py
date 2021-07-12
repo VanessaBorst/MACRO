@@ -68,11 +68,12 @@ class ECGTrainer(BaseTrainer):
 
         # Store potential parameters needed for metrics
         val_class_weights = self.data_loader.dataset.get_inverse_class_frequency(
-            idx_list=self.data_loader.valid_sampler.indices, multi_label_training=self.multi_label_training) \
+            idx_list=self.data_loader.valid_sampler.indices, multi_label_training=self.multi_label_training,
+            mode='valid') \
             if not self.overfit_single_batch else None
 
         val_pos_weights = self.data_loader.dataset.get_ml_pos_weights(
-            idx_list=self.data_loader.valid_sampler.indices) \
+            idx_list=self.data_loader.valid_sampler.indices, mode='valid') \
             if not self.overfit_single_batch else None
 
         self._param_dict = {
@@ -82,10 +83,10 @@ class ECGTrainer(BaseTrainer):
             "log_probs": config["metrics"]["additional_metrics_args"].get("log_probs", False),
             "logits": config["metrics"]["additional_metrics_args"].get("logits", False),
             "train_pos_weights": self.data_loader.dataset.get_ml_pos_weights(
-                idx_list=self.data_loader.batch_sampler.sampler.indices),
+                idx_list=self.data_loader.batch_sampler.sampler.indices, mode='train'),
             "train_class_weights": self.data_loader.dataset.get_inverse_class_frequency(
                 idx_list=self.data_loader.batch_sampler.sampler.indices,
-                multi_label_training=self.multi_label_training),
+                multi_label_training=self.multi_label_training, mode='train'),
             "valid_pos_weights": val_pos_weights,
             "valid_class_weights": val_class_weights
         }

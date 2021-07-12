@@ -98,7 +98,7 @@ def random_search_tuning_params(name):
         return None
 
 
-def tuning_params(name):
+def axsearch_tuning_params(name):
     if name == "BaselineModelWithSkipConnections":
         return {
             "num_first_conv_blocks": tune.randint(1, 6),
@@ -122,12 +122,29 @@ def tuning_params(name):
     else:
         return None
 
-
-parameter_constraints = ["num_first_conv_blocks + num_second_conv_blocks <= 8",
-                         "num_first_conv_blocks + num_second_conv_blocks >= 4",
-                         # at least in one block size reduction
-                         "stride_first_conv_blocks + stride_second_conv_blocks >= 3",
-                         "out_channel_first_conv_blocks <= out_channel_second_conv_blocks"]
+def optuna_params(name):
+    if name == "BaselineModelWithSkipConnections":
+        return {
+            "num_first_conv_blocks": tune.randint(1, 6),
+            "num_second_conv_blocks": tune.randint(1, 6),
+            "drop_out_first_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
+            "drop_out_second_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
+            "out_channel_first_conv_blocks": tune.randint(12, 64),
+            "out_channel_second_conv_blocks": tune.randint(12, 64),
+            "mid_kernel_size_first_conv_blocks": tune.randint(3, 7),
+            "mid_kernel_size_second_conv_blocks": tune.randint(3, 7),
+            "last_kernel_size_first_conv_blocks": tune.randint(9, 39),
+            "last_kernel_size_second_conv_blocks": tune.randint(33, 63),
+            "stride_first_conv_blocks": tune.randint(1, 2),
+            "stride_second_conv_blocks": tune.randint(1, 2),
+            "down_sample":  tune.choice(["conv", "avg_pool", "max_pool"]),
+            # "dilation_first_conv_blocks": tune.randint(1, 3),
+            # "dilation_second_conv_blocks": tune.randint(1, 3),
+            # "expansion_first_conv_blocks": tune.choice(["1", "mul 2", "add 32"]),
+            # "expansion_second_conv_blocks": tune.choice(["1", "mul 2", "add 32"]),
+        }
+    else:
+        return None
 
 
 def hyper_study(main_config, tune_config, num_tune_samples):
@@ -165,13 +182,13 @@ def hyper_study(main_config, tune_config, num_tune_samples):
     # The idea behind SHA (Algorithm 1) is simple: allocate a small budget to each configuration, evaluate all
     # configurations and keep the top 1/reduction_factor, increase the budget per configuration by a factor of
     # reduction_factor, and repeat until the maximum per-configuration budget of R is reached
-    # scheduler = ASHAScheduler(
-    #     time_attr='training_iteration',
-    #     metric=mnt_metric,  # The training result objective value attribute. Stopping procedures will use this.
-    #     mode=mnt_mode,
-    #     max_t=100, # trainer.get('epochs', 120),  # Trials will be stopped after max_t time units (based on time_attr)
-    #     grace_period=1,  # Only stop trials at least this old in time.
-    #     reduction_factor=2)
+    scheduler = ASHAScheduler(
+        time_attr='training_iteration',
+        metric=mnt_metric,  # The training result objective value attribute. Stopping procedures will use this.
+        mode=mnt_mode,
+        max_t=100, # trainer.get('epochs', 120),  # Trials will be stopped after max_t time units (based on time_attr)
+        grace_period=1,  # Only stop trials at least this old in time.
+        reduction_factor=2)
     # # Problem:  the ASHAScheduler will aggressively terminate low-performing trials
 
     reporter = CLIReporter(
@@ -298,18 +315,17 @@ def hyper_study(main_config, tune_config, num_tune_samples):
                            points_to_evaluate=initial_param_suggestions,
                            parameter_constraints=["num_first_conv_blocks + num_second_conv_blocks <= 8",
                                                   "num_first_conv_blocks + num_second_conv_blocks >= 4",
+                                                  # at least in one block size reduction
                                                   "stride_first_conv_blocks + stride_second_conv_blocks >= 3",
                                                   "out_channel_first_conv_blocks <= out_channel_second_conv_blocks"])
     ax_searcher = ConcurrencyLimiter(ax_searcher, max_concurrent=2)
 
-    experiment_name = str(main_config.save_dir) + "_AxSearch"
-    local_training_save_dir = str(os.path.join(main_config.save_dir, "ray_results"))
     analysis = tune.run(
         run_or_experiment=train_fn,
         num_samples=num_tune_samples,
-        name=experiment_name,  # experiment_name
+        name=str(main_config.save_dir),  # experiment_name
         trial_dirname_creator=name_trial,  # trial_name
-        local_dir=local_training_save_dir,
+        local_dir=str(main_config.save_dir),
 
         #  scheduler=scheduler,             # Do not use any scheduler, early stopping can be configured in the Config!
         metric=mnt_metric,
@@ -383,7 +399,7 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
         valid_data_loader = data_loader.split_validation()
 
     # build model architecture, then print to console
-    if not use_tune:
+    if tune_config is None:
         model = config.init_obj('arch', module_arch)
     else:
         model = config.init_obj('arch', module_arch, **tune_config)
@@ -448,7 +464,7 @@ if __name__ == '__main__':
                       help='path to latest checkpoint (default: None)')
     args.add_argument('-d', '--device', default=None, type=str,
                       help='indices of GPUs to enable (default: all)')
-    args.add_argument('-t', '--tune', action='store_true', help='Use with True to enable tuning')
+    args.add_argument('-t', '--tune', action='store_true', help='Use to enable tuning')
 
     # custom cli options to modify configuration from default values given in json file.
     CustomArgs = collections.namedtuple('CustomArgs', 'flags type target')
@@ -459,7 +475,22 @@ if __name__ == '__main__':
     ]
     config = ConfigParser.from_args(args=args, options=options)
     if config.use_tune:
-        tuning_params = tuning_params(name=config["arch"]["type"])
+        tuning_params = axsearch_tuning_params(name=config["arch"]["type"])
         hyper_study(main_config=config, tune_config=tuning_params, num_tune_samples=100)
     else:
+        dummy_params = {
+          "down_sample": "conv",
+          "drop_out_first_conv_blocks": 0.2,
+          "drop_out_second_conv_blocks": 0.2,
+          "last_kernel_size_first_conv_blocks": 23,
+          "last_kernel_size_second_conv_blocks": 49,
+          "mid_kernel_size_first_conv_blocks": 5,
+          "mid_kernel_size_second_conv_blocks": 4,
+          "num_first_conv_blocks": 1,
+          "num_second_conv_blocks": 3,
+          "out_channel_first_conv_blocks": 31,
+          "out_channel_second_conv_blocks": 39,
+          "stride_first_conv_blocks": 2,
+          "stride_second_conv_blocks": 1
+        }
         train_model(config)

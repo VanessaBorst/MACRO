@@ -17,7 +17,7 @@
       "shuffle": true,
       "validation_split": 0.25,
       "num_workers": 4,
-      "pin_memory": true
+      "pin_memory": false
     },
     "overfit_single_batch": false,
     "test_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000/valid"
