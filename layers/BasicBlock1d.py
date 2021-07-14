@@ -1,6 +1,4 @@
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torchinfo import summary
 
 from layers.LayerUtils import calc_same_padding_for_stride_one
