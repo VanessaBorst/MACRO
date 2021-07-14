@@ -4,7 +4,7 @@ from torchinfo import summary
 from layers.LayerUtils import calc_same_padding_for_stride_one
 
 
-class BasicBlock1d(nn.Module):
+class BasicBlock1dWithInstNorm(nn.Module):
 
     def __init__(self, in_channels, out_channels, mid_kernels_size, last_kernel_size, stride, down_sample, drop_out):
         """
@@ -59,6 +59,7 @@ class BasicBlock1d(nn.Module):
                                 stride=stride)
         self._lrelu3 = nn.LeakyReLU(0.3)
         self._dropout = nn.Dropout(drop_out)
+        self._instance_norm = nn.InstanceNorm1d(num_features=out_channels, affine=True)
 
         self._downsample = None
         self._poooled_downsample = False
@@ -132,11 +133,12 @@ class BasicBlock1d(nn.Module):
                 if residual.shape[2] % 2 != 0:
                     residual = nn.ConstantPad1d((1, 1), 0)(residual)
             residual = self._downsample(residual)
-        out += residual
+        out = out + residual
+        out = self._instance_norm(out)
         return out
 
 
 if __name__ == "__main__":
-    model = BasicBlock1d(in_channels=12, out_channels=12, mid_kernels_size=3, last_kernel_size=44, stride=2,
+    model = BasicBlock1dWithInstNorm(in_channels=12, out_channels=12, mid_kernels_size=3, last_kernel_size=44, stride=2,
                          down_sample='avg_pool', drop_out=0.2)
     summary(model, input_size=(2, 12, 1125), col_names=["input_size", "output_size", "num_params"])

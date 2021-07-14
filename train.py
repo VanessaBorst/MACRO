@@ -14,9 +14,9 @@ from ax.service.ax_client import AxClient
 from jinja2.nodes import List
 from optuna.samplers import TPESampler
 from ray import tune
-from ray.tune import CLIReporter, Callback
+from ray.tune import CLIReporter, Callback, Trainable
 from ray.tune.schedulers import ASHAScheduler
-from ray.tune.suggest import ConcurrencyLimiter
+from ray.tune.suggest import ConcurrencyLimiter, BasicVariantGenerator
 from ray.tune.suggest.ax import AxSearch
 from ray.tune.suggest.optuna import OptunaSearch
 from ray.tune.stopper import ExperimentPlateauStopper, TrialPlateauStopper, CombinedStopper, FunctionStopper
@@ -53,67 +53,88 @@ _set_seed(SEED)
 # ==> Currently tune.sample_from() only works with random search (the default).
 # (https://github.com/ray-project/ray/issues/13614)
 
-# 1) The total amount of conv blocks should not exceed 7
-def _get_poss_num_second_conv_blocks(spec):
-    poss_nums = [1, 2, 3, 4, 5, 6]
-    poss_nums = [item for item in poss_nums if 8 >= item + spec.config.num_first_conv_blocks >= 4]
-    return np.random.choice(poss_nums)
+# # 1) The total amount of conv blocks should not exceed 7
+# def _get_poss_num_second_conv_blocks(spec):
+#     poss_nums = [1, 2, 3, 4, 5, 6]
+#     poss_nums = [item for item in poss_nums if 8 >= item + spec.config.num_first_conv_blocks >= 4]
+#     return np.random.choice(poss_nums)
+#
+#
+# # 2) The depth/amount of channels should stay the same or increase, but it should not decrease
+# def _get_poss_second_conv_blocks_depth(spec):
+#     poss_depths = [12, 24, 32, 64]  # , 128]
+#     poss_depths = [item for item in poss_depths if item >= spec.config.out_channel_first_conv_blocks]
+#     return np.random.choice(poss_depths)
+#
+#
+# # 3) With different amounts of in and out channels in a block, pooling can not be used for aligning the residual tensor
+# def _get_poss_down_samples(spec):
+#     if spec.config.out_channel_first_conv_blocks != 12 or \
+#             spec.config.out_channel_first_conv_blocks != spec.config.out_channel_second_conv_blocks:
+#         return "conv"
+#     else:
+#         return np.random.choice(["conv", "max_pool", "avg_pool"])
+#
+#
+# # Sample from can not be used with SearchAlgo other than the default
+# def restricted_tuning_params(name):
+#     if name == "BaselineModelWithSkipConnections":
+#         return {
+#             "num_first_conv_blocks": tune.randint(2, 6),
+#             "num_second_conv_blocks": tune.sample_from(_get_poss_num_second_conv_blocks),
+#             "drop_out_first_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
+#             "drop_out_second_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
+#             "out_channel_first_conv_blocks": tune.choice([12, 24, 32, 64]),
+#             "out_channel_second_conv_blocks": tune.sample_from(_get_poss_second_conv_blocks_depth),
+#             "mid_kernel_size_first_conv_blocks": tune.choice([3, 5, 7]),
+#             "mid_kernel_size_second_conv_blocks": tune.choice([3, 5, 7]),
+#             "last_kernel_size_first_conv_blocks": tune.randint(10, 24),
+#             "last_kernel_size_second_conv_blocks": tune.randint(20, 50),
+#             "stride_first_conv_blocks": 2,  # tune.randint(1, 2),
+#             "stride_second_conv_blocks": 2,  # tune.randint(1, 2),
+#             "down_sample": tune.sample_from(_get_poss_down_samples)
+#         }
+#     else:
+#         return None
+#
+#
+# def axsearch_tuning_params(name):
+#     if name == "BaselineModelWithSkipConnections":
+#         return {
+#             "num_first_conv_blocks": tune.randint(1, 6),
+#             "num_second_conv_blocks": tune.randint(1, 6),
+#             "drop_out_first_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
+#             "drop_out_second_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
+#             "out_channel_first_conv_blocks": tune.randint(12, 64),
+#             "out_channel_second_conv_blocks": tune.randint(12, 64),
+#             "mid_kernel_size_first_conv_blocks": tune.randint(3, 7),
+#             "mid_kernel_size_second_conv_blocks": tune.randint(3, 7),
+#             "last_kernel_size_first_conv_blocks": tune.randint(9, 39),
+#             "last_kernel_size_second_conv_blocks": tune.randint(33, 63),
+#             "stride_first_conv_blocks": tune.randint(1, 2),
+#             "stride_second_conv_blocks": tune.randint(1, 2),
+#             "down_sample": "conv",
+#             # "dilation_first_conv_blocks": tune.randint(1, 3),
+#             # "dilation_second_conv_blocks": tune.randint(1, 3),
+#             # "expansion_first_conv_blocks": tune.choice(["1", "mul 2", "add 32"]),
+#             # "expansion_second_conv_blocks": tune.choice(["1", "mul 2", "add 32"]),
+#         }
+#     else:
+#         return None
+#
 
-
-# 2) The depth/amount of channels should stay the same or increase, but it should not decrease
-def _get_poss_second_conv_blocks_depth(spec):
-    poss_depths = [12, 24, 32, 64]  # , 128]
-    poss_depths = [item for item in poss_depths if item >= spec.config.out_channel_first_conv_blocks]
-    return np.random.choice(poss_depths)
-
-
-# 3) With different amounts of in and out channels in a block, pooling can not be used for aligning the residual tensor
-def _get_poss_down_samples(spec):
-    if spec.config.out_channel_first_conv_blocks != 12 or \
-            spec.config.out_channel_first_conv_blocks != spec.config.out_channel_second_conv_blocks:
-        return "conv"
-    else:
-        return np.random.choice(["conv", "max_pool", "avg_pool"])
-
-
-# Sample from can not be used with SearchAlgo other than the default
-def random_search_tuning_params(name):
+def tuning_params(name):
     if name == "BaselineModelWithSkipConnections":
         return {
-            "num_first_conv_blocks": tune.randint(2, 6),
-            "num_second_conv_blocks": tune.sample_from(_get_poss_num_second_conv_blocks),
-            "drop_out_first_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
-            "drop_out_second_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
-            "out_channel_first_conv_blocks": tune.choice([12, 24, 32, 64]),
-            "out_channel_second_conv_blocks": tune.sample_from(_get_poss_second_conv_blocks_depth),
+            # "num_first_conv_blocks": tune.randint(1, 6),
+            # "num_second_conv_blocks": tune.randint(1, 6),
+            # "drop_out_first_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
+            # "drop_out_second_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
             "mid_kernel_size_first_conv_blocks": tune.choice([3, 5, 7]),
             "mid_kernel_size_second_conv_blocks": tune.choice([3, 5, 7]),
-            "last_kernel_size_first_conv_blocks": tune.randint(10, 24),
-            "last_kernel_size_second_conv_blocks": tune.randint(20, 50),
-            "stride_first_conv_blocks": 2,  # tune.randint(1, 2),
-            "stride_second_conv_blocks": 2,  # tune.randint(1, 2),
-            "down_sample": tune.sample_from(_get_poss_down_samples)
-        }
-    else:
-        return None
-
-
-def axsearch_tuning_params(name):
-    if name == "BaselineModelWithSkipConnections":
-        return {
-            "num_first_conv_blocks": tune.randint(1, 6),
-            "num_second_conv_blocks": tune.randint(1, 6),
-            "drop_out_first_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
-            "drop_out_second_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
-            "out_channel_first_conv_blocks": tune.randint(12, 64),
-            "out_channel_second_conv_blocks": tune.randint(12, 64),
-            "mid_kernel_size_first_conv_blocks": tune.randint(3, 7),
-            "mid_kernel_size_second_conv_blocks": tune.randint(3, 7),
-            "last_kernel_size_first_conv_blocks": tune.randint(9, 39),
-            "last_kernel_size_second_conv_blocks": tune.randint(33, 63),
-            "stride_first_conv_blocks": tune.randint(1, 2),
-            "stride_second_conv_blocks": tune.randint(1, 2),
-            "down_sample": "conv",
+            "last_kernel_size_first_conv_blocks": tune.choice([21, 24, 27]),
+            "last_kernel_size_second_conv_blocks": tune.choice([45, 48, 51]),
+            "down_sample": tune.choice(["conv", "max_pool"]),
             # "dilation_first_conv_blocks": tune.randint(1, 3),
             # "dilation_second_conv_blocks": tune.randint(1, 3),
             # "expansion_first_conv_blocks": tune.choice(["1", "mul 2", "add 32"]),
@@ -122,29 +143,26 @@ def axsearch_tuning_params(name):
     else:
         return None
 
-def optuna_params(name):
-    if name == "BaselineModelWithSkipConnections":
-        return {
-            "num_first_conv_blocks": tune.randint(1, 6),
-            "num_second_conv_blocks": tune.randint(1, 6),
-            "drop_out_first_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
-            "drop_out_second_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
-            "out_channel_first_conv_blocks": tune.randint(12, 64),
-            "out_channel_second_conv_blocks": tune.randint(12, 64),
-            "mid_kernel_size_first_conv_blocks": tune.randint(3, 7),
-            "mid_kernel_size_second_conv_blocks": tune.randint(3, 7),
-            "last_kernel_size_first_conv_blocks": tune.randint(9, 39),
-            "last_kernel_size_second_conv_blocks": tune.randint(33, 63),
-            "stride_first_conv_blocks": tune.randint(1, 2),
-            "stride_second_conv_blocks": tune.randint(1, 2),
-            "down_sample":  tune.choice(["conv", "avg_pool", "max_pool"]),
-            # "dilation_first_conv_blocks": tune.randint(1, 3),
-            # "dilation_second_conv_blocks": tune.randint(1, 3),
-            # "expansion_first_conv_blocks": tune.choice(["1", "mul 2", "add 32"]),
-            # "expansion_second_conv_blocks": tune.choice(["1", "mul 2", "add 32"]),
-        }
-    else:
-        return None
+
+class MyTrainableClass(Trainable):
+
+    def _setup(self, config, tune_config):
+        # config (dict): A dict of hyperparameters
+        self.x = 0
+        self.a = config["a"]
+        self.b = config["b"]
+
+    def _train(self):  # This is called iteratively.
+       print()
+
+    def _save(self, tmp_checkpoint_dir):
+        checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
+        torch.save(self.model.state_dict(), checkpoint_path)
+        return tmp_checkpoint_dir
+
+    def _restore(self, tmp_checkpoint_dir):
+        checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
+        self.model.load_state_dict(torch.load(checkpoint_path))
 
 
 def hyper_study(main_config, tune_config, num_tune_samples):
@@ -182,30 +200,30 @@ def hyper_study(main_config, tune_config, num_tune_samples):
     # The idea behind SHA (Algorithm 1) is simple: allocate a small budget to each configuration, evaluate all
     # configurations and keep the top 1/reduction_factor, increase the budget per configuration by a factor of
     # reduction_factor, and repeat until the maximum per-configuration budget of R is reached
-    scheduler = ASHAScheduler(
-        time_attr='training_iteration',
-        metric=mnt_metric,  # The training result objective value attribute. Stopping procedures will use this.
-        mode=mnt_mode,
-        max_t=100, # trainer.get('epochs', 120),  # Trials will be stopped after max_t time units (based on time_attr)
-        grace_period=1,  # Only stop trials at least this old in time.
-        reduction_factor=2)
+    # scheduler = ASHAScheduler(
+    #     time_attr='training_iteration',
+    #     metric=mnt_metric,  # The training result objective value attribute. Stopping procedures will use this.
+    #     mode=mnt_mode,
+    #     max_t=100,  # trainer.get('epochs', 120),  # Trials will be stopped after max_t time units (based on time_attr)
+    #     grace_period=1,  # Only stop trials at least this old in time.
+    #     reduction_factor=2)
     # # Problem:  the ASHAScheduler will aggressively terminate low-performing trials
 
     reporter = CLIReporter(
         parameter_columns={
-            "num_first_conv_blocks": "Num 1st",
-            "num_second_conv_blocks": "Num 2nd",
-            "drop_out_first_conv_blocks": "Drop 1st",
-            "drop_out_second_conv_blocks": "Drop 2nd",
-            "out_channel_first_conv_blocks": "Out 1st",
-            "out_channel_second_conv_blocks": "Out 2nd",
+            # "num_first_conv_blocks": "Num 1st",
+            # "num_second_conv_blocks": "Num 2nd",
+            # "drop_out_first_conv_blocks": "Drop 1st",
+            # "drop_out_second_conv_blocks": "Drop 2nd",
+            # "out_channel_first_conv_blocks": "Out 1st",
+            # "out_channel_second_conv_blocks": "Out 2nd",
             "mid_kernel_size_first_conv_blocks": "Mid kernel 1st",
             "mid_kernel_size_second_conv_blocks": "Mid kernel 2nd",
             "last_kernel_size_first_conv_blocks": "Last kernel 1st",
             "last_kernel_size_second_conv_blocks": "Last kernel 2nd",
-            "stride_first_conv_blocks": "S 1st",
-            "stride_second_conv_blocks": "S 2nd",
-            "down_sample": "ds"
+            # "stride_first_conv_blocks": "S 1st",
+            # "stride_second_conv_blocks": "S 2nd",
+            "down_sample": "Downsampling"
         },
         metric_columns=["val_loss", "val_cpsc_F1", "training_iteration"])
 
@@ -224,101 +242,118 @@ def hyper_study(main_config, tune_config, num_tune_samples):
     #     grace_period=1,  # Minimum number of timesteps before a trial can be early stopped
     # )
 
+    # initial_param_suggestions = [
+    #     # Original setting
+    #     {
+    #         "num_first_conv_blocks": 4,
+    #         "num_second_conv_blocks": 1,
+    #         "drop_out_first_conv_blocks": 0.2,
+    #         "drop_out_second_conv_blocks": 0.2,
+    #         "out_channel_first_conv_blocks": 12,
+    #         "out_channel_second_conv_blocks": 12,
+    #         "mid_kernel_size_first_conv_blocks": 3,
+    #         "mid_kernel_size_second_conv_blocks": 3,
+    #         "last_kernel_size_first_conv_blocks": 24,
+    #         "last_kernel_size_second_conv_blocks": 48,
+    #         "stride_first_conv_blocks": 2,
+    #         "stride_second_conv_blocks": 2,
+    #         "down_sample": "conv"
+    #     },
+    #     # Good configurations found by first manual runs
+    #     {
+    #         "num_first_conv_blocks": 3,
+    #         "num_second_conv_blocks": 1,
+    #         "drop_out_first_conv_blocks": 0.2,
+    #         "drop_out_second_conv_blocks": 0.2,
+    #         "out_channel_first_conv_blocks": 12,
+    #         "out_channel_second_conv_blocks": 12,
+    #         "mid_kernel_size_first_conv_blocks": 3,
+    #         "mid_kernel_size_second_conv_blocks": 3,
+    #         "last_kernel_size_first_conv_blocks": 24,
+    #         "last_kernel_size_second_conv_blocks": 48,
+    #         "stride_first_conv_blocks": 2,
+    #         "stride_second_conv_blocks": 2,
+    #         "down_sample": "conv"
+    #     },
+    #     # Good configurations found by first RandomSearch
+    #     {
+    #         "num_first_conv_blocks": 3,
+    #         "num_second_conv_blocks": 3,
+    #         "drop_out_first_conv_blocks": 0.3,
+    #         "drop_out_second_conv_blocks": 0.2,
+    #         "out_channel_first_conv_blocks": 32,
+    #         "out_channel_second_conv_blocks": 32,
+    #         "mid_kernel_size_first_conv_blocks": 3,
+    #         "mid_kernel_size_second_conv_blocks": 3,
+    #         "last_kernel_size_first_conv_blocks": 13,
+    #         "last_kernel_size_second_conv_blocks": 48,
+    #         "stride_first_conv_blocks": 2,
+    #         "stride_second_conv_blocks": 2,
+    #         "down_sample": "conv"
+    #     },
+    #     {
+    #         "num_first_conv_blocks": 4,
+    #         "num_second_conv_blocks": 2,
+    #         "drop_out_first_conv_blocks": 0.2,
+    #         "drop_out_second_conv_blocks": 0.2,
+    #         "out_channel_first_conv_blocks": 24,
+    #         "out_channel_second_conv_blocks": 24,
+    #         "mid_kernel_size_first_conv_blocks": 5,
+    #         "mid_kernel_size_second_conv_blocks": 5,
+    #         "last_kernel_size_first_conv_blocks": 11,
+    #         "last_kernel_size_second_conv_blocks": 38,
+    #         "stride_first_conv_blocks": 2,
+    #         "stride_second_conv_blocks": 2,
+    #         "down_sample": "conv"
+    #     },
+    #     {
+    #         "num_first_conv_blocks": 2,
+    #         "num_second_conv_blocks": 3,
+    #         "drop_out_first_conv_blocks": 0.2,
+    #         "drop_out_second_conv_blocks": 0.2,
+    #         "out_channel_first_conv_blocks": 12,
+    #         "out_channel_second_conv_blocks": 24,
+    #         "mid_kernel_size_first_conv_blocks": 7,
+    #         "mid_kernel_size_second_conv_blocks": 3,
+    #         "last_kernel_size_first_conv_blocks": 22,
+    #         "last_kernel_size_second_conv_blocks": 37,
+    #         "stride_first_conv_blocks": 2,
+    #         "stride_second_conv_blocks": 2,
+    #         "down_sample": "conv"
+    #     },
+    # ]
+
+    # optuna_searcher = OptunaSearch(metric=mnt_metric, mode=mnt_mode,
+    #                                points_to_evaluate=initial_param_suggestions,
+    #                                sampler=TPESampler(seed=SEED))
+    #
+    # # ax = AxClient(enforce_sequential_optimization=False)  # (https://ax.dev/tutorials/raytune_pytorch_cnn.html)
+    # # ax = AxClient(random_seed=SEED)
+    # ax_searcher = AxSearch(metric=mnt_metric, mode=mnt_mode,
+    #                        points_to_evaluate=initial_param_suggestions,
+    #                        parameter_constraints=["num_first_conv_blocks + num_second_conv_blocks <= 8",
+    #                                               "num_first_conv_blocks + num_second_conv_blocks >= 4",
+    #                                               # at least in one block size reduction
+    #                                               "stride_first_conv_blocks + stride_second_conv_blocks >= 3",
+    #                                               "out_channel_first_conv_blocks <= out_channel_second_conv_blocks"])
+    # ax_searcher = ConcurrencyLimiter(ax_searcher, max_concurrent=2)
+
     initial_param_suggestions = [
-        # Original setting
         {
-            "num_first_conv_blocks": 4,
-            "num_second_conv_blocks": 1,
-            "drop_out_first_conv_blocks": 0.2,
-            "drop_out_second_conv_blocks": 0.2,
-            "out_channel_first_conv_blocks": 12,
-            "out_channel_second_conv_blocks": 12,
             "mid_kernel_size_first_conv_blocks": 3,
             "mid_kernel_size_second_conv_blocks": 3,
             "last_kernel_size_first_conv_blocks": 24,
             "last_kernel_size_second_conv_blocks": 48,
-            "stride_first_conv_blocks": 2,
-            "stride_second_conv_blocks": 2,
             "down_sample": "conv"
         },
-        # Good configurations found by first manual runs
         {
-            "num_first_conv_blocks": 3,
-            "num_second_conv_blocks": 1,
-            "drop_out_first_conv_blocks": 0.2,
-            "drop_out_second_conv_blocks": 0.2,
-            "out_channel_first_conv_blocks": 12,
-            "out_channel_second_conv_blocks": 12,
             "mid_kernel_size_first_conv_blocks": 3,
             "mid_kernel_size_second_conv_blocks": 3,
             "last_kernel_size_first_conv_blocks": 24,
             "last_kernel_size_second_conv_blocks": 48,
-            "stride_first_conv_blocks": 2,
-            "stride_second_conv_blocks": 2,
-            "down_sample": "conv"
-        },
-        # Good configurations found by first RandomSearch
-        {
-            "num_first_conv_blocks": 3,
-            "num_second_conv_blocks": 3,
-            "drop_out_first_conv_blocks": 0.3,
-            "drop_out_second_conv_blocks": 0.2,
-            "out_channel_first_conv_blocks": 32,
-            "out_channel_second_conv_blocks": 32,
-            "mid_kernel_size_first_conv_blocks": 3,
-            "mid_kernel_size_second_conv_blocks": 3,
-            "last_kernel_size_first_conv_blocks": 13,
-            "last_kernel_size_second_conv_blocks": 48,
-            "stride_first_conv_blocks": 2,
-            "stride_second_conv_blocks": 2,
-            "down_sample": "conv"
-        },
-        {
-            "num_first_conv_blocks": 4,
-            "num_second_conv_blocks": 2,
-            "drop_out_first_conv_blocks": 0.2,
-            "drop_out_second_conv_blocks": 0.2,
-            "out_channel_first_conv_blocks": 24,
-            "out_channel_second_conv_blocks": 24,
-            "mid_kernel_size_first_conv_blocks": 5,
-            "mid_kernel_size_second_conv_blocks": 5,
-            "last_kernel_size_first_conv_blocks": 11,
-            "last_kernel_size_second_conv_blocks": 38,
-            "stride_first_conv_blocks": 2,
-            "stride_second_conv_blocks": 2,
-            "down_sample": "conv"
-        },
-        {
-            "num_first_conv_blocks": 2,
-            "num_second_conv_blocks": 3,
-            "drop_out_first_conv_blocks": 0.2,
-            "drop_out_second_conv_blocks": 0.2,
-            "out_channel_first_conv_blocks": 12,
-            "out_channel_second_conv_blocks": 24,
-            "mid_kernel_size_first_conv_blocks": 7,
-            "mid_kernel_size_second_conv_blocks": 3,
-            "last_kernel_size_first_conv_blocks": 22,
-            "last_kernel_size_second_conv_blocks": 37,
-            "stride_first_conv_blocks": 2,
-            "stride_second_conv_blocks": 2,
-            "down_sample": "conv"
-        },
+            "down_sample": "max_pool"
+        }
     ]
-
-    optuna_searcher = OptunaSearch(metric=mnt_metric, mode=mnt_mode,
-                                   points_to_evaluate=initial_param_suggestions,
-                                   sampler=TPESampler(seed=SEED))
-
-    # ax = AxClient(enforce_sequential_optimization=False)  # (https://ax.dev/tutorials/raytune_pytorch_cnn.html)
-    # ax = AxClient(random_seed=SEED)
-    ax_searcher = AxSearch(metric=mnt_metric, mode=mnt_mode,
-                           points_to_evaluate=initial_param_suggestions,
-                           parameter_constraints=["num_first_conv_blocks + num_second_conv_blocks <= 8",
-                                                  "num_first_conv_blocks + num_second_conv_blocks >= 4",
-                                                  # at least in one block size reduction
-                                                  "stride_first_conv_blocks + stride_second_conv_blocks >= 3",
-                                                  "out_channel_first_conv_blocks <= out_channel_second_conv_blocks"])
-    ax_searcher = ConcurrencyLimiter(ax_searcher, max_concurrent=2)
 
     analysis = tune.run(
         run_or_experiment=train_fn,
@@ -334,10 +369,11 @@ def hyper_study(main_config, tune_config, num_tune_samples):
         # keep_checkpoints_num=10,
         # checkpoint_score_attr=f"{mnt_mode}-{mnt_metric}",
 
-        search_alg=ax_searcher,
+        # search_alg=ax_searcher,           # Just use Random Grid Search instead of an advanced search algo
+        search_alg=BasicVariantGenerator(points_to_evaluate=initial_param_suggestions, max_concurrent=3),
         config={**tune_config},
-        resources_per_trial={"cpu": 8 if torch.cuda.is_available() else 1,
-                             "gpu": 0.5 if torch.cuda.is_available() else 0},
+        resources_per_trial={"cpu": 5 if torch.cuda.is_available() else 1,
+                             "gpu": 0.33 if torch.cuda.is_available() else 0},
 
         max_failures=2,  # retry when error, e.g. OutOfMemory, default is 0
         raise_on_failed_trial=False,  # Failed trials are expected due to assertion errors
@@ -475,22 +511,7 @@ if __name__ == '__main__':
     ]
     config = ConfigParser.from_args(args=args, options=options)
     if config.use_tune:
-        tuning_params = axsearch_tuning_params(name=config["arch"]["type"])
+        tuning_params = tuning_params(name=config["arch"]["type"])
         hyper_study(main_config=config, tune_config=tuning_params, num_tune_samples=100)
     else:
-        dummy_params = {
-          "down_sample": "conv",
-          "drop_out_first_conv_blocks": 0.2,
-          "drop_out_second_conv_blocks": 0.2,
-          "last_kernel_size_first_conv_blocks": 23,
-          "last_kernel_size_second_conv_blocks": 49,
-          "mid_kernel_size_first_conv_blocks": 5,
-          "mid_kernel_size_second_conv_blocks": 4,
-          "num_first_conv_blocks": 1,
-          "num_second_conv_blocks": 3,
-          "out_channel_first_conv_blocks": 31,
-          "out_channel_second_conv_blocks": 39,
-          "stride_first_conv_blocks": 2,
-          "stride_second_conv_blocks": 1
-        }
         train_model(config)

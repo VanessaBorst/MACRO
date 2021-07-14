@@ -2,7 +2,7 @@ import os
 import pickle
 from shutil import copyfile
 
-base_path = "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000"
+base_path = "../data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000"
 with open("savedVM/log/CPSC_BaselineModel/ml_bs8/Record_names_valid.p", "rb") as file:
     record_names = pickle.load(file)
 

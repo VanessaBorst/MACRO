@@ -5,6 +5,7 @@ from base import BaseModel
 from layers.ContextualAttention import ContextualAttention
 from layers.BasicBlock1d import BasicBlock1d
 
+
 # /1_5_0.2_0.3_24_64_3_3_13_44_1_1_conv_23-22-57
 class BaselineModelWithSkipConnections(BaseModel):
     def __init__(self, apply_final_activation, multi_label_training, input_channel=12, num_classes=9,
@@ -126,6 +127,6 @@ if __name__ == "__main__":
                                              stride_first_conv_blocks=2,
                                              stride_second_conv_blocks=2
                                              )
-        #2_6_0.2_0.3_24_64_3_3_13_44_2_2_conv_23
+    # 2_6_0.2_0.3_24_64_3_3_13_44_2_2_conv_23
 
     summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "num_params"])
