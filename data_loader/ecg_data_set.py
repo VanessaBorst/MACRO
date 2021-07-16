@@ -118,8 +118,9 @@ class ECGDataset(Dataset):
                 record_names.append(record_name)
 
             # Dump the record names to pickle to ensure they are the same between VMs
+            project_root = get_project_root()
             if mode is not None:
-                with open(os.path.join(Path('data_loader'), 'Record_names_' + str(mode)) + ".p", 'wb') as file:
+                with open(os.path.join(project_root, 'data_loader', 'Record_names_' + str(mode)) + ".p", 'wb+') as file:
                     pickle.dump(record_names, file)
 
             # Get the class freqs as Pandas series

@@ -37,8 +37,8 @@ def main(config, tune_config=None):
         import model.baseline_model as module_arch
     elif config['arch']['type'] == 'BaselineModelWithSkipConnections':
         import model.baseline_model_with_skips as module_arch
-    else:
-        import model.baseline_model_variableConvs as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndInstanceNorm':
+        import model.baseline_model_with_skips_and_InstNorm as module_arch
 
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric

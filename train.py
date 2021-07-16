@@ -1,6 +1,6 @@
 import argparse
 import collections
-import json
+import sys
 from datetime import datetime
 import os
 import pickle
@@ -8,25 +8,20 @@ import random
 from pathlib import Path
 
 import ray
-import torch
 import numpy as np
-from ax.service.ax_client import AxClient
-from jinja2.nodes import List
-from optuna.samplers import TPESampler
+from ray.tune.web_server import TuneClient
 from ray import tune
-from ray.tune import CLIReporter, Callback, Trainable
-from ray.tune.schedulers import ASHAScheduler
-from ray.tune.suggest import ConcurrencyLimiter, BasicVariantGenerator
-from ray.tune.suggest.ax import AxSearch
-from ray.tune.suggest.optuna import OptunaSearch
-from ray.tune.stopper import ExperimentPlateauStopper, TrialPlateauStopper, CombinedStopper, FunctionStopper
+from ray.tune import CLIReporter, Callback
+from ray.tune.suggest import BasicVariantGenerator
+
 
 import data_loader.data_loaders as module_data_loader
 import model.loss as module_loss
-from logger import update_logging_setup_for_tune, setup_logging
+from logger import update_logging_setup_for_tune
 from parse_config import ConfigParser
 from trainer.ecg_trainer import ECGTrainer
-from utils import prepare_device, get_project_root, write_json
+from utils import prepare_device, get_project_root
+import torch
 
 
 def _set_seed(SEED):
@@ -123,49 +118,66 @@ _set_seed(SEED)
 #         return None
 #
 
+def _get_mid_kernel_size_second_conv_blocks(spec):
+    # Choose the same size for the second block as well to reduce the amount of hyperparams
+    return spec.config.mid_kernel_size_first_conv_blocks
+
+
 def tuning_params(name):
-    if name == "BaselineModelWithSkipConnections":
+    if name == "BaselineModelWithSkipConnections" or name == "BaselineModelWithSkipConnectionsAndInstanceNorm":
         return {
-            # "num_first_conv_blocks": tune.randint(1, 6),
-            # "num_second_conv_blocks": tune.randint(1, 6),
-            # "drop_out_first_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
-            # "drop_out_second_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
-            "mid_kernel_size_first_conv_blocks": tune.choice([3, 5, 7]),
-            "mid_kernel_size_second_conv_blocks": tune.choice([3, 5, 7]),
-            "last_kernel_size_first_conv_blocks": tune.choice([21, 24, 27]),
-            "last_kernel_size_second_conv_blocks": tune.choice([45, 48, 51]),
-            "down_sample": tune.choice(["conv", "max_pool"]),
-            # "dilation_first_conv_blocks": tune.randint(1, 3),
-            # "dilation_second_conv_blocks": tune.randint(1, 3),
-            # "expansion_first_conv_blocks": tune.choice(["1", "mul 2", "add 32"]),
-            # "expansion_second_conv_blocks": tune.choice(["1", "mul 2", "add 32"]),
+            "mid_kernel_size_first_conv_blocks": tune.grid_search([3, 5, 7]),
+            "mid_kernel_size_second_conv_blocks": tune.sample_from(_get_mid_kernel_size_second_conv_blocks),
+            "last_kernel_size_first_conv_blocks": tune.grid_search([21, 24, 27]),
+            "last_kernel_size_second_conv_blocks": tune.grid_search([45, 48, 51]),
+            "down_sample": tune.grid_search(["conv", "max_pool"])
         }
     else:
         return None
 
 
-class MyTrainableClass(Trainable):
+class MyTuneCallback(Callback):
 
-    def _setup(self, config, tune_config):
-        # config (dict): A dict of hyperparameters
-        self.x = 0
-        self.a = config["a"]
-        self.b = config["b"]
+    def __init__(self):
+        self.already_seen = set()
+        self.manager = TuneClient(tune_address="localhost", port_forward=4321)
 
-    def _train(self):  # This is called iteratively.
-       print()
+    def setup(self, ):
+        seen_configs = [
+            # {
+            #     "mid_kernel_size_first_conv_blocks": 3,
+            #     "mid_kernel_size_second_conv_blocks": 3,
+            #     "last_kernel_size_first_conv_blocks": 24,
+            #     "last_kernel_size_second_conv_blocks": 48,
+            #     "down_sample": "conv"
+            # },
+            # {
+            #     "mid_kernel_size_first_conv_blocks": 3,
+            #     "mid_kernel_size_second_conv_blocks": 3,
+            #     "last_kernel_size_first_conv_blocks": 24,
+            #     "last_kernel_size_second_conv_blocks": 48,
+            #     "down_sample": "max_pool"
+            # },
+            # {
+            #     "mid_kernel_size_first_conv_blocks": 3,
+            #     "mid_kernel_size_second_conv_blocks": 3,
+            #     "last_kernel_size_first_conv_blocks": 21,
+            #     "last_kernel_size_second_conv_blocks": 45,
+            #     "down_sample": "conv"
+            # }
+        ]
 
-    def _save(self, tmp_checkpoint_dir):
-        checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
-        torch.save(self.model.state_dict(), checkpoint_path)
-        return tmp_checkpoint_dir
+        for config in seen_configs:
+            self.already_seen.add(str(config))
 
-    def _restore(self, tmp_checkpoint_dir):
-        checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
-        self.model.load_state_dict(torch.load(checkpoint_path))
+    def on_trial_start(self, iteration, trials, trial, **info):
+        if str(trial.config) in self.already_seen:
+            self.manager.stop_trial(trial.trial_id)
+        else:
+            self.already_seen.add(str(trial.config))
 
 
-def hyper_study(main_config, tune_config, num_tune_samples):
+def hyper_study(main_config, tune_config, num_tune_samples=1):
     def name_trial(trial):
         file_name = f""
         for key in tune_config.keys():
@@ -183,7 +195,6 @@ def hyper_study(main_config, tune_config, num_tune_samples):
     valid_data_loader = data_loader.split_validation()
 
     def train_fn(config, checkpoint_dir=None):
-        # model = getattr(models, config["model_name"])(**config)
         train_model(config=main_config, tune_config=config, train_dl=data_loader, valid_dl=valid_data_loader,
                     checkpoint_dir=checkpoint_dir, use_tune=True)
 
@@ -338,23 +349,6 @@ def hyper_study(main_config, tune_config, num_tune_samples):
     #                                               "out_channel_first_conv_blocks <= out_channel_second_conv_blocks"])
     # ax_searcher = ConcurrencyLimiter(ax_searcher, max_concurrent=2)
 
-    initial_param_suggestions = [
-        {
-            "mid_kernel_size_first_conv_blocks": 3,
-            "mid_kernel_size_second_conv_blocks": 3,
-            "last_kernel_size_first_conv_blocks": 24,
-            "last_kernel_size_second_conv_blocks": 48,
-            "down_sample": "conv"
-        },
-        {
-            "mid_kernel_size_first_conv_blocks": 3,
-            "mid_kernel_size_second_conv_blocks": 3,
-            "last_kernel_size_first_conv_blocks": 24,
-            "last_kernel_size_second_conv_blocks": 48,
-            "down_sample": "max_pool"
-        }
-    ]
-
     analysis = tune.run(
         run_or_experiment=train_fn,
         num_samples=num_tune_samples,
@@ -370,7 +364,7 @@ def hyper_study(main_config, tune_config, num_tune_samples):
         # checkpoint_score_attr=f"{mnt_mode}-{mnt_metric}",
 
         # search_alg=ax_searcher,           # Just use Random Grid Search instead of an advanced search algo
-        search_alg=BasicVariantGenerator(points_to_evaluate=initial_param_suggestions, max_concurrent=3),
+        search_alg=BasicVariantGenerator(),     #points_to_evaluate=initial_param_suggestions, max_concurrent=3),
         config={**tune_config},
         resources_per_trial={"cpu": 5 if torch.cuda.is_available() else 1,
                              "gpu": 0.33 if torch.cuda.is_available() else 0},
@@ -379,7 +373,10 @@ def hyper_study(main_config, tune_config, num_tune_samples):
         raise_on_failed_trial=False,  # Failed trials are expected due to assertion errors
         verbose=1,
         progress_reporter=reporter,
-        log_to_file=True
+        log_to_file=True,
+
+        callbacks=[MyTuneCallback()],
+        server_port=4321
     )
 
     print("Best hyperparameters found were: ", analysis.best_config)
@@ -397,6 +394,16 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
     # config: type: ConfigParser -> can be used as usual
     # tune_config: type: Dict -> contains the tune params with the samples values,
     #               e.g. {'num_first_conv_blocks': 8, 'num_second_conv_blocks': 9, ...}
+    import torch    # Needed to work with asych. tune workers as well
+    if use_tune:
+        # When using Ray Tune, this is distributed among worker processes, which requires seeding within the function
+        # Otherwise the same config may to different results -> not reproducible
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        np.random.seed(SEED)
+        torch.manual_seed(SEED)
+        random.seed(SEED)
+        torch.cuda.manual_seed_all(SEED)
 
     # Conditional inputs depending on the config
     if config['arch']['type'] == 'BaselineModelWoRnnWoAttention':
@@ -405,8 +412,8 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
         import model.baseline_model as module_arch
     elif config['arch']['type'] == 'BaselineModelWithSkipConnections':
         import model.baseline_model_with_skips as module_arch
-    else:
-        import model.baseline_model_variableConvs as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndInstanceNorm':
+        import model.baseline_model_with_skips_and_InstNorm as module_arch
 
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric
@@ -512,6 +519,7 @@ if __name__ == '__main__':
     config = ConfigParser.from_args(args=args, options=options)
     if config.use_tune:
         tuning_params = tuning_params(name=config["arch"]["type"])
-        hyper_study(main_config=config, tune_config=tuning_params, num_tune_samples=100)
+        # With grid search, only 1 times !
+        hyper_study(main_config=config, tune_config=tuning_params, num_tune_samples=1)
     else:
         train_model(config)

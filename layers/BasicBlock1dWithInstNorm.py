@@ -1,3 +1,4 @@
+import torch.cuda
 import torch.nn as nn
 from torchinfo import summary
 
@@ -50,16 +51,26 @@ class BasicBlock1dWithInstNorm(nn.Module):
         self._half_last_kernel_padding = nn.ConstantPad1d((half_last_kernel, half_last_kernel), 0)
         self._half_last_kernel_padding_minus_1 = nn.ConstantPad1d((half_last_kernel_minus_1, half_last_kernel_minus_1), 0)
 
-        self._conv1 = nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=mid_kernels_size)
+        self._conv1 = nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=mid_kernels_size, bias=False)
+        # self._instance_norm1 = nn.InstanceNorm1d(num_features=out_channels, affine=True)
+        # self._batch_norm1 = nn.BatchNorm1d(num_features=out_channels)
         self._lrelu1 = nn.LeakyReLU(0.3)
-        self._conv2 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=mid_kernels_size)
+
+        self._conv2 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=mid_kernels_size, bias=False)
+        # self._instance_norm2 = nn.InstanceNorm1d(num_features=out_channels, affine=True)
+        # self._batch_norm2 = nn.BatchNorm1d(num_features=out_channels)
         self._lrelu2 = nn.LeakyReLU(0.3)
 
         self._conv3 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=last_kernel_size,
-                                stride=stride)
+                                stride=stride, bias=False)
+        # self._instance_norm3 = nn.InstanceNorm1d(num_features=out_channels, affine=True)
+        # self._batch_norm3 = nn.BatchNorm1d(num_features=out_channels)
         self._lrelu3 = nn.LeakyReLU(0.3)
         self._dropout = nn.Dropout(drop_out)
-        self._instance_norm = nn.InstanceNorm1d(num_features=out_channels, affine=True)
+
+        self._batch_norm = nn.BatchNorm1d(num_features=out_channels, momentum=0.01)
+        # self._instance_norm = nn.InstanceNorm1d(num_features=out_channels, affine=True)
+
 
         self._downsample = None
         self._poooled_downsample = False
@@ -104,15 +115,21 @@ class BasicBlock1dWithInstNorm(nn.Module):
         else:
             x = self._half_mid_kernel_padding(x)
         out = self._conv1(x)
+        # out = self._instance_norm1(out)
+        # out = self._batch_norm1(out)
         out = self._lrelu1(out)
+
         if self._mid_kernels_size % 2 == 0:
             out = self._one_sided_padding(out)
             out = self._half_mid_kernel_padding_minus_1(out)
         else:
             out = self._half_mid_kernel_padding(out)
         out = self._conv2(out)
+        # out = self._instance_norm2(out)
+        # out = self._batch_norm2(out)
         out = self._lrelu2(out)
-        # Conv3 usually has stride 2
+
+        # Conv3 has stride 2
         if self._stride == 2:
             if self._last_kernel_size % 2 == 0 and out.shape[2] % 2 != 0:
                 out = self._half_last_kernel_padding(out)
@@ -125,8 +142,11 @@ class BasicBlock1dWithInstNorm(nn.Module):
             else:
                 out = self._half_last_kernel_padding(out)
         out = self._conv3(out)
+        # out = self._instance_norm3(out)
+        # out = self._batch_norm3(out)
         out = self._lrelu3(out)
         out = self._dropout(out)
+
         if self._downsample is not None:
             if self._poooled_downsample:
                 # Stride is two and kernel size is two as well
@@ -134,11 +154,16 @@ class BasicBlock1dWithInstNorm(nn.Module):
                     residual = nn.ConstantPad1d((1, 1), 0)(residual)
             residual = self._downsample(residual)
         out = out + residual
-        out = self._instance_norm(out)
+        out = self._batch_norm(out)
+        # out = self._instance_norm(out)
+        # layer_norm = nn.LayerNorm([out.shape[-1]])
+        # if torch.cuda.is_available():
+        #     layer_norm.to('cuda:0')
+        # out = layer_norm(out)
         return out
 
 
 if __name__ == "__main__":
     model = BasicBlock1dWithInstNorm(in_channels=12, out_channels=12, mid_kernels_size=3, last_kernel_size=44, stride=2,
-                         down_sample='avg_pool', drop_out=0.2)
+                         down_sample='conv', drop_out=0.2)
     summary(model, input_size=(2, 12, 1125), col_names=["input_size", "output_size", "num_params"])

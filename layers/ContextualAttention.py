@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class ContextualAttention(nn.Module):
-    """Contextual Attention as used by Tsai-Min et al.
+    """Contextual Attention as used by Chen et al.
 
     Given an input of shape [batch_size, seq_len, 2*num_units]
     attention weights are determined for each of the seq_len hidden states.
@@ -21,9 +21,6 @@ class ContextualAttention(nn.Module):
         Bool specifying whether an bias should be used to retrieve the hidden representation for
         the hidden states of the BiGRU (which serve as values)
     """
-    # TODO: Check Initalization, Values may differ from the original paper by Tsai-Min et al.
-    # TODO: CHECK attention weights and their development during training
-    # See init.kaiming_uniform_(self.weight, a=math.sqrt(5))
     def __init__(self, gru_dimension=12, attention_dimension=24, use_bias=True):
         super().__init__()
         self._use_bias = use_bias
@@ -67,6 +64,7 @@ class ContextualAttention(nn.Module):
         nn.init.uniform(self._u)
         '''
 
+
     def forward(self, biGRU_outputs):
         # biGRU_outputs is of shape [batch_size, seq_len, 2*num_units], e.g., bs*2250*24
         # Wanted: Seq_len number of attention weights for each element in the batch
@@ -98,9 +96,5 @@ class ContextualAttention(nn.Module):
         # u_in = F.tanh(F.add(F.dot(x, self._W), self._b)) if self._bias else F.tanh(F.dot(x, self._W))
         # a = F.softmax(F.dot(u_in, self._u))
         # return x[:, -1, :]  # For testing, just pass through/choose the last hidden state for each element of the batch
-
-
-
-
 
 
