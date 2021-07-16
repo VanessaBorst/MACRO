@@ -31,14 +31,14 @@ _set_seed(SEED)
 
 def main(config, tune_config=None):
     # Conditional inputs depending on the config
-    if config['arch']['type'] == 'BaselineModelWoRnnWoAttention':
-        import model.baseline_model_woRNN_woAttention as module_arch
-    elif config['arch']['type'] == 'BaselineModel':
+    if config['arch']['type'] == 'BaselineModel':
         import model.baseline_model as module_arch
     elif config['arch']['type'] == 'BaselineModelWithSkipConnections':
         import model.baseline_model_with_skips as module_arch
     elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndInstanceNorm':
         import model.baseline_model_with_skips_and_InstNorm as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithMHAttention':
+        import model.baseline_model_with_MHAttention as module_arch
 
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric

@@ -17,12 +17,16 @@ class MultiHeadAttention(nn.Module):
     ----------
     d_model:
         Dimension of the input vector.
+    k:
+        Dimension of all key matrix.
     q:
         Dimension of all query matrix.
     v:
         Dimension of all value matrix.
     h:
         Number of heads.
+    dropout:
+        Dropout ratio to be applied as float. If None, no dropout is applied
     attention_size:
         Number of backward elements to apply attention.
         Deactivated if ``None``. Default is ``None``.
@@ -30,9 +34,11 @@ class MultiHeadAttention(nn.Module):
 
     def __init__(self,
                  d_model: int,
+                 k: int,
                  q: int,
                  v: int,
                  h: int,
+                 dropout: float,
                  attention_size: int = None,
                  **kwargs):
         """Initialize the Multi Head Block."""
@@ -43,7 +49,7 @@ class MultiHeadAttention(nn.Module):
 
         # Query, keys and value matrices
         self._W_q = nn.Linear(d_model, q*self._h)
-        self._W_k = nn.Linear(d_model, q*self._h)
+        self._W_k = nn.Linear(d_model, k*self._h)
         self._W_v = nn.Linear(d_model, v*self._h)
 
         # Output linear function
@@ -51,6 +57,11 @@ class MultiHeadAttention(nn.Module):
 
         # Score placeholder
         self._scores = None
+
+        # Dropout
+        self._dropout = None
+        if dropout is not None:
+            self._dropout = nn.Dropout(p=dropout)
 
     def forward(self,
                 query: torch.Tensor,
@@ -87,11 +98,13 @@ class MultiHeadAttention(nn.Module):
         values = torch.cat(self._W_v(value).chunk(self._h, dim=-1), dim=0)
 
         # Scaled Dot Product
-        # self._scores = torch.bmm(queries, keys.transpose(1, 2)) / np.sqrt(K)
         self._scores = torch.bmm(queries, keys.transpose(1, 2)) / np.sqrt(K)
 
         # Apply sotfmax
         self._scores = F.softmax(self._scores, dim=-1)
+
+        if self._dropout is not None:
+            self._scores = self._dropout(self._scores)
 
         attention = torch.bmm(self._scores, values)
 

@@ -132,6 +132,12 @@ def tuning_params(name):
             "last_kernel_size_second_conv_blocks": tune.grid_search([45, 48, 51]),
             "down_sample": tune.grid_search(["conv", "max_pool"])
         }
+    elif name == "BaselineModelWithMHAttention":
+        return {
+            "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
+            "heads": tune.grid_search([3, 5, 8]),
+            "gru_units": tune.grid_search([12, 24, 32]),
+        }
     else:
         return None
 
@@ -220,23 +226,32 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
     #     reduction_factor=2)
     # # Problem:  the ASHAScheduler will aggressively terminate low-performing trials
 
-    reporter = CLIReporter(
-        parameter_columns={
-            # "num_first_conv_blocks": "Num 1st",
-            # "num_second_conv_blocks": "Num 2nd",
-            # "drop_out_first_conv_blocks": "Drop 1st",
-            # "drop_out_second_conv_blocks": "Drop 2nd",
-            # "out_channel_first_conv_blocks": "Out 1st",
-            # "out_channel_second_conv_blocks": "Out 2nd",
-            "mid_kernel_size_first_conv_blocks": "Mid kernel 1st",
-            "mid_kernel_size_second_conv_blocks": "Mid kernel 2nd",
-            "last_kernel_size_first_conv_blocks": "Last kernel 1st",
-            "last_kernel_size_second_conv_blocks": "Last kernel 2nd",
-            # "stride_first_conv_blocks": "S 1st",
-            # "stride_second_conv_blocks": "S 2nd",
-            "down_sample": "Downsampling"
-        },
-        metric_columns=["val_loss", "val_cpsc_F1", "training_iteration"])
+    if main_config["arch"]["type"] == "BaselineModelWithSkipConnections" or main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndInstanceNorm":
+        reporter = CLIReporter(
+            parameter_columns={
+                # "num_first_conv_blocks": "Num 1st",
+                # "num_second_conv_blocks": "Num 2nd",
+                # "drop_out_first_conv_blocks": "Drop 1st",
+                # "drop_out_second_conv_blocks": "Drop 2nd",
+                # "out_channel_first_conv_blocks": "Out 1st",
+                # "out_channel_second_conv_blocks": "Out 2nd",
+                "mid_kernel_size_first_conv_blocks": "Mid kernel 1st",
+                "mid_kernel_size_second_conv_blocks": "Mid kernel 2nd",
+                "last_kernel_size_first_conv_blocks": "Last kernel 1st",
+                "last_kernel_size_second_conv_blocks": "Last kernel 2nd",
+                # "stride_first_conv_blocks": "S 1st",
+                # "stride_second_conv_blocks": "S 2nd",
+                "down_sample": "Downsampling"
+            },
+            metric_columns=["val_loss", "val_cpsc_F1", "training_iteration"])
+    elif main_config["arch"]["type"] == "BaselineModelWithMHAttention":
+        reporter = CLIReporter(
+            parameter_columns={
+                "dropout_attention": "Droput MH Attention",
+                "heads": "Num Heads",
+                "gru_units": "Num Units GRU"
+            },
+            metric_columns=["loss", "val_loss", "val_cpsc_F1", "training_iteration"])
 
     # experiment_stopper = ExperimentPlateauStopper(
     #     metric=mnt_metric,
@@ -367,7 +382,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
         search_alg=BasicVariantGenerator(),     #points_to_evaluate=initial_param_suggestions, max_concurrent=3),
         config={**tune_config},
         resources_per_trial={"cpu": 5 if torch.cuda.is_available() else 1,
-                             "gpu": 0.33 if torch.cuda.is_available() else 0},
+                             "gpu": 0.5 if torch.cuda.is_available() else 0},
 
         max_failures=2,  # retry when error, e.g. OutOfMemory, default is 0
         raise_on_failed_trial=False,  # Failed trials are expected due to assertion errors
@@ -414,6 +429,9 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
         import model.baseline_model_with_skips as module_arch
     elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndInstanceNorm':
         import model.baseline_model_with_skips_and_InstNorm as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithMHAttention':
+        import model.baseline_model_with_MHAttention as module_arch
+
 
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric
