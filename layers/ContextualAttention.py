@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchinfo import summary
+
+from layers.MultiHeadAttention import MultiHeadAttention
 
 
 class ContextualAttention(nn.Module):
@@ -98,3 +101,64 @@ class ContextualAttention(nn.Module):
         # return x[:, -1, :]  # For testing, just pass through/choose the last hidden state for each element of the batch
 
 
+class MultiHeadContextualAttention(nn.Module):
+    """Multihead Contextual Attention
+
+    Given an input of shape [batch_size, seq_len, 2*num_units]
+    attention weights are determined for each of the seq_len hidden states.
+
+    The weighted sum of the hidden states of shape [batch_size, 2*num_units] is returned
+
+    Parameters
+    ----------
+    gru_dimension:
+        Number of units contained per GRU
+    attention_dimension:
+        Dimension of the output of the layer (default: 2xgru_dimension)
+    use_bias:
+        Bool specifying whether an bias should be used to retrieve the hidden representation for
+        the hidden states of the BiGRU (which serve as values)
+    """
+    def __init__(self, gru_dimension=12, attention_dimension=24, use_bias=True):
+        super().__init__()
+        self._use_bias = use_bias
+
+        # The input dimension will be twice the number of units of a single GRU (since it is a BiGRU)
+        # This layer calculates a hidden representation of the incoming values for which attention weights are needed
+        # It calculates the following: tanh(W h +b)
+        self._hidden_rep = nn.Sequential(
+            nn.Linear(in_features=2 * gru_dimension, out_features=attention_dimension, bias=self._use_bias),
+            nn.Tanh()
+        )
+
+        # Apply the attention scoring function (dot-product) between the values and the query vector u
+        # Here u is represented as trainable tensor, which has shape (attention_dimension x 1)
+        u = torch.empty(attention_dimension, 1)
+        u = nn.init.xavier_uniform_(u, gain=nn.init.calculate_gain('linear'))
+        self._query = nn.Parameter(u, requires_grad=True)
+
+        self._multihead_attention = MultiHeadAttention(d_model=attention_dimension, q=attention_dimension,
+                                                       v=2 * gru_dimension, h=3)
+
+    def forward(self, biGRU_outputs):
+        # biGRU_outputs is of shape [batch_size, seq_len, 2*num_units], e.g., bs*2250*24
+        # Wanted: Seq_len number of attention weights for each element in the batch
+
+        keys = self._hidden_rep(biGRU_outputs)
+        values = biGRU_outputs
+
+        bs = biGRU_outputs.shape[0]
+        # seq_len = biGRU_outputs.shape[1]
+        # querys = self._query.repeat(seq_len, 1, 1).repeat(bs, 1, 1, 1).squeeze()
+        querys = self._query.permute(1, 0)
+        querys = querys.repeat(bs, 1, 1)
+
+        attention_output = self._multihead_attention(query=querys, key=keys, value=values)
+
+        # Shape bs x 24
+        return attention_output
+
+
+if __name__ == "__main__":
+    model = MultiHeadContextualAttention()
+    summary(model, input_size=(2, 2250, 24), col_names=["input_size", "output_size", "num_params"])
