@@ -50,7 +50,7 @@ def main(config, tune_config=None):
     # setup data_loader instances
     data_loader = getattr(module_data, config['data_loader']['type'])(
         config['data_loader']['test_dir'],
-        batch_size=512,
+        batch_size=64,
         shuffle=False,
         validation_split=0.0,
         num_workers=4
@@ -95,25 +95,22 @@ def main(config, tune_config=None):
     if config['arch']['args']['multi_label_training']:
         metrics_iter = [getattr(module_metric, met) for met in ['sk_subset_accuracy']]
         metrics_epoch = [getattr(module_metric, met) for met in ['cpsc_score',
-                                                                 'weighted_sk_f1', 'weighted_torch_f1',
-                                                                 'weighted_sk_roc_auc', 'weighted_torch_roc_auc',
+                                                                 'weighted_sk_f1',
+                                                                 'weighted_torch_roc_auc',
                                                                  'weighted_torch_precision',
                                                                  'weighted_torch_accuracy']]
-        metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_sk_f1', 'class_wise_torch_f1',
-                                                                            'class_wise_sk_roc_auc', 'class_wise_torch_roc_auc',
-                                                                            'class_wise_torch_precision',
+        metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_sk_f1',
+                                                                            'class_wise_torch_roc_auc',
                                                                             'class_wise_torch_accuracy']]
     else:
         metrics_iter = [getattr(module_metric, met) for met in ['sk_accuracy']]
         metrics_epoch = [getattr(module_metric, met) for met in ['cpsc_score',
-                                                                 'weighted_sk_f1', 'weighted_torch_f1',
-                                                                 'weighted_sk_roc_auc_ovr', 'weighted_sk_roc_auc_ovo',
+                                                                 'weighted_sk_f1',
                                                                  'weighted_torch_roc_auc',
                                                                  'weighted_torch_precision',
                                                                  'weighted_torch_accuracy']]
-        metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_sk_f1', 'class_wise_torch_f1',
+        metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_sk_f1',
                                                                             'class_wise_torch_roc_auc',
-                                                                            'class_wise_torch_precision',
                                                                             'class_wise_torch_accuracy']]
 
     multi_label_training = config['arch']['args']['multi_label_training']
@@ -406,7 +403,7 @@ def main(config, tune_config=None):
 
 
 if __name__ == '__main__':
-    args = argparse.ArgumentParser(description='PyTorch Template')
+    args = argparse.ArgumentParser(description='MA Vanessa')
     args.add_argument('-c', '--config', default=None, type=str,
                       help='config file path (default: None)')
     args.add_argument('-r', '--resume', default=None, type=str,

@@ -1,5 +1,5 @@
 {
-  "name": "CPSC_BaselineWithMultiHeadAttention",
+  "name": "CPSC_BaselineWithMultiHeadAttention_uBCE_F1",
   "run_details": "",
   "n_gpu": 1,
   "arch": {
@@ -31,8 +31,8 @@
     }
   },
   "loss": {
-    "type": "balanced_BCE_with_logits",
-    "add_args": ["pos_weights", "device"]
+    "type": "BCE_with_logits",
+    "add_args": []
   },
   "metrics": {
     "sl": {
@@ -78,7 +78,7 @@
     "save_dir": "savedVM/",
     "save_period": 1,
     "verbosity": 2,
-    "monitor": "max val_cpsc_F1",
+    "monitor": "max val_weighted_sk_f1",
     "early_stop": 20,
     "tensorboard": true,
     "try_run": false,

@@ -403,7 +403,13 @@ class ECGTrainer(BaseTrainer):
             # Report some metrics back to Ray Tune. Specifically, we send the validation loss and CPSC F1 score back to
             # Ray Tune. Ray Tune can then use these metrics to decide which hyperparameter configuration lead to the
             # best results. These metrics can also be used to stop bad performing trials early
-            tune.report(val_loss=valid_log['mean']["loss"], val_cpsc_F1=valid_log['mean']["cpsc_F1"])
+            tune.report(val_loss=valid_log['mean']["loss"],
+                        val_weighted_sk_f1=valid_log['mean']["weighted_sk_f1"],
+                        val_cpsc_F1=valid_log['mean']["cpsc_F1"],
+                        val_cpsc_Faf=valid_log['mean']["cpsc_Faf"],
+                        val_cpsc_Fblock=valid_log['mean']["cpsc_Fblock"],
+                        val_cpsc_Fpc=valid_log['mean']["cpsc_Fpc"],
+                        val_cpsc_Fst=valid_log['mean']["cpsc_Fst"])
 
         # # Also log the confusion matrix-related information to the valid log
         # valid_cm_information = dict({"overall_cm": "\n" + str(self.valid_cms.cm)},

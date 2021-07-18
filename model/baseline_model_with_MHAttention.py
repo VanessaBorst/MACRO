@@ -88,7 +88,7 @@ class BaselineModelWithMHAttention(BaseModel):
             nn.Dropout(0.2)
         )
 
-        self._fcn = nn.Linear(in_features=24, out_features=num_classes)
+        self._fcn = nn.Linear(in_features=gru_units*2, out_features=num_classes)
 
         if apply_final_activation:
             self._final_activation = nn.Sigmoid() if multi_label_training else nn.LogSoftmax(dim=1)
@@ -122,5 +122,5 @@ class BaselineModelWithMHAttention(BaseModel):
 
 
 if __name__ == "__main__":
-    model = BaselineModelWithMHAttention(apply_final_activation=True, multi_label_training=True)
+    model = BaselineModelWithMHAttention(apply_final_activation=True, multi_label_training=True, gru_units=24)
     summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "num_params"])

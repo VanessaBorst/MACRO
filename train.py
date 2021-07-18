@@ -243,7 +243,14 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                 # "stride_second_conv_blocks": "S 2nd",
                 "down_sample": "Downsampling"
             },
-            metric_columns=["val_loss", "val_cpsc_F1", "training_iteration"])
+            metric_columns=["loss", "val_loss",
+                            "val_weighted_sk_f1",
+                            "val_cpsc_F1",
+                            "val_cpsc_Faf",
+                            "val_cpsc_Fblock",
+                            "val_cpsc_Fpc",
+                            "val_cpsc_Fst",
+                            "training_iteration"])
     elif main_config["arch"]["type"] == "BaselineModelWithMHAttention":
         reporter = CLIReporter(
             parameter_columns={
@@ -251,7 +258,16 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                 "heads": "Num Heads",
                 "gru_units": "Num Units GRU"
             },
-            metric_columns=["loss", "val_loss", "val_cpsc_F1", "training_iteration"])
+            metric_columns=["loss", "val_loss",
+                            "val_weighted_sk_f1",
+                            "val_cpsc_F1",
+                            "val_cpsc_Faf",
+                            "val_cpsc_Fblock",
+                            "val_cpsc_Fpc",
+                            "val_cpsc_Fst",
+                            "training_iteration"])
+
+
 
     # experiment_stopper = ExperimentPlateauStopper(
     #     metric=mnt_metric,

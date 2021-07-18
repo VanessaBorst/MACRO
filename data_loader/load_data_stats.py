@@ -30,7 +30,8 @@ with open(os.path.join(path, "class_freq_sl_test.p"), 'rb') as file:
 df_summary['Total'] = df_summary.sum(axis=1)
 df_summary=df_summary.astype(int)
 
+df_summary_reordered = df_summary[[5,1,0,2,4,3,8,6,7]]
 with open(os.path.join(path, 'label_stats.tex'), 'w') as file:
-    df_summary.to_latex(buf=file, index=True, bold_rows=True)
-print(df_summary.to_latex())
+    df_summary_reordered.to_latex(buf=file, index=True, bold_rows=True)
+print(df_summary_reordered.to_latex())
 print("Finished")
