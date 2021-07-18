@@ -1,12 +1,14 @@
+import torch.cuda
 import torch.nn as nn
 from torchinfo import summary
 
 from layers.LayerUtils import calc_same_padding_for_stride_one
 
 
-class BasicBlock1d(nn.Module):
+class BasicBlock1dWithNorm(nn.Module):
 
-    def __init__(self, in_channels, out_channels, mid_kernels_size, last_kernel_size, stride, down_sample, drop_out):
+    def __init__(self, in_channels, out_channels, mid_kernels_size, last_kernel_size, stride, down_sample, drop_out,
+                 norm_type, norm_pos, norm_before_act):
         """
         The stride is only applied in the last conv layer and can be used for size reduction
         If the resulting number of channel differs, it is done within the first Conv1D and kept for the further ones
@@ -37,6 +39,10 @@ class BasicBlock1d(nn.Module):
         self._mid_kernels_size = mid_kernels_size
         self._last_kernel_size = last_kernel_size
 
+        self._norm_type = norm_type
+        self._norm_pos = norm_pos
+        self._norm_before_act = norm_before_act
+
         # If stride is 1 and the kernel_size uneven, an additional one-sided 0 is needed to keep/half dimension
         self._one_sided_padding = nn.ConstantPad1d((0, 1), 0)
 
@@ -50,15 +56,37 @@ class BasicBlock1d(nn.Module):
         self._half_last_kernel_padding = nn.ConstantPad1d((half_last_kernel, half_last_kernel), 0)
         self._half_last_kernel_padding_minus_1 = nn.ConstantPad1d((half_last_kernel_minus_1, half_last_kernel_minus_1), 0)
 
-        self._conv1 = nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=mid_kernels_size)
+        self._conv1 = nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=mid_kernels_size, bias=False)
+        # Before or after relu is handled during forward()
+        if self._norm_pos == "all":
+            if self._norm_type == "BN":
+                self._norm1 = nn.BatchNorm1d(num_features=out_channels)
+            elif self._norm_type == "IN":
+                self._norm1 = nn.InstanceNorm1d(num_features=out_channels, affine=True)
         self._lrelu1 = nn.LeakyReLU(0.3)
-        self._conv2 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=mid_kernels_size)
+
+        self._conv2 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=mid_kernels_size, bias=False)
+        # Before or after relu is handled during forward()
+        if self._norm_pos == "all":
+            if self._norm_type == "BN":
+                self._norm2 = nn.BatchNorm1d(num_features=out_channels)
+            elif self._norm_type == "IN":
+                self._norm2 = nn.InstanceNorm1d(num_features=out_channels, affine=True)
         self._lrelu2 = nn.LeakyReLU(0.3)
 
         self._conv3 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=last_kernel_size,
-                                stride=stride)
+                                stride=stride, bias=False)
+        # Before or after relu is handled during forward()
+        if self._norm_pos == "all":
+            if self._norm_type == "BN":
+                self._norm3 = nn.BatchNorm1d(num_features=out_channels)
+            elif self._norm_type == "IN":
+                self._norm3 = nn.InstanceNorm1d(num_features=out_channels, affine=True)
         self._lrelu3 = nn.LeakyReLU(0.3)
         self._dropout = nn.Dropout(drop_out)
+
+        # self._batch_norm = nn.BatchNorm1d(num_features=out_channels, momentum=0.01)
+        # self._instance_norm = nn.InstanceNorm1d(num_features=out_channels, affine=True)
 
         self._downsample = None
         self._poooled_downsample = False
@@ -110,7 +138,25 @@ class BasicBlock1d(nn.Module):
         else:
             x = self._half_mid_kernel_padding(x)
         out = self._conv1(x)
+        # Normalize here if "all" and "before" activation function
+        if self._norm_pos == "all" and self._norm_before_act:
+            if self._norm_type == "LN":
+                layer_norm_1 = nn.LayerNorm([out.shape[-1]])
+                if torch.cuda.is_available():
+                    layer_norm_1.to('cuda:0')
+                out = layer_norm_1(out)
+            else:   # BN or IN
+                out = self._norm1(out)
         out = self._lrelu1(out)
+        # Normalize here if "all" and "after" activation function
+        if self._norm_pos == "all" and not self._norm_before_act:
+            if self._norm_type == "LN":
+                layer_norm_1 = nn.LayerNorm([out.shape[-1]])
+                if torch.cuda.is_available():
+                    layer_norm_1.to('cuda:0')
+                out = layer_norm_1(out)
+            else:   # BN or IN
+                out = self._norm1(out)
 
         # Conv2 -----------------------------------------------------------------
         if self._mid_kernels_size % 2 == 0:
@@ -119,10 +165,28 @@ class BasicBlock1d(nn.Module):
         else:
             out = self._half_mid_kernel_padding(out)
         out = self._conv2(out)
+        # Normalize here if "all" and "before" activation function
+        if self._norm_pos == "all" and self._norm_before_act:
+            if self._norm_type == "LN":
+                layer_norm_2 = nn.LayerNorm([out.shape[-1]])
+                if torch.cuda.is_available():
+                    layer_norm_2.to('cuda:0')
+                out = layer_norm_2(out)
+            else:  # BN or IN
+                out = self._norm2(out)
         out = self._lrelu2(out)
+        # Normalize here if "all" and "after" activation function
+        if self._norm_pos == "all" and not self._norm_before_act:
+            if self._norm_type == "LN":
+                layer_norm_2 = nn.LayerNorm([out.shape[-1]])
+                if torch.cuda.is_available():
+                    layer_norm_2.to('cuda:0')
+                out = layer_norm_2(out)
+            else:  # BN or IN
+                out = self._norm2(out)
 
         # Conv3 -----------------------------------------------------------------
-        # Conv3 usually has stride 2
+        # Conv3 has stride 2
         if self._stride == 2:
             if self._last_kernel_size % 2 == 0 and out.shape[2] % 2 != 0:
                 out = self._half_last_kernel_padding(out)
@@ -135,6 +199,17 @@ class BasicBlock1d(nn.Module):
             else:
                 out = self._half_last_kernel_padding(out)
         out = self._conv3(out)
+        # Normalize here if "all" and "before" activation function
+        if self._norm_pos == "all" and self._norm_before_act:
+            if self._norm_type == "LN":
+                layer_norm_3 = nn.LayerNorm([out.shape[-1]])
+                if torch.cuda.is_available():
+                    layer_norm_3.to('cuda:0')
+                out = layer_norm_3(out)
+            else:  # BN or IN
+                out = self._norm3(out)
+        # out = self._lrelu3(out)
+        # out = self._dropout(out)
 
         # Residual -----------------------------------------------------------------
         if self._downsample is not None:
@@ -143,15 +218,32 @@ class BasicBlock1d(nn.Module):
                 if residual.shape[2] % 2 != 0:
                     residual = nn.ConstantPad1d((1, 1), 0)(residual)
             residual = self._downsample(residual)
-        out += residual
+        out = out + residual
 
-        # Import: Move this part AFTER the addition instead of keeping it directly after conv3!!!
+        # out = self._batch_norm(out)       # ResNet uses Conv - BN - Downsample - ReLU
+        # out = self._instance_norm(out)
+        # layer_norm = nn.LayerNorm([out.shape[-1]])
+        # if torch.cuda.is_available():
+        #     layer_norm.to('cuda:0')
+        # out = layer_norm(out)
+
+        # Import: Move the Leaky RELU part AFTER the addition!!!
         out = self._lrelu3(out)
+        # Normalize here if "all" and "after" activation function
+        if self._norm_pos == "all" and not self._norm_before_act:
+            if self._norm_type == "LN":
+                layer_norm_3 = nn.LayerNorm([out.shape[-1]])
+                if torch.cuda.is_available():
+                    layer_norm_3.to('cuda:0')
+                out = layer_norm_3(out)
+            else:  # BN or IN
+                out = self._norm3(out)
         out = self._dropout(out)
+
         return out
 
 
 if __name__ == "__main__":
-    model = BasicBlock1d(in_channels=12, out_channels=12, mid_kernels_size=3, last_kernel_size=44, stride=2,
-                         down_sample='avg_pool', drop_out=0.2)
+    model = BasicBlock1dWithNorm(in_channels=12, out_channels=12, mid_kernels_size=3, last_kernel_size=44, stride=2,
+                                 down_sample='conv', drop_out=0.2, norm_type="IN", norm_pos="all", norm_before_act=True)
     summary(model, input_size=(2, 12, 1125), col_names=["input_size", "output_size", "num_params"])

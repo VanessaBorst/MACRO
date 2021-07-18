@@ -1,9 +1,9 @@
 {
-  "name": "CPSC_BaselineWithSkipsAndInstNorm",
-  "run_details": "_weightedBCE_Experiment_1_2",
+  "name": "CPSC_BaselineWithSkipsAndNorm",
+  "run_details": "_weightedBCE_experiment_norm_layer",
   "n_gpu": 1,
   "arch": {
-    "type": "BaselineModelWithSkipConnectionsAndInstanceNorm",
+    "type": "BaselineModelWithSkipConnectionsAndNorm",
     "args": {
       "apply_final_activation": false,
       "multi_label_training": true

@@ -126,18 +126,37 @@ def _get_mid_kernel_size_second_conv_blocks(spec):
 def tuning_params(name):
     if name == "BaselineModelWithSkipConnections" or name == "BaselineModelWithSkipConnectionsAndInstanceNorm":
         return {
-            "mid_kernel_size_first_conv_blocks": tune.grid_search([3, 5, 7]),
-            "mid_kernel_size_second_conv_blocks": tune.sample_from(_get_mid_kernel_size_second_conv_blocks),
-            "last_kernel_size_first_conv_blocks": tune.grid_search([21, 24, 27]),
-            "last_kernel_size_second_conv_blocks": tune.grid_search([45, 48, 51]),
-            "down_sample": tune.grid_search(["conv", "max_pool"])
+            "mid_kernel_size_first_conv_blocks": 7,
+            "mid_kernel_size_second_conv_blocks": 7,
+            "last_kernel_size_first_conv_blocks": 21,
+            "last_kernel_size_second_conv_blocks": 48,
+            "down_sample": "conv",
         }
+        # return {
+        #     "mid_kernel_size_first_conv_blocks": tune.grid_search([3, 5, 7]),
+        #     "mid_kernel_size_second_conv_blocks": tune.sample_from(_get_mid_kernel_size_second_conv_blocks),
+        #     "last_kernel_size_first_conv_blocks": tune.grid_search([21, 24, 27]),
+        #     "last_kernel_size_second_conv_blocks": tune.grid_search([45, 48, 51]),
+        #     "down_sample": tune.grid_search(["conv", "max_pool"])
+        # }
     elif name == "BaselineModelWithMHAttention":
         return {
             "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
             "heads": tune.grid_search([3, 5, 8]),
             "gru_units": tune.grid_search([12, 24, 32]),
         }
+    elif name == "BaselineModelWithSkipConnectionsAndNorm":
+        return {
+            "mid_kernel_size_first_conv_blocks": 7,
+            "mid_kernel_size_second_conv_blocks": 7,
+            "last_kernel_size_first_conv_blocks": 21,
+            "last_kernel_size_second_conv_blocks": 48,
+            "down_sample": "conv",
+            "norm_type": tune.grid_search(["BN", "IN", "LN"]),
+            "norm_pos": tune.grid_search(["all", "last"]),
+            "norm_before_act": tune.grid_search([True, False])
+        }
+
     else:
         return None
 
@@ -257,6 +276,21 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                 "dropout_attention": "Droput MH Attention",
                 "heads": "Num Heads",
                 "gru_units": "Num Units GRU"
+            },
+            metric_columns=["loss", "val_loss",
+                            "val_weighted_sk_f1",
+                            "val_cpsc_F1",
+                            "val_cpsc_Faf",
+                            "val_cpsc_Fblock",
+                            "val_cpsc_Fpc",
+                            "val_cpsc_Fst",
+                            "training_iteration"])
+    elif main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNorm":
+        reporter = CLIReporter(
+            parameter_columns={
+                "norm_type": "Type",
+                "norm_pos":  "Position",
+                "norm_before_act": "Before L-ReLU"
             },
             metric_columns=["loss", "val_loss",
                             "val_weighted_sk_f1",
@@ -447,7 +481,8 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
         import model.baseline_model_with_skips_and_InstNorm as module_arch
     elif config['arch']['type'] == 'BaselineModelWithMHAttention':
         import model.baseline_model_with_MHAttention as module_arch
-
+    elif config['arch']['type'] == "BaselineModelWithSkipConnectionsAndNorm":
+        import model.baseline_model_with_skips_and_norm as module_arch
 
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric

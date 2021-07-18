@@ -97,18 +97,25 @@ class BasicBlock1dWithInstNorm(nn.Module):
 
     def _max_pooled_downsample(self):
         # The block is keeping the channel amount of 12 but decreases the seq len by a factor of 2
-        downsample = nn.MaxPool1d(kernel_size=2, stride=2)
+        downsample = nn.Sequential(
+            nn.MaxPool1d(kernel_size=2, stride=2),
+            nn.BatchNorm1d(self._out_channels)
+        )
         return downsample
 
     def _avg_pooled_downsample(self):
         # The block is keeping the channel amount of 12 but decreases the seq len by a factor of 2
-        downsample = nn.AvgPool1d(kernel_size=2, stride=2)
+        downsample = nn.Sequential(
+            nn.AvgPool1d(kernel_size=2, stride=2),
+            nn.BatchNorm1d(self._out_channels)
+        )
         return downsample
 
     def forward(self, x):
         # Handle padding explicit
         residual = x
-        # Conv1 and Conv2 have stride 1
+
+        # Conv1 -----------------------------------------------------------------
         if self._mid_kernels_size % 2 == 0:
             x = self._one_sided_padding(x)
             x = self._half_mid_kernel_padding_minus_1(x)
@@ -119,6 +126,7 @@ class BasicBlock1dWithInstNorm(nn.Module):
         # out = self._batch_norm1(out)
         out = self._lrelu1(out)
 
+        # Conv2 -----------------------------------------------------------------
         if self._mid_kernels_size % 2 == 0:
             out = self._one_sided_padding(out)
             out = self._half_mid_kernel_padding_minus_1(out)
@@ -129,6 +137,7 @@ class BasicBlock1dWithInstNorm(nn.Module):
         # out = self._batch_norm2(out)
         out = self._lrelu2(out)
 
+        # Conv3 -----------------------------------------------------------------
         # Conv3 has stride 2
         if self._stride == 2:
             if self._last_kernel_size % 2 == 0 and out.shape[2] % 2 != 0:
@@ -144,9 +153,10 @@ class BasicBlock1dWithInstNorm(nn.Module):
         out = self._conv3(out)
         # out = self._instance_norm3(out)
         # out = self._batch_norm3(out)
-        out = self._lrelu3(out)
-        out = self._dropout(out)
+        # out = self._lrelu3(out)
+        # out = self._dropout(out)
 
+        # Residual -----------------------------------------------------------------
         if self._downsample is not None:
             if self._poooled_downsample:
                 # Stride is two and kernel size is two as well
@@ -154,12 +164,18 @@ class BasicBlock1dWithInstNorm(nn.Module):
                     residual = nn.ConstantPad1d((1, 1), 0)(residual)
             residual = self._downsample(residual)
         out = out + residual
-        out = self._batch_norm(out)
+
+        # out = self._batch_norm(out)       # ResNet uses Conv - BN - Downsample - ReLU
         # out = self._instance_norm(out)
         # layer_norm = nn.LayerNorm([out.shape[-1]])
         # if torch.cuda.is_available():
         #     layer_norm.to('cuda:0')
         # out = layer_norm(out)
+
+        # Import: Move this part AFTER the addition!!!
+        out = self._lrelu3(out)
+        out = self._dropout(out)
+
         return out
 
 

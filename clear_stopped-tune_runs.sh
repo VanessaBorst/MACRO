@@ -4,7 +4,7 @@ source venv/bin/activate
 
 REL_PATH="savedVM/models/CPSC_BaselineWithSkips/0714_222352_ml_bs64_weightedBCE"
 REL_PATH_LOGS="savedVM/log/CPSC_BaselineWithSkips/0714_222352_ml_bs64_weightedBCE"
-CHECKPOINT_NAME="checkpoint_000005"
+CHECKPOINT_NAME="checkpoint_000001"
 
 #REL_PATH="savedVM/models/CPSC_BaselineWithSkips/tune_random_search"
 #REL_PATH_LOGS="savedVM/log/CPSC_BaselineWithSkips/tune_random_search"
@@ -13,7 +13,7 @@ CHECKPOINT_NAME="checkpoint_000005"
 COUNTER_MODELS_DELETE=0
 COUNTER_MODELS_KEEP=0
 keep_models_folders=()
-# Delete all models that were not trained for at least 5 epochs
+# Delete all models that were not trained for at least x epochs
 for dir in $(find $REL_PATH -mindepth 1 -maxdepth 1 -type d )
 do
     if [ -e $dir/$CHECKPOINT_NAME ]; then
@@ -22,7 +22,7 @@ do
         COUNTER_MODELS_KEEP=$(( COUNTER_MODELS_KEEP + 1 ))
     else
         echo "Fifth checkpoint does NOT exists in $dir"
-        #rm -r "$dir"
+        rm -r "$dir"
         echo "Directory $dir deleted"
         COUNTER_MODELS_DELETE=$(( COUNTER_MODELS_DELETE + 1 ))
     fi
@@ -51,7 +51,7 @@ do
       COUNTER_MODELS_KEEP_LOG=$(( COUNTER_MODELS_KEEP_LOG + 1 ))
     else
       echo "Delete $dir"
-      # rm -r "$dir"
+      rm -r "$dir"
       COUNTER_MODELS_DELETE_LOG=$(( COUNTER_MODELS_DELETE_LOG + 1 ))
     fi
 done

@@ -3,19 +3,36 @@ import os
 import pickle as pk
 import pandas as pd
 
-path_to_tune = 'savedVM/models/CPSC_BaselineWithMultiHeadAttention/param_study_1'
-# Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
-hyper_params = ['dropout_attention', 'gru_units', 'heads']
-integer_vals = ['gru_units', 'heads']
-single_precision = ['dropout_attention']
+# path_to_tune = 'savedVM/models/CPSC_BaselineWithMultiHeadAttention/param_study_1'
+# # Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
+# hyper_params = ['dropout_attention', 'gru_units', 'heads']
+# integer_vals = ['gru_units', 'heads']
+# single_precision = ['dropout_attention']
+# desired_col_order = ['dropout_attention', 'gru_units', 'heads',
+#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc',
+#                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
+
+path_to_tune = 'savedVM/models/CPSC_BaselineWithSkips/experiment_1_1'
+hyper_params = ["down_sample", "last_kernel_size_first_conv_blocks", "last_kernel_size_second_conv_blocks",
+                "mid_kernel_size_first_conv_blocks", "mid_kernel_size_second_conv_blocks"]
+integer_vals = ["last_kernel_size_first_conv_blocks", "last_kernel_size_second_conv_blocks",
+                "mid_kernel_size_first_conv_blocks", "mid_kernel_size_second_conv_blocks"]
+single_precision = []
+desired_col_order = ['down_sample', 'mid_kernel_size_first_conv_blocks', 'last_kernel_size_first_conv_blocks',
+                     'last_kernel_size_second_conv_blocks',
+                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+                     'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc',
+                     'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
+
 
 df_summary_valid = pd.DataFrame(
     columns=hyper_params + ['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'W-AVG_F1',
-                            'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'W-AVG_ROC'])
+                            'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'W-AVG_ROC', 'W-AVG_Acc'])
 
 df_summary_test = pd.DataFrame(
     columns=hyper_params + ['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'W-AVG_F1',
-                            'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'W-AVG_ROC'])
+                            'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'W-AVG_ROC', 'W-AVG_Acc'])
 
 
 def _append_to_summary(path, df_summary, tune_dict):
@@ -33,6 +50,8 @@ def _append_to_summary(path, df_summary, tune_dict):
     row_values = row_values + df_single_metrics[col_names].values.tolist()[0]
     # Append the weighted AVG for ROC-AUC
     row_values.append(df_class_wise.loc['torch_roc_auc']['weighted avg'])
+    # Append the weighted AVG for Acc
+    row_values.append(df_class_wise.loc['torch_accuracy']['weighted avg'])
 
     # Add the row to the summary dataframe
     df_summary.loc[len(df_summary)] = row_values
@@ -66,9 +85,6 @@ for col in single_precision:
                                      index=df_summary_test.index)
 
 # Reorder the columns of the dataframe to match the one used in the thesis
-desired_col_order = ['dropout_attention', 'gru_units', 'heads',
-                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE', 'W-AVG_F1', 'W-AVG_ROC',
-                     'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
 df_summary_valid_reordered = df_summary_valid[desired_col_order]
 df_summary_test_reordered = df_summary_test[desired_col_order]
 
