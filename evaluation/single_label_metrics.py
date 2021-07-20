@@ -14,7 +14,7 @@ from sklearn.metrics import confusion_matrix, multilabel_confusion_matrix, \
 #       => Biases the classes towards the most populated class
 #       => Micro-Average Precision and Recall are the same values, therefore the MicroAverage F1-Score is also the same
 #           (and corresponds to the accuracy when all classes are considered)
-from torchmetrics import F1, Precision, Accuracy
+from torchmetrics import F1, Precision, Accuracy, Recall
 from torchmetrics.classification.auroc import AUROC
 
 
@@ -445,6 +445,20 @@ def _torch_precision(output, target, log_probs, logits, labels, average):
         return precision(pred, target)
 
 
+def _torch_recall(output, target, log_probs, logits, labels, average):
+    with torch.no_grad():
+        assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
+
+        if log_probs:
+            pred = _convert_log_probs_to_prediction(output)
+        else:
+            pred = _convert_logits_to_prediction(output)
+
+        assert pred.shape[0] == len(target)
+        recall = Recall(num_classes=len(labels), average=average)
+        return recall(pred, target)
+
+
 def _torch_roc_auc(output, target, log_probs, logits, labels, average):
     """
     The following parameter description applies for the multiclass case
@@ -537,14 +551,34 @@ def weighted_torch_accuracy(output, target, log_probs, logits, labels):
     return _torch_accuracy(output, target, log_probs, logits, labels, average="weighted")
 
 
-def weighted_torch_f1(output, target, log_probs, logits, labels):
-    """See documentation for _torch_f1 """
-    return _torch_f1(output, target, log_probs, logits, labels, average="weighted")
+def macro_torch_accuracy(output, target, log_probs, logits, labels):
+    """See documentation for _torch_accuracy """
+    return _torch_accuracy(output, target, log_probs, logits, labels, average="macro")
+
+
+def micro_torch_accuracy(output, target, log_probs, logits, labels):
+    """See documentation for _torch_accuracy """
+    return _torch_accuracy(output, target, log_probs, logits, labels, average="micro")
 
 
 def class_wise_torch_f1(output, target, log_probs, logits, labels):
     """See documentation for _torch_f1 """
     return _torch_f1(output, target, log_probs, logits, labels, average=None)
+
+
+def weighted_torch_f1(output, target, log_probs, logits, labels):
+    """See documentation for _torch_f1 """
+    return _torch_f1(output, target, log_probs, logits, labels, average="weighted")
+
+
+def macro_torch_f1(output, target, log_probs, logits, labels):
+    """See documentation for _torch_f1 """
+    return _torch_f1(output, target, log_probs, logits, labels, average="macro")
+
+
+def class_wise_torch_roc_auc(output, target, log_probs, logits, labels):
+    """See documentation for _torch_auc """
+    return _torch_roc_auc(output, target, log_probs, logits, labels, average=None)
 
 
 def weighted_torch_roc_auc(output, target, log_probs, logits, labels):
@@ -553,9 +587,10 @@ def weighted_torch_roc_auc(output, target, log_probs, logits, labels):
     return _torch_roc_auc(output, target, log_probs, logits, labels, average="weighted")
 
 
-def class_wise_torch_roc_auc(output, target, log_probs, logits, labels):
+def macro_torch_roc_auc(output, target, log_probs, logits, labels):
     """See documentation for _torch_auc """
-    return _torch_roc_auc(output, target, log_probs, logits, labels, average=None)
+    # Seems to be consistent to sklearn's 'weighted_roc_auc_ovr', may differ from 'weighted_roc_auc_ovo',
+    return _torch_roc_auc(output, target, log_probs, logits, labels, average="macro")
 
 
 def class_wise_torch_precision(output, target, log_probs, logits, labels):
@@ -566,6 +601,26 @@ def class_wise_torch_precision(output, target, log_probs, logits, labels):
 def weighted_torch_precision(output, target, sigmoid_probs, logits, labels):
     """See documentation for _torch_precision """
     return _torch_precision(output, target, sigmoid_probs, logits, labels, average='weighted')
+
+
+def macro_torch_precision(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_precision """
+    return _torch_precision(output, target, sigmoid_probs, logits, labels, average='macro')
+
+
+def class_wise_torch_recall(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_recall """
+    return _torch_recall(output, target, sigmoid_probs, logits, labels, average=None)
+
+
+def weighted_torch_recall(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_recall """
+    return _torch_recall(output, target, sigmoid_probs, logits, labels, average='weighted')
+
+
+def macro_torch_recall(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_recall """
+    return _torch_recall(output, target, sigmoid_probs, logits, labels, average='macro')
 
 
 if __name__ == '__main__':

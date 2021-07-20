@@ -146,7 +146,7 @@ class MultiHeadContextualAttention(nn.Module):
         # biGRU_outputs is of shape [batch_size, seq_len, 2*num_units], e.g., bs*2250*24
         # Wanted: Seq_len number of attention weights for each element in the batch
 
-        keys = self._hidden_rep(biGRU_outputs)
+        keys = biGRU_outputs#self._hidden_rep(biGRU_outputs)
         values = biGRU_outputs
 
         bs = biGRU_outputs.shape[0]

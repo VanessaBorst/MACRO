@@ -94,7 +94,7 @@ class MultiHeadAttention(nn.Module):
 
         # Compute Q, K and V, concatenate heads on batch dimension
         queries = torch.cat(self._W_q(query).chunk(self._h, dim=-1), dim=0)
-        keys = torch.cat(self._W_k(key).chunk(self._h, dim=-1), dim=0)
+        keys = torch.cat(self._W_k(key).chunk(self._h, dim=-1), dim=0)  # Tanh um self.W_key
         values = torch.cat(self._W_v(value).chunk(self._h, dim=-1), dim=0)
 
         # Scaled Dot Product

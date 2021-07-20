@@ -3,6 +3,7 @@ import csv
 import numpy as np
 import pandas as pd
 import torch
+from keras.metrics import Recall
 from sklearn.metrics import multilabel_confusion_matrix, \
     accuracy_score, roc_auc_score, f1_score, precision_score, \
     recall_score, classification_report
@@ -493,6 +494,16 @@ def _torch_precision(output, target, sigmoid_probs, logits, labels, average):
         return precision(pred, target)
 
 
+def _torch_recall(output, target, sigmoid_probs, logits, labels, average):
+    with torch.no_grad():
+        assert sigmoid_probs ^ logits, "In the single-label case, exactly one of the two must be true"
+        # The default Threshold for transforming probability or logit predictions to binary (0,1) predictions,
+        # in the case of binary or multi-label inputs is 0.5 and corresponds to input being probabilities.
+        pred = output if sigmoid_probs else torch.sigmoid(output)
+        recall = Recall(num_classes=len(labels), average=average, threshold=THRESHOLD)
+        return recall(pred, target)
+
+
 def _torch_roc_auc(output, target, sigmoid_probs, logits, labels, average):
     """
     The following parameter description applies for the multilabel case
@@ -568,9 +579,9 @@ def weighted_torch_accuracy(output, target, log_probs, logits, labels):
     return _torch_accuracy(output, target, log_probs, logits, labels, average="weighted")
 
 
-def weighted_torch_f1(output, target, sigmoid_probs, logits, labels):
-    """See documentation for _torch_f1 """
-    return _torch_f1(output, target, sigmoid_probs, logits, labels, average="weighted")
+def macro_torch_accuracy(output, target, log_probs, logits, labels):
+    """See documentation for _torch_accuracy """
+    return _torch_accuracy(output, target, log_probs, logits, labels, average="macro")
 
 
 def class_wise_torch_f1(output, target, sigmoid_probs, logits, labels):
@@ -578,9 +589,14 @@ def class_wise_torch_f1(output, target, sigmoid_probs, logits, labels):
     return _torch_f1(output, target, sigmoid_probs, logits, labels, average=None)
 
 
-def weighted_torch_roc_auc(output, target, sigmoid_probs, logits, labels):
-    """See documentation for _torch_auc """
-    return _torch_roc_auc(output, target, sigmoid_probs, logits, labels, average="weighted")
+def weighted_torch_f1(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_f1 """
+    return _torch_f1(output, target, sigmoid_probs, logits, labels, average="weighted")
+
+
+def macro_torch_f1(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_f1 """
+    return _torch_f1(output, target, sigmoid_probs, logits, labels, average="macro")
 
 
 def class_wise_torch_roc_auc(output, target, sigmoid_probs, logits, labels):
@@ -588,14 +604,44 @@ def class_wise_torch_roc_auc(output, target, sigmoid_probs, logits, labels):
     return _torch_roc_auc(output, target, sigmoid_probs, logits, labels, average=None)
 
 
-def weighted_torch_precision(output, target, sigmoid_probs, logits, labels):
-    """See documentation for _torch_precision """
-    return _torch_precision(output, target, sigmoid_probs, logits, labels, average='weighted')
+def weighted_torch_roc_auc(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_auc """
+    return _torch_roc_auc(output, target, sigmoid_probs, logits, labels, average="weighted")
+
+
+def macro_torch_roc_auc(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_auc """
+    return _torch_roc_auc(output, target, sigmoid_probs, logits, labels, average="macro")
 
 
 def class_wise_torch_precision(output, target, sigmoid_probs, logits, labels):
     """See documentation for _torch_precision """
     return _torch_precision(output, target, sigmoid_probs, logits, labels, average=None)
+
+
+def weighted_torch_precision(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_precision """
+    return _torch_precision(output, target, sigmoid_probs, logits, labels, average='weighted')
+
+
+def macro_torch_precision(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_precision """
+    return _torch_precision(output, target, sigmoid_probs, logits, labels, average='macro')
+
+
+def class_wise_torch_recall(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_recall """
+    return _torch_recall(output, target, sigmoid_probs, logits, labels, average=None)
+
+
+def weighted_torch_recall(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_recall """
+    return _torch_recall(output, target, sigmoid_probs, logits, labels, average='weighted')
+
+
+def macro_torch_recall(output, target, sigmoid_probs, logits, labels):
+    """See documentation for _torch_recall """
+    return _torch_recall(output, target, sigmoid_probs, logits, labels, average='macro')
 
 
 if __name__ == '__main__':

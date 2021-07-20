@@ -94,25 +94,29 @@ def main(config, tune_config=None):
     #                                 config['metrics']['sl']['per_epoch_class_wise']]
 
     # HARD-CODE the metrics to calc here
+    # The sk-summary report is used automatically
+    # Thus, the support and class-wise, w-avg and micro-avg for Precision, Recall, F1 are always contained and don't
+    # need to be specified below
+    # !!!!! IMPORTANT!!!!!
+    # For each additional metric specified in "metrics_epoch_class_wise", there should be two corresponding entries
+    # in "metrics_epoch" containing the macro and the weighted average (otherwise results can not be merged)
     if config['arch']['args']['multi_label_training']:
         metrics_iter = [getattr(module_metric, met) for met in ['sk_subset_accuracy']]
         metrics_epoch = [getattr(module_metric, met) for met in ['cpsc_score',
-                                                                 'weighted_sk_f1',
                                                                  'weighted_torch_roc_auc',
-                                                                 'weighted_torch_precision',
-                                                                 'weighted_torch_accuracy']]
-        metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_sk_f1',
-                                                                            'class_wise_torch_roc_auc',
+                                                                 'weighted_torch_accuracy',
+                                                                 'macro_torch_roc_auc',
+                                                                 'macro_torch_accuracy']]
+        metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_torch_roc_auc',
                                                                             'class_wise_torch_accuracy']]
     else:
         metrics_iter = [getattr(module_metric, met) for met in ['sk_accuracy']]
         metrics_epoch = [getattr(module_metric, met) for met in ['cpsc_score',
-                                                                 'weighted_sk_f1',
                                                                  'weighted_torch_roc_auc',
-                                                                 'weighted_torch_precision',
-                                                                 'weighted_torch_accuracy']]
-        metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_sk_f1',
-                                                                            'class_wise_torch_roc_auc',
+                                                                 'weighted_torch_accuracy',
+                                                                 'macro_torch_roc_auc',
+                                                                 'macro_torch_accuracy']]
+        metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_torch_roc_auc',
                                                                             'class_wise_torch_accuracy']]
 
     multi_label_training = config['arch']['args']['multi_label_training']
@@ -355,11 +359,12 @@ def main(config, tune_config=None):
 
 
     df_class_wise_results = pd.DataFrame(
-        columns=['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'weighted avg'])
+        columns=['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'macro avg', 'weighted avg'])
     df_class_wise_results = pd.concat([df_class_wise_results, df_sklearn_summary[
-        ['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'weighted avg']]])
+        ['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'macro avg', 'weighted avg']]])
 
-    df_class_wise_metrics = df_metric_results.loc[df_metric_results.index.str.startswith(('class_wise', 'weighted'))]['mean'].to_frame()
+    df_class_wise_metrics = df_metric_results.loc[df_metric_results.index.str.startswith(
+        ('class_wise', 'weighted', 'macro'))]['mean'].to_frame()
     df_class_wise_metrics.index = df_class_wise_metrics.index.set_names('metric')
     df_class_wise_metrics.reset_index(inplace=True)
     # df_class_wise_metrics['metric'] = df_class_wise_metrics['metric'].apply(lambda x: str(x).replace("class_wise_", "").replace("_class", ""))
@@ -370,8 +375,17 @@ def main(config, tune_config=None):
         df_temp = df_temp.rename(columns=df_temp.iloc[0]).drop(df_temp.index[0])
         df_temp.rename(index={'mean': metric_name}, inplace=True)
         cols = df_temp.columns.tolist()
-        cols.append(cols.pop(0))
-        df_temp = df_temp[cols]
+        # Reorder the dataframe
+        desired_order = []
+        for i in range(0, 9):
+            desired_order.append('class_wise_' + metric_name + '_class_' + str(i))
+        if 'macro_' + metric_name in cols:
+            desired_order.append('macro_' + metric_name)
+        if 'weighted_' + metric_name in cols:
+            desired_order.append('weighted_' + metric_name)
+        # if 'micro' + metric_name in cols:
+        #     desired_order.append('micro' + metric_name)
+        df_temp = df_temp[desired_order]
         df_temp.columns = df_class_wise_results.columns
         df_class_wise_results = pd.concat([df_class_wise_results, df_temp], axis=0)
 
@@ -379,8 +393,12 @@ def main(config, tune_config=None):
     df_class_wise_results = df_class_wise_results.reindex(idx)
     df_class_wise_results.loc['support'] = df_class_wise_results.loc['support'].apply(int)
 
+    # Reorder the class columns of the dataframe to match the one used in the
+    desired_col_order=['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE', 'macro avg', 'weighted avg']
+    df_class_wise_results = df_class_wise_results[desired_col_order]
+
     df_single_metric_results = df_metric_results.loc[~df_metric_results.index.str.startswith(
-        ('class_wise', 'weighted'))]['mean'].to_frame().transpose()
+        ('class_wise', 'weighted', 'macro'))]['mean'].to_frame().transpose()
     df_single_metric_results.rename(index={'mean': 'value'}, inplace=True)
 
     with open(os.path.join(config.test_output_dir,'eval_class_wise.p'), 'wb') as file:
