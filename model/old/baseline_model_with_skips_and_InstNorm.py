@@ -2,7 +2,7 @@ import torch.nn as nn
 from torchinfo import summary
 
 from base import BaseModel
-from layers.BasicBlock1dWithInstNorm import BasicBlock1dWithInstNorm
+from layers.Old.BasicBlock1dWithInstNorm import BasicBlock1dWithInstNorm
 from layers.ContextualAttention import ContextualAttention
 
 

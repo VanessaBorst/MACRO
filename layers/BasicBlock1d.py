@@ -6,7 +6,8 @@ from layers.LayerUtils import calc_same_padding_for_stride_one
 
 class BasicBlock1d(nn.Module):
 
-    def __init__(self, in_channels, out_channels, mid_kernels_size, last_kernel_size, stride, down_sample, drop_out):
+    def __init__(self, in_channels, out_channels, mid_kernels_size, last_kernel_size, stride, down_sample, drop_out,
+                 skips_active=True):
         """
         The stride is only applied in the last conv layer and can be used for size reduction
         If the resulting number of channel differs, it is done within the first Conv1D and kept for the further ones
@@ -28,8 +29,6 @@ class BasicBlock1d(nn.Module):
         super().__init__()
 
         assert stride == 1 or stride == 2, "Stride should be 1 or 2, otherwise the sizes are too much reduced"
-        assert down_sample == "conv" or in_channels == out_channels, \
-            "With different amount of in and out channels, pooling can not be used for aligning the residual tensor"
 
         self._in_channels = in_channels
         self._out_channels = out_channels
@@ -60,19 +59,21 @@ class BasicBlock1d(nn.Module):
         self._lrelu3 = nn.LeakyReLU(0.3)
         self._dropout = nn.Dropout(drop_out)
 
+        self._skips_active = skips_active
         self._downsample = None
-        self._poooled_downsample = False
-        if stride == 1 and in_channels == out_channels:
-            # No downsampling needed
-            self._downsample = None
-        elif down_sample == 'conv':
-            self._downsample = self._convolutional_downsample(stride=stride)
-        elif down_sample == 'max_pool':
-            self._downsample = self._max_pooled_downsample()
-            self._poooled_downsample = True
-        elif down_sample == 'avg_pool':
-            self._downsample = self._avg_pooled_downsample()
-            self._poooled_downsample = True
+        if self._skips_active:
+            self._poooled_downsample = False
+            if stride == 1 and in_channels == out_channels:
+                # No downsampling needed
+                self._downsample = None
+            elif down_sample == 'conv':
+                self._downsample = self._convolutional_downsample(stride=stride)
+            elif down_sample == 'max_pool':
+                self._downsample = self._max_pooled_downsample()
+                self._poooled_downsample = True
+            elif down_sample == 'avg_pool':
+                self._downsample = self._avg_pooled_downsample()
+                self._poooled_downsample = True
 
     def _convolutional_downsample(self, stride):
         # The block is potentially changing the channel amount of 12
@@ -85,10 +86,18 @@ class BasicBlock1d(nn.Module):
 
     def _max_pooled_downsample(self):
         # The block is keeping the channel amount of 12 but decreases the seq len by a factor of 2
-        downsample = nn.Sequential(
-            nn.MaxPool1d(kernel_size=2, stride=2),
-            nn.BatchNorm1d(self._out_channels)
-        )
+        if self._in_channels == self._out_channels:
+            downsample = nn.Sequential(
+                nn.MaxPool1d(kernel_size=2, stride=2),
+                nn.BatchNorm1d(self._out_channels)
+            )
+        else:
+            downsample = nn.Sequential(
+                nn.MaxPool1d(kernel_size=2, stride=2),
+                # Needed to align the channels before the addtition
+                nn.Conv1d(self._in_channels, self._out_channels, kernel_size=1, stride=1, bias=False),
+                nn.BatchNorm1d(self._out_channels)
+            )
         return downsample
 
     def _avg_pooled_downsample(self):
@@ -137,13 +146,14 @@ class BasicBlock1d(nn.Module):
         out = self._conv3(out)
 
         # Residual -----------------------------------------------------------------
-        if self._downsample is not None:
-            if self._poooled_downsample:
-                # Stride is two and kernel size is two as well
-                if residual.shape[2] % 2 != 0:
-                    residual = nn.ConstantPad1d((1, 1), 0)(residual)
-            residual = self._downsample(residual)
-        out += residual
+        if self._skips_active:
+            if self._downsample is not None:
+                if self._poooled_downsample:
+                    # Stride is two and kernel size is two as well
+                    if residual.shape[2] % 2 != 0:
+                        residual = nn.ConstantPad1d((1, 1), 0)(residual)
+                residual = self._downsample(residual)
+            out += residual
 
         # Import: Move this part AFTER the addition instead of keeping it directly after conv3!!!
         out = self._lrelu3(out)

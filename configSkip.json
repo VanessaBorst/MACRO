@@ -1,9 +1,9 @@
 {
-  "name": "CPSC_BaselineWithSkipsAndNorm",
-  "run_details": "_weightedBCE_experiment_norm_layer",
+  "name": "BaselineModelWithSkipConnectionsV2",
+  "run_details": "uw-BCE_max_w-F1",
   "n_gpu": 1,
   "arch": {
-    "type": "BaselineModelWithSkipConnectionsAndNorm",
+    "type": "BaselineModelWithSkipConnectionsV2",
     "args": {
       "apply_final_activation": false,
       "multi_label_training": true
@@ -31,8 +31,8 @@
     }
   },
   "loss": {
-    "type": "balanced_BCE_with_logits",
-    "add_args": ["pos_weights", "device"]
+    "type": "BCE_with_logits",
+    "add_args": []
   },
   "metrics": {
     "sl": {
@@ -75,10 +75,10 @@
   },
   "trainer": {
     "epochs": 300,
-    "save_dir": "savedVM/",
+    "save_dir": "savedVM_v2/",
     "save_period": 1,
     "verbosity": 2,
-    "monitor": "max val_cpsc_F1",
+    "monitor": "max val_weighted_sk_f1",
     "early_stop": 20,
     "tensorboard": true,
     "try_run": false,
