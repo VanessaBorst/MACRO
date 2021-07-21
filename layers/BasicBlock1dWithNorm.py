@@ -8,7 +8,7 @@ from layers.LayerUtils import calc_same_padding_for_stride_one
 class BasicBlock1dWithNorm(nn.Module):
 
     def __init__(self, in_channels, out_channels, mid_kernels_size, last_kernel_size, stride, down_sample, drop_out,
-                 norm_type, norm_pos, norm_before_act):
+                 norm_type, norm_pos, norm_before_act, skips_active=True):
         """
         The stride is only applied in the last conv layer and can be used for size reduction
         If the resulting number of channel differs, it is done within the first Conv1D and kept for the further ones
@@ -30,8 +30,6 @@ class BasicBlock1dWithNorm(nn.Module):
         super().__init__()
 
         assert stride == 1 or stride == 2, "Stride should be 1 or 2, otherwise the sizes are too much reduced"
-        assert down_sample == "conv" or in_channels == out_channels, \
-            "With different amount of in and out channels, pooling can not be used for aligning the residual tensor"
 
         self._in_channels = in_channels
         self._out_channels = out_channels
@@ -54,9 +52,10 @@ class BasicBlock1dWithNorm(nn.Module):
         half_last_kernel = calc_same_padding_for_stride_one(dilation=1, kernel_size=last_kernel_size)  # k//2
         half_last_kernel_minus_1 = (last_kernel_size - 1) // 2
         self._half_last_kernel_padding = nn.ConstantPad1d((half_last_kernel, half_last_kernel), 0)
-        self._half_last_kernel_padding_minus_1 = nn.ConstantPad1d((half_last_kernel_minus_1, half_last_kernel_minus_1), 0)
+        self._half_last_kernel_padding_minus_1 = nn.ConstantPad1d((half_last_kernel_minus_1, half_last_kernel_minus_1),
+                                                                  0)
 
-        self._conv1 = nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=mid_kernels_size, bias=False)
+        self._conv1 = nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=mid_kernels_size)
         # Before or after relu is handled during forward()
         if self._norm_pos == "all":
             if self._norm_type == "BN":
@@ -65,7 +64,7 @@ class BasicBlock1dWithNorm(nn.Module):
                 self._norm1 = nn.InstanceNorm1d(num_features=out_channels, affine=True)
         self._lrelu1 = nn.LeakyReLU(0.3)
 
-        self._conv2 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=mid_kernels_size, bias=False)
+        self._conv2 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=mid_kernels_size)
         # Before or after relu is handled during forward()
         if self._norm_pos == "all":
             if self._norm_type == "BN":
@@ -75,7 +74,7 @@ class BasicBlock1dWithNorm(nn.Module):
         self._lrelu2 = nn.LeakyReLU(0.3)
 
         self._conv3 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=last_kernel_size,
-                                stride=stride, bias=False)
+                                stride=stride)
         # Before or after relu is handled during forward()
         if self._norm_pos == "all":
             if self._norm_type == "BN":
@@ -88,19 +87,21 @@ class BasicBlock1dWithNorm(nn.Module):
         # self._batch_norm = nn.BatchNorm1d(num_features=out_channels, momentum=0.01)
         # self._instance_norm = nn.InstanceNorm1d(num_features=out_channels, affine=True)
 
+        self._skips_active = skips_active
         self._downsample = None
-        self._poooled_downsample = False
-        if stride == 1 and in_channels == out_channels:
-            # No downsampling needed
-            self._downsample = None
-        elif down_sample == 'conv':
-            self._downsample = self._convolutional_downsample(stride=stride)
-        elif down_sample == 'max_pool':
-            self._downsample = self._max_pooled_downsample()
-            self._poooled_downsample = True
-        elif down_sample == 'avg_pool':
-            self._downsample = self._avg_pooled_downsample()
-            self._poooled_downsample = True
+        if self._skips_active:
+            self._poooled_downsample = False
+            if stride == 1 and in_channels == out_channels:
+                # No downsampling needed
+                self._downsample = None
+            elif down_sample == 'conv':
+                self._downsample = self._convolutional_downsample(stride=stride)
+            elif down_sample == 'max_pool':
+                self._downsample = self._max_pooled_downsample()
+                self._poooled_downsample = True
+            elif down_sample == 'avg_pool':
+                self._downsample = self._avg_pooled_downsample()
+                self._poooled_downsample = True
 
     def _convolutional_downsample(self, stride):
         # The block is potentially changing the channel amount of 12
@@ -113,18 +114,34 @@ class BasicBlock1dWithNorm(nn.Module):
 
     def _max_pooled_downsample(self):
         # The block is keeping the channel amount of 12 but decreases the seq len by a factor of 2
-        downsample = nn.Sequential(
-            nn.MaxPool1d(kernel_size=2, stride=2),
-            nn.BatchNorm1d(self._out_channels)
-        )
+        if self._in_channels == self._out_channels:
+            downsample = nn.Sequential(
+                nn.MaxPool1d(kernel_size=2, stride=2),
+                nn.BatchNorm1d(self._out_channels)
+            )
+        else:
+            downsample = nn.Sequential(
+                nn.MaxPool1d(kernel_size=2, stride=2),
+                # Needed to align the channels before the addition
+                nn.Conv1d(self._in_channels, self._out_channels, kernel_size=1, stride=1, bias=False),
+                nn.BatchNorm1d(self._out_channels)
+            )
         return downsample
 
     def _avg_pooled_downsample(self):
         # The block is keeping the channel amount of 12 but decreases the seq len by a factor of 2
-        downsample = nn.Sequential(
-            nn.AvgPool1d(kernel_size=2, stride=2),
-            nn.BatchNorm1d(self._out_channels)
-        )
+        if self._in_channels == self._out_channels:
+            downsample = nn.Sequential(
+                nn.AvgPool1d(kernel_size=2, stride=2),
+                nn.BatchNorm1d(self._out_channels)
+            )
+        else:
+            downsample = nn.Sequential(
+                nn.AvgPool1d(kernel_size=2, stride=2),
+                # Needed to align the channels before the addition
+                nn.Conv1d(self._in_channels, self._out_channels, kernel_size=1, stride=1, bias=False),
+                nn.BatchNorm1d(self._out_channels)
+            )
         return downsample
 
     def forward(self, x):
@@ -145,7 +162,7 @@ class BasicBlock1dWithNorm(nn.Module):
                 if torch.cuda.is_available():
                     layer_norm_1.to('cuda:0')
                 out = layer_norm_1(out)
-            else:   # BN or IN
+            else:  # BN or IN
                 out = self._norm1(out)
         out = self._lrelu1(out)
         # Normalize here if "all" and "after" activation function
@@ -155,7 +172,7 @@ class BasicBlock1dWithNorm(nn.Module):
                 if torch.cuda.is_available():
                     layer_norm_1.to('cuda:0')
                 out = layer_norm_1(out)
-            else:   # BN or IN
+            else:  # BN or IN
                 out = self._norm1(out)
 
         # Conv2 -----------------------------------------------------------------
@@ -212,13 +229,14 @@ class BasicBlock1dWithNorm(nn.Module):
         # out = self._dropout(out)
 
         # Residual -----------------------------------------------------------------
-        if self._downsample is not None:
-            if self._poooled_downsample:
-                # Stride is two and kernel size is two as well
-                if residual.shape[2] % 2 != 0:
-                    residual = nn.ConstantPad1d((1, 1), 0)(residual)
-            residual = self._downsample(residual)
-        out = out + residual
+        if self._skips_active:
+            if self._downsample is not None:
+                if self._poooled_downsample:
+                    # Stride is two and kernel size is two as well
+                    if residual.shape[2] % 2 != 0:
+                        residual = nn.ConstantPad1d((1, 1), 0)(residual)
+                residual = self._downsample(residual)
+            out += residual
 
         # out = self._batch_norm(out)       # ResNet uses Conv - BN - Downsample - ReLU
         # out = self._instance_norm(out)

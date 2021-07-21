@@ -119,34 +119,37 @@ class MultiHeadContextualAttention(nn.Module):
         Bool specifying whether an bias should be used to retrieve the hidden representation for
         the hidden states of the BiGRU (which serve as values)
     """
-    def __init__(self, gru_dimension, heads, dropout=None, use_bias=True):
+    def __init__(self, gru_dimension, heads, dropout=None, use_bias=True, discard_FC_before_MH=False):
         super().__init__()
         self._use_bias = use_bias
+        self._discard_FC_before_MH = discard_FC_before_MH
         d_model = 2 * gru_dimension
 
-        # The input dimension will be twice the number of units of a single GRU (since it is a BiGRU)
-        # This layer calculates a hidden representation of the incoming values for which attention weights are needed
-        # It calculates the following: tanh(W h +b)
-        self._hidden_rep = nn.Sequential(
-            nn.Linear(in_features=d_model, out_features=d_model, bias=self._use_bias),
-            nn.Tanh()
-        )
+        if not self._discard_FC_before_MH:
+            # The input dimension will be twice the number of units of a single GRU (since it is a BiGRU)
+            # This layer calculates a hidden representation of the incoming values for which attention weights are needed
+            # It calculates the following: tanh(W h +b)
+            self._hidden_rep = nn.Sequential(
+                nn.Linear(in_features=d_model, out_features=d_model, bias=self._use_bias),
+                nn.Tanh()
+            )
 
         # Apply the attention scoring function (dot-product) between the values and the query vector u
         # Here u is represented as trainable tensor, which has shape (attention_dimension x 1)
         u = torch.empty(d_model, 1)
-        u = nn.init.xavier_uniform_(u, gain=nn.init.calculate_gain('linear'))
+        u = nn.init.xavier_uniform_(u)
         self._query = nn.Parameter(u, requires_grad=True)
 
         self._multihead_attention = MultiHeadAttention(d_model=d_model, k=d_model,
                                                        q=d_model, v=d_model, h=heads,
-                                                       dropout=dropout)
+                                                       dropout=dropout,
+                                                       discard_FC_before_MH=self._discard_FC_before_MH)
 
     def forward(self, biGRU_outputs):
         # biGRU_outputs is of shape [batch_size, seq_len, 2*num_units], e.g., bs*2250*24
         # Wanted: Seq_len number of attention weights for each element in the batch
 
-        keys = biGRU_outputs#self._hidden_rep(biGRU_outputs)
+        keys = self._hidden_rep(biGRU_outputs) if not self._discard_FC_before_MH else biGRU_outputs
         values = biGRU_outputs
 
         bs = biGRU_outputs.shape[0]

@@ -31,16 +31,22 @@ _set_seed(SEED)
 
 def main(config, tune_config=None):
     # Conditional inputs depending on the config
-    if config['arch']['type'] == 'BaselineModel':
+    if config['arch']['type'] == 'BaselineModelWoRnnWoAttention':
+        import model.baseline_model_woRNN_woAttention as module_arch
+    elif config['arch']['type'] == 'BaselineModel':
         import model.baseline_model as module_arch
     elif config['arch']['type'] == 'BaselineModelWithSkipConnections':
-        import model.baseline_model_with_skips as module_arch
+        import model.old.baseline_model_with_skips as module_arch
     elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndInstanceNorm':
-        import model.baseline_model_with_skips_and_InstNorm as module_arch
+        import model.old.baseline_model_with_skips_and_InstNorm as module_arch
+    elif config['arch']['type'] == "BaselineModelWithSkipConnectionsAndNorm":
+        import model.old.baseline_model_with_skips_and_norm as module_arch
+    elif config['arch']['type'] == "BaselineModelWithSkipConnectionsV2":
+        import model.baseline_model_with_skips_v2 as module_arch
+    elif config['arch']['type'] == "BaselineModelWithSkipConnectionsAndNormV2":
+        import model.baseline_model_with_skips_and_norm_v2 as module_arch
     elif config['arch']['type'] == 'BaselineModelWithMHAttention':
         import model.baseline_model_with_MHAttention as module_arch
-    elif config['arch']['type'] == "BaselineModelWithSkipConnectionsAndNorm":
-        import model.baseline_model_with_skips_and_norm as module_arch
 
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric
@@ -167,7 +173,7 @@ def main(config, tune_config=None):
         start = time.time()
 
         for batch_idx, (padded_records, _, first_labels, labels_one_hot, record_names) in \
-                    enumerate(tqdm(data_loader)):
+                enumerate(tqdm(data_loader)):
             if multi_label_training:
                 data, target = padded_records.to(device), labels_one_hot.to(device)
             else:
@@ -264,6 +270,56 @@ def main(config, tune_config=None):
             metric_tracker.class_wise_epoch_update(met.__name__, met(target=det_targets, output=det_outputs,
                                                                      **additional_kwargs))
 
+    # ------------ ROC Plots ------------------------------------
+    if config['arch']['args']['multi_label_training']:
+        fpr, tpr, thresholds = module_metric.torch_roc(output=det_outputs, target=det_targets,
+                                                       sigmoid_probs=_param_dict["sigmoid_probs"],
+                                                       logits=_param_dict["logits"], labels=_param_dict["labels"])
+        roc_auc_scores = module_metric.class_wise_torch_roc_auc(output=det_outputs, target=det_targets,
+                                                                sigmoid_probs=_param_dict["sigmoid_probs"],
+                                                                logits=_param_dict["logits"],
+                                                                labels=_param_dict["labels"])
+    else:
+        fpr, tpr, thresholds = module_metric.torch_roc(output=det_outputs, target=det_targets,
+                                                       log_probs=_param_dict["log_probs"],
+                                                       logits=_param_dict["logits"], labels=_param_dict["labels"])
+        roc_auc_scores = module_metric.class_wise_torch_roc_auc(output=det_outputs, target=det_targets,
+                                                                log_probs=_param_dict["log_probs"],
+                                                                logits=_param_dict["logits"],
+                                                                labels=_param_dict["labels"])
+
+    fig, axs = plt.subplots(3, 3, figsize=(15, 10))
+    axis_0 = 0
+    axis_1 = 0
+    line_width = 2
+    target_names = ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]
+    desired_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE']
+    for i in range(0, 9):
+        desired_class = desired_order[i]
+        idx = target_names.index(desired_class)
+        fpr_class_i = fpr[idx].numpy()
+        tpr_class_i = tpr[idx].numpy()
+        # Scale values by a factor of 1000 to better match the cpsc raw values
+        axs[axis_0, axis_1].plot(fpr_class_i, tpr_class_i, color='darkorange', lw=line_width,
+                                 label='ROC curve (area = %0.3f)' % roc_auc_scores[idx])
+        axs[axis_0, axis_1].plot([0, 1], [0, 1], color='navy', lw=line_width, linestyle='--')
+        axs[axis_0, axis_1].set_xlabel('False Positive Rate')
+        axs[axis_0, axis_1].set_ylabel('True Positive Rate')
+        axs[axis_0, axis_1].set_xlim([0.0, 1.0])
+        axs[axis_0, axis_1].set_ylim([0.0, 1.05])
+        axs[axis_0, axis_1].legend(loc="lower right")
+        axs[axis_0, axis_1].set_title('ROC curve for class ' + str(target_names[idx]))
+        # Also save the single plots per class
+        file_name = 'roc_curve_' + target_names[idx] + '.pdf'
+        extent = axs[axis_0, axis_1].get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+        # Pad the saved area by 30% in the x-direction and 35% in the y-direction
+        fig.savefig(config.test_output_dir / file_name, bbox_inches=extent.expanded(1.3, 1.35))
+        axis_1 = (axis_1 + 1) % 3
+        if axis_1 == 0:
+            axis_0 += 1
+    plt.tight_layout()
+    plt.savefig(config.test_output_dir / "roc_curves.pdf")
+
     # ------------ Confusion matrices ------------------------
     # Dump the confusion matrices into a pickle file and write figures of them to file
     # 1) Update the confusion matrices maintained by the ClassificationTracker
@@ -283,7 +339,7 @@ def main(config, tune_config=None):
         upd_class_wise_cms = class_wise_confusion_matrices_multi_label_sk(output=det_outputs,
                                                                           target=det_targets,
                                                                           sigmoid_probs=_param_dict[
-                                                                           'sigmoid_probs'],
+                                                                              'sigmoid_probs'],
                                                                           logits=_param_dict['logits'],
                                                                           labels=_param_dict['labels'])
     cm_tracker.update_class_wise_cms(upd_class_wise_cms)
@@ -357,7 +413,6 @@ def main(config, tune_config=None):
     df_sklearn_summary = pd.DataFrame.from_dict(summary_dict)
     df_metric_results = metric_tracker.result(include_epoch_metrics=True)
 
-
     df_class_wise_results = pd.DataFrame(
         columns=['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'macro avg', 'weighted avg'])
     df_class_wise_results = pd.concat([df_class_wise_results, df_sklearn_summary[
@@ -394,29 +449,30 @@ def main(config, tune_config=None):
     df_class_wise_results.loc['support'] = df_class_wise_results.loc['support'].apply(int)
 
     # Reorder the class columns of the dataframe to match the one used in the
-    desired_col_order=['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE', 'macro avg', 'weighted avg']
+    desired_col_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE', 'macro avg', 'weighted avg']
     df_class_wise_results = df_class_wise_results[desired_col_order]
 
     df_single_metric_results = df_metric_results.loc[~df_metric_results.index.str.startswith(
         ('class_wise', 'weighted', 'macro'))]['mean'].to_frame().transpose()
     df_single_metric_results.rename(index={'mean': 'value'}, inplace=True)
 
-    with open(os.path.join(config.test_output_dir,'eval_class_wise.p'), 'wb') as file:
+    with open(os.path.join(config.test_output_dir, 'eval_class_wise.p'), 'wb') as file:
         pickle.dump(df_class_wise_results, file)
 
-    with open(os.path.join(config.test_output_dir,'eval_single_metrics.p'), 'wb') as file:
+    with open(os.path.join(config.test_output_dir, 'eval_single_metrics.p'), 'wb') as file:
         pickle.dump(df_single_metric_results, file)
 
     with open(os.path.join(config.test_output_dir, 'eval_results.tex'), 'w') as file:
-        df_class_wise_results.to_latex(buf=file, index=True,  bold_rows=True, float_format="{:0.3f}".format)
-        df_single_metric_results.to_latex(buf=file, index=True,  bold_rows=True, float_format="{:0.3f}".format)
+        df_class_wise_results.to_latex(buf=file, index=True, bold_rows=True, float_format="{:0.3f}".format)
+        df_single_metric_results.to_latex(buf=file, index=True, bold_rows=True, float_format="{:0.3f}".format)
 
     end = time.time()
     ty_res = time.gmtime(end - start)
     res = time.strftime("%H hours, %M minutes, %S seconds", ty_res)
 
     eval_log = {'Runtime': res}
-    eval_info_single_metrics = ', '.join(f"{key}: {str(value).split('Name')[0].split('value')[1]}" for key, value in df_single_metric_results.items())
+    eval_info_single_metrics = ', '.join(
+        f"{key}: {str(value).split('Name')[0].split('value')[1]}" for key, value in df_single_metric_results.items())
     eval_info_class_wise_metrics = ', '.join(f"{key}: {value}" for key, value in df_class_wise_results.items())
     logger_info = f"{eval_log}\n{eval_info_single_metrics}\n{eval_info_class_wise_metrics}\n"
     logger.info(logger_info)

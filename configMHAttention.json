@@ -1,12 +1,13 @@
 {
   "name": "CPSC_BaselineWithMultiHeadAttention_uBCE_F1",
-  "run_details": "",
+  "run_details": "add_FC_discarded",
   "n_gpu": 1,
   "arch": {
     "type": "BaselineModelWithMHAttention",
     "args": {
       "apply_final_activation": false,
-      "multi_label_training": true
+      "multi_label_training": true,
+      "discard_FC_before_MH": true
     }
   },
   "data_loader": {

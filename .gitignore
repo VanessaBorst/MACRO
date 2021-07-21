@@ -5,6 +5,8 @@ data/
 logs/
 saved/
 saved_old/
+savedVM/
+savedVM_v2/
 .idea/
 /playground/plots/
 *.p
@@ -222,4 +224,4 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
-/savedVM/
+

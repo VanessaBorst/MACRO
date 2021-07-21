@@ -27,6 +27,8 @@ class MultiHeadAttention(nn.Module):
         Number of heads.
     dropout:
         Dropout ratio to be applied as float. If None, no dropout is applied
+    discard_FC_before_MH:
+        If set to True, there is no key transformation before, so the tanh is applied within the MH attention
     attention_size:
         Number of backward elements to apply attention.
         Deactivated if ``None``. Default is ``None``.
@@ -39,6 +41,7 @@ class MultiHeadAttention(nn.Module):
                  v: int,
                  h: int,
                  dropout: float,
+                 discard_FC_before_MH: bool,
                  attention_size: int = None,
                  **kwargs):
         """Initialize the Multi Head Block."""
@@ -46,10 +49,17 @@ class MultiHeadAttention(nn.Module):
 
         self._h = h
         self._attention_size = attention_size
+        self._discard_FC_before_MH = discard_FC_before_MH
 
         # Query, keys and value matrices
         self._W_q = nn.Linear(d_model, q*self._h)
-        self._W_k = nn.Linear(d_model, k*self._h)
+        if not self._discard_FC_before_MH:
+            self._W_k = nn.Linear(d_model, k*self._h)
+        else:
+            self._W_k = nn.Sequential(
+                nn.Linear(d_model, k*self._h),
+                nn.Tanh()
+            )
         self._W_v = nn.Linear(d_model, v*self._h)
 
         # Output linear function
@@ -94,7 +104,7 @@ class MultiHeadAttention(nn.Module):
 
         # Compute Q, K and V, concatenate heads on batch dimension
         queries = torch.cat(self._W_q(query).chunk(self._h, dim=-1), dim=0)
-        keys = torch.cat(self._W_k(key).chunk(self._h, dim=-1), dim=0)  # Tanh um self.W_key
+        keys = torch.cat(self._W_k(key).chunk(self._h, dim=-1), dim=0)
         values = torch.cat(self._W_v(value).chunk(self._h, dim=-1), dim=0)
 
         # Scaled Dot Product

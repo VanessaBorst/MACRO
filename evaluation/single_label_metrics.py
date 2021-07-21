@@ -492,6 +492,34 @@ def _torch_roc_auc(output, target, log_probs, logits, labels, average):
         return auroc(probs, target)
 
 
+def torch_roc(output, target, log_probs, logits, labels):
+    """
+    The following parameter description applies for the multiclass case
+    :param output: (N, C, ...) (multiclass/multilabel) tensor with probabilities, where C is the number of classes.
+    :param log_probs: If the outputs are log softmax probs and do NOT necessarily sum to 1, set param to True
+    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
+    :param target: (N, ...) or (N, C, ...) with integer labels
+    :param labels: List of labels that index the classes in output
+    :return: Receiver Operating Characteristic Curve (ROC) for the multiclass case
+    """
+    with torch.no_grad():
+        # In the multiclass case, y_score corresponds to an array of shape (n_samples, n_classes) of class
+        # estimates. The class estimates must sum to 1 across the possible classes
+        assert log_probs ^ logits, "In the single-label case, exactly one of the two must be true"
+        # In both cases, the scores do not sum to one
+        # Either they are logmax outputs or logits, so transform them
+        if logits:
+            probs = torch.nn.functional.softmax(output, dim=1)
+        else:
+            probs = torch.exp(output)
+
+        assert probs.shape[0] == len(target)
+        # returns a tuple (fpr, tpr, thresholds)
+        auroc = AUROC(num_classes=len(labels))
+        return auroc(probs, target)
+
+
+
 def _torch_f1(output, target, log_probs, logits, labels, average):
     """
     The following parameter description applies for the multiclass case

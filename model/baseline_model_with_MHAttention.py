@@ -8,7 +8,7 @@ from utils import plot_record_from_np_array
 
 class BaselineModelWithMHAttention(BaseModel):
     def __init__(self, apply_final_activation, multi_label_training, gru_units=12, dropout_attention=0.2, heads=3,
-                 num_classes=9):
+                 discard_FC_before_MH = False, num_classes=9):
         """
         :param apply_final_activation: whether the Sigmoid(sl) or the LogSoftmax(ml) should be applied at the end
         :param multi_label_training: if true, Sigmoid is used as final activation, else the LogSoftmax
@@ -79,7 +79,8 @@ class BaselineModelWithMHAttention(BaseModel):
 
         self._multi_head_contextual_attention = MultiHeadContextualAttention(gru_dimension=gru_units,
                                                                              dropout=dropout_attention,
-                                                                             heads=heads)
+                                                                             heads=heads,
+                                                                             discard_FC_before_MH=discard_FC_before_MH)
 
         self._batchNorm = nn.Sequential(
             # The batch normalization layer has 24*2=48 trainable and 24*2=48 non-trainable parameters

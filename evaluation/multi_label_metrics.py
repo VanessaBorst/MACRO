@@ -3,7 +3,6 @@ import csv
 import numpy as np
 import pandas as pd
 import torch
-from keras.metrics import Recall
 from sklearn.metrics import multilabel_confusion_matrix, \
     accuracy_score, roc_auc_score, f1_score, precision_score, \
     recall_score, classification_report
@@ -21,7 +20,7 @@ from sklearn.metrics import multilabel_confusion_matrix, \
 
 # Details:
 # https://datascience.stackexchange.com/questions/15989/micro-average-vs-macro-average-performance-in-a-multiclass-classification-settin/16001
-from torchmetrics import AUROC, F1, Precision, Accuracy
+from torchmetrics import AUROC, F1, Precision, Accuracy, Recall, ROC
 
 THRESHOLD = 0.5
 
@@ -525,6 +524,27 @@ def _torch_roc_auc(output, target, sigmoid_probs, logits, labels, average):
 
         auroc = AUROC(num_classes=len(labels), average=average, pos_label=1)
         return auroc(pred, target)
+
+
+def torch_roc(output, target, sigmoid_probs, logits, labels):
+    """
+    The following parameter description applies for the multilabel case
+    :param output: (N, C, ...) (multiclass/multilabel) tensor with probabilities, where C is the number of classes.
+    :param sigmoid_probs: If the outputs are log sigmoid probs and do NOT necessarily sum to 1, set param to True
+    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
+    :param target: (N, ...) or (N, C, ...) with integer labels
+    :param labels: List of labels that index the classes in output
+    :return: Receiver Operating Characteristic Curve (ROC) for the multilabel case
+    """
+    with torch.no_grad():
+        sigmoid_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+
+        # Pred should be a tensor with probabilities of shape (N, C, ...), where C is the number of classes.
+        pred = output if sigmoid_probs else torch.sigmoid(output)
+
+        roc = ROC(num_classes=len(labels), pos_label=1)
+        # returns a tuple (fpr, tpr, thresholds)
+        return roc(pred, target)
 
 
 def _torch_f1(output, target, sigmoid_probs, logits, labels, average):

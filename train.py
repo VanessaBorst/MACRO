@@ -1,6 +1,5 @@
 import argparse
 import collections
-import sys
 from datetime import datetime
 import os
 import pickle
@@ -13,7 +12,6 @@ from ray.tune.web_server import TuneClient
 from ray import tune
 from ray.tune import CLIReporter, Callback
 from ray.tune.suggest import BasicVariantGenerator
-
 
 import data_loader.data_loaders as module_data_loader
 import model.loss as module_loss
@@ -126,19 +124,12 @@ def _get_mid_kernel_size_second_conv_blocks(spec):
 def tuning_params(name):
     if name == "BaselineModelWithSkipConnections" or name == "BaselineModelWithSkipConnectionsAndInstanceNorm":
         return {
-            "mid_kernel_size_first_conv_blocks": 7,
-            "mid_kernel_size_second_conv_blocks": 7,
-            "last_kernel_size_first_conv_blocks": 21,
-            "last_kernel_size_second_conv_blocks": 48,
-            "down_sample": "conv",
+            "mid_kernel_size_first_conv_blocks": tune.grid_search([3, 5, 7]),
+            "mid_kernel_size_second_conv_blocks": tune.sample_from(_get_mid_kernel_size_second_conv_blocks),
+            "last_kernel_size_first_conv_blocks": tune.grid_search([21, 24, 27]),
+            "last_kernel_size_second_conv_blocks": tune.grid_search([45, 48, 51]),
+            "down_sample": tune.grid_search(["conv", "max_pool"])
         }
-        # return {
-        #     "mid_kernel_size_first_conv_blocks": tune.grid_search([3, 5, 7]),
-        #     "mid_kernel_size_second_conv_blocks": tune.sample_from(_get_mid_kernel_size_second_conv_blocks),
-        #     "last_kernel_size_first_conv_blocks": tune.grid_search([21, 24, 27]),
-        #     "last_kernel_size_second_conv_blocks": tune.grid_search([45, 48, 51]),
-        #     "down_sample": tune.grid_search(["conv", "max_pool"])
-        # }
     elif name == "BaselineModelWithMHAttention":
         return {
             "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
@@ -156,7 +147,21 @@ def tuning_params(name):
             "norm_pos": tune.grid_search(["all", "last"]),
             "norm_before_act": tune.grid_search([True, False])
         }
-
+    elif name == "BaselineModelWithSkipConnectionsV2":
+        return {
+            "down_sample": tune.grid_search(["conv", "max_pool"]),
+            "vary_channels": tune.grid_search([True, False]),
+            "pos_skip": tune.grid_search(["all", "not_last", "not_first"])
+        }
+    elif name == "BaselineModelWithSkipConnectionsAndNormV2":
+        return {
+            "down_sample": tune.grid_search(["conv", "max_pool"]),
+            "vary_channels": True,
+            "pos_skip": tune.grid_search(["all", "not_last", "not_first"]),
+            "norm_type": tune.grid_search(["BN", "IN", "LN"]),
+            "norm_pos": tune.grid_search(["all", "last"]),
+            "norm_before_act": tune.grid_search([True, False])
+        }
     else:
         return None
 
@@ -165,7 +170,7 @@ class MyTuneCallback(Callback):
 
     def __init__(self):
         self.already_seen = set()
-        self.manager = TuneClient(tune_address="localhost", port_forward=4321)
+        self.manager = TuneClient(tune_address="127.0.0.1", port_forward=4321)
 
     def setup(self, ):
         seen_configs = [
@@ -196,7 +201,12 @@ class MyTuneCallback(Callback):
             self.already_seen.add(str(config))
 
     def on_trial_start(self, iteration, trials, trial, **info):
-        if str(trial.config) in self.already_seen:
+        unwanted_combination = \
+            (trial.config["down_sample"] == "conv" and trial.config["pos_skip"] == "all") or \
+            (trial.config["down_sample"] == "conv" and trial.config["pos_skip"] == "not_first") or \
+            (trial.config["down_sample"] == "max_pool" and trial.config["pos_skip"] == "not_last")
+        if str(trial.config) in self.already_seen or unwanted_combination:
+            print("Stop trial with id " + str(trial.trial_id))
             self.manager.stop_trial(trial.trial_id)
         else:
             self.already_seen.add(str(trial.config))
@@ -245,21 +255,14 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
     #     reduction_factor=2)
     # # Problem:  the ASHAScheduler will aggressively terminate low-performing trials
 
-    if main_config["arch"]["type"] == "BaselineModelWithSkipConnections" or main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndInstanceNorm":
+    if main_config["arch"]["type"] == "BaselineModelWithSkipConnections" \
+            or main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndInstanceNorm":
         reporter = CLIReporter(
             parameter_columns={
-                # "num_first_conv_blocks": "Num 1st",
-                # "num_second_conv_blocks": "Num 2nd",
-                # "drop_out_first_conv_blocks": "Drop 1st",
-                # "drop_out_second_conv_blocks": "Drop 2nd",
-                # "out_channel_first_conv_blocks": "Out 1st",
-                # "out_channel_second_conv_blocks": "Out 2nd",
                 "mid_kernel_size_first_conv_blocks": "Mid kernel 1st",
                 "mid_kernel_size_second_conv_blocks": "Mid kernel 2nd",
                 "last_kernel_size_first_conv_blocks": "Last kernel 1st",
                 "last_kernel_size_second_conv_blocks": "Last kernel 2nd",
-                # "stride_first_conv_blocks": "S 1st",
-                # "stride_second_conv_blocks": "S 2nd",
                 "down_sample": "Downsampling"
             },
             metric_columns=["loss", "val_loss",
@@ -289,7 +292,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
         reporter = CLIReporter(
             parameter_columns={
                 "norm_type": "Type",
-                "norm_pos":  "Position",
+                "norm_pos": "Position",
                 "norm_before_act": "Before L-ReLU"
             },
             metric_columns=["loss", "val_loss",
@@ -300,8 +303,39 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                             "val_cpsc_Fpc",
                             "val_cpsc_Fst",
                             "training_iteration"])
-
-
+    elif main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsV2":
+        reporter = CLIReporter(
+            parameter_columns={
+                "down_sample": "Downsampling",
+                "vary_channels": "Varied channels",
+                "pos_skip": "Skip Pos"
+            },
+            metric_columns=["loss", "val_loss",
+                            "val_weighted_sk_f1",
+                            "val_cpsc_F1",
+                            "val_cpsc_Faf",
+                            "val_cpsc_Fblock",
+                            "val_cpsc_Fpc",
+                            "val_cpsc_Fst",
+                            "training_iteration"])
+    elif main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2":
+        reporter = CLIReporter(
+            parameter_columns={
+                "down_sample": "Downsampling",
+                "vary_channels": "Varied channels",
+                "pos_skip": "Skip Pos",
+                "norm_type": "Type",
+                "norm_pos": "Position",
+                "norm_before_act": "Before L-ReLU"
+            },
+            metric_columns=["loss", "val_loss",
+                            "val_weighted_sk_f1",
+                            "val_cpsc_F1",
+                            "val_cpsc_Faf",
+                            "val_cpsc_Fblock",
+                            "val_cpsc_Fpc",
+                            "val_cpsc_Fst",
+                            "training_iteration"])
 
     # experiment_stopper = ExperimentPlateauStopper(
     #     metric=mnt_metric,
@@ -414,6 +448,8 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
     #                                               "out_channel_first_conv_blocks <= out_channel_second_conv_blocks"])
     # ax_searcher = ConcurrencyLimiter(ax_searcher, max_concurrent=2)
 
+    num_gpu = 0.5 if not main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsV2" and not \
+        main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2" else 1
     analysis = tune.run(
         run_or_experiment=train_fn,
         num_samples=num_tune_samples,
@@ -429,10 +465,10 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
         # checkpoint_score_attr=f"{mnt_mode}-{mnt_metric}",
 
         # search_alg=ax_searcher,           # Just use Random Grid Search instead of an advanced search algo
-        search_alg=BasicVariantGenerator(),     #points_to_evaluate=initial_param_suggestions, max_concurrent=3),
+        search_alg=BasicVariantGenerator(),  # points_to_evaluate=initial_param_suggestions, max_concurrent=3),
         config={**tune_config},
         resources_per_trial={"cpu": 5 if torch.cuda.is_available() else 1,
-                             "gpu": 0.5 if torch.cuda.is_available() else 0},
+                             "gpu": num_gpu if torch.cuda.is_available() else 0},
 
         max_failures=2,  # retry when error, e.g. OutOfMemory, default is 0
         raise_on_failed_trial=False,  # Failed trials are expected due to assertion errors
@@ -459,7 +495,7 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
     # config: type: ConfigParser -> can be used as usual
     # tune_config: type: Dict -> contains the tune params with the samples values,
     #               e.g. {'num_first_conv_blocks': 8, 'num_second_conv_blocks': 9, ...}
-    import torch    # Needed to work with asych. tune workers as well
+    import torch  # Needed to work with asych. tune workers as well
     if use_tune:
         # When using Ray Tune, this is distributed among worker processes, which requires seeding within the function
         # Otherwise the same config may to different results -> not reproducible
@@ -476,13 +512,17 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
     elif config['arch']['type'] == 'BaselineModel':
         import model.baseline_model as module_arch
     elif config['arch']['type'] == 'BaselineModelWithSkipConnections':
-        import model.baseline_model_with_skips as module_arch
+        import model.old.baseline_model_with_skips as module_arch
     elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndInstanceNorm':
-        import model.baseline_model_with_skips_and_InstNorm as module_arch
+        import model.old.baseline_model_with_skips_and_InstNorm as module_arch
+    elif config['arch']['type'] == "BaselineModelWithSkipConnectionsAndNorm":
+        import model.old.baseline_model_with_skips_and_norm as module_arch
+    elif config['arch']['type'] == "BaselineModelWithSkipConnectionsV2":
+        import model.baseline_model_with_skips_v2 as module_arch
+    elif config['arch']['type'] == "BaselineModelWithSkipConnectionsAndNormV2":
+        import model.baseline_model_with_skips_and_norm_v2 as module_arch
     elif config['arch']['type'] == 'BaselineModelWithMHAttention':
         import model.baseline_model_with_MHAttention as module_arch
-    elif config['arch']['type'] == "BaselineModelWithSkipConnectionsAndNorm":
-        import model.baseline_model_with_skips_and_norm as module_arch
 
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric

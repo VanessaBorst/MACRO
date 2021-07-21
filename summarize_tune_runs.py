@@ -27,15 +27,25 @@ def _bold_formatter(x, value, num_decimals=2):
     else:
         return f"{x:.{num_decimals}f}"
 
-path_to_tune = 'savedVM/models/CPSC_BaselineWithMultiHeadAttention/param_study_1'
-# Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
-hyper_params = ['dropout_attention', 'gru_units', 'heads']
-integer_vals = ['gru_units', 'heads']
-single_precision = ['dropout_attention']
-desired_col_order = ['dropout_attention', 'gru_units', 'heads',
+
+path_to_tune = 'savedVM_v2/models/BaselineModelWithSkipConnectionsV2/experiment_1_1'  # Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
+hyper_params = ['down_sample', 'pos_skip', 'vary_channels']
+integer_vals = []
+single_precision = []
+desired_col_order = ['down_sample', 'vary_channels', 'pos_skip',
                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-                     'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc',
+                     'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
+
+# path_to_tune = 'savedVM/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/tune_run_1'   # 'savedVM/models/CPSC_BaselineWithMultiHeadAttention/param_study_1'
+# # Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
+# hyper_params = ['dropout_attention', 'gru_units', 'heads']
+# integer_vals = ['gru_units', 'heads']
+# single_precision = ['dropout_attention']
+# desired_col_order = ['dropout_attention', 'gru_units', 'heads',
+#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
+#                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
 
 # path_to_tune = 'savedVM/models/CPSC_BaselineWithSkips/experiment_1_1'
 # hyper_params = ["down_sample", "last_kernel_size_first_conv_blocks", "last_kernel_size_second_conv_blocks",
@@ -46,7 +56,7 @@ desired_col_order = ['dropout_attention', 'gru_units', 'heads',
 # desired_col_order = ['down_sample', 'mid_kernel_size_first_conv_blocks', 'last_kernel_size_first_conv_blocks',
 #                      'last_kernel_size_second_conv_blocks',
 #                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc',
+#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
 #                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
 
 # path_to_tune = 'savedVM/models/CPSC_BaselineWithSkipsAndNorm/weightedBCE_experiment_norm_layer'
@@ -58,21 +68,21 @@ desired_col_order = ['dropout_attention', 'gru_units', 'heads',
 # single_precision = []
 # desired_col_order = ["norm_type", "norm_pos", "norm_before_act",
 #                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc',
+#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
 #                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
 
-# Colums to format with maximum condition and 2 floating decimals
+# Columns to format with maximum condition and 2 floating decimals
 max_columns = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-                  'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc',
+                  'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
                   'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
 
 df_summary_valid = pd.DataFrame(
     columns=hyper_params + ['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'W-AVG_F1',
-                            'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'W-AVG_ROC', 'W-AVG_Acc'])
+                            'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'W-AVG_ROC', 'W-AVG_Acc', 'MR'])
 
 df_summary_test = pd.DataFrame(
     columns=hyper_params + ['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'W-AVG_F1',
-                            'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'W-AVG_ROC', 'W-AVG_Acc'])
+                            'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'W-AVG_ROC', 'W-AVG_Acc', 'MR'])
 
 
 def _append_to_summary(path, df_summary, tune_dict):
@@ -84,7 +94,9 @@ def _append_to_summary(path, df_summary, tune_dict):
     # Update param configuration
     row_values = [tune_dict[k] for k in tune_dict.keys()]
     # Append F1 metrics (class-wise + weighted AVG)
-    row_values = row_values + df_class_wise.loc['sk_f1'].values.tolist()
+    f1_metrics = df_class_wise.loc['f1-score'][['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB',
+                                                'weighted avg']].values.tolist()
+    row_values = row_values + f1_metrics
     # Append single metrics
     col_names = ['cpsc_F1', 'cpsc_Faf', 'cpsc_Fblock', 'cpsc_Fpc', 'cpsc_Fst']
     row_values = row_values + df_single_metrics[col_names].values.tolist()[0]
@@ -92,6 +104,8 @@ def _append_to_summary(path, df_summary, tune_dict):
     row_values.append(df_class_wise.loc['torch_roc_auc']['weighted avg'])
     # Append the weighted AVG for Acc
     row_values.append(df_class_wise.loc['torch_accuracy']['weighted avg'])
+    # Append the subset acc (=MR)
+    row_values = row_values + df_single_metrics['sk_subset_accuracy'].values.tolist()
 
     # Add the row to the summary dataframe
     df_summary.loc[len(df_summary)] = row_values
@@ -128,7 +142,7 @@ df_summary_valid_reordered = df_summary_valid[desired_col_order]
 df_summary_test_reordered = df_summary_test[desired_col_order]
 
 # Sort the rows by the two F1-scores
-order_by_cols = ['CPCS_F1', 'W-AVG_F1']  # ['W-AVG_F1', 'CPCS_F1']
+order_by_cols = ['W-AVG_F1', 'CPCS_F1'] # ['CPCS_F1', 'W-AVG_F1']
 df_summary_valid_reordered = df_summary_valid_reordered.sort_values(by=order_by_cols, inplace=False, ascending=False)
 df_summary_test_reordered = df_summary_test_reordered.sort_values(by=order_by_cols, inplace=False, ascending=False)
 

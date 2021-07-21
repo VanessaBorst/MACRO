@@ -94,7 +94,7 @@ class BasicBlock1d(nn.Module):
         else:
             downsample = nn.Sequential(
                 nn.MaxPool1d(kernel_size=2, stride=2),
-                # Needed to align the channels before the addtition
+                # Needed to align the channels before the addition
                 nn.Conv1d(self._in_channels, self._out_channels, kernel_size=1, stride=1, bias=False),
                 nn.BatchNorm1d(self._out_channels)
             )
@@ -102,10 +102,18 @@ class BasicBlock1d(nn.Module):
 
     def _avg_pooled_downsample(self):
         # The block is keeping the channel amount of 12 but decreases the seq len by a factor of 2
-        downsample = nn.Sequential(
-            nn.AvgPool1d(kernel_size=2, stride=2),
-            nn.BatchNorm1d(self._out_channels)
-        )
+        if self._in_channels == self._out_channels:
+            downsample = nn.Sequential(
+                nn.AvgPool1d(kernel_size=2, stride=2),
+                nn.BatchNorm1d(self._out_channels)
+            )
+        else:
+            downsample = nn.Sequential(
+                nn.AvgPool1d(kernel_size=2, stride=2),
+                # Needed to align the channels before the addition
+                nn.Conv1d(self._in_channels, self._out_channels, kernel_size=1, stride=1, bias=False),
+                nn.BatchNorm1d(self._out_channels)
+            )
         return downsample
 
     def forward(self, x):
@@ -131,7 +139,7 @@ class BasicBlock1d(nn.Module):
         out = self._lrelu2(out)
 
         # Conv3 -----------------------------------------------------------------
-        # Conv3 usually has stride 2
+        # Conv3 has stride 2
         if self._stride == 2:
             if self._last_kernel_size % 2 == 0 and out.shape[2] % 2 != 0:
                 out = self._half_last_kernel_padding(out)
