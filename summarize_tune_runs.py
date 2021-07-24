@@ -28,24 +28,24 @@ def _bold_formatter(x, value, num_decimals=2):
         return f"{x:.{num_decimals}f}"
 
 
-path_to_tune = 'savedVM_v2/models/BaselineModelWithSkipConnectionsV2/experiment_1_1'  # Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
-hyper_params = ['down_sample', 'pos_skip', 'vary_channels']
-integer_vals = []
-single_precision = []
-desired_col_order = ['down_sample', 'vary_channels', 'pos_skip',
-                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-                     'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
-                     'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
-
-# path_to_tune = 'savedVM/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/tune_run_1'   # 'savedVM/models/CPSC_BaselineWithMultiHeadAttention/param_study_1'
-# # Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
-# hyper_params = ['dropout_attention', 'gru_units', 'heads']
-# integer_vals = ['gru_units', 'heads']
-# single_precision = ['dropout_attention']
-# desired_col_order = ['dropout_attention', 'gru_units', 'heads',
+# path_to_tune = 'savedVM_v2/models/BaselineModelWithSkipConnectionsV2/experiment_1_1'  # Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
+# hyper_params = ['down_sample', 'pos_skip', 'vary_channels']
+# integer_vals = []
+# single_precision = []
+# desired_col_order = ['down_sample', 'vary_channels', 'pos_skip',
 #                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
 #                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
 #                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
+
+path_to_tune = 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/tune_run_1'
+# Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
+hyper_params = ['dropout_attention', 'gru_units', 'heads']
+integer_vals = ['gru_units', 'heads']
+single_precision = ['dropout_attention']
+desired_col_order = ['dropout_attention', 'heads', 'gru_units',
+                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+                     'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
+                     'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
 
 # path_to_tune = 'savedVM/models/CPSC_BaselineWithSkips/experiment_1_1'
 # hyper_params = ["down_sample", "last_kernel_size_first_conv_blocks", "last_kernel_size_second_conv_blocks",
@@ -142,9 +142,11 @@ df_summary_valid_reordered = df_summary_valid[desired_col_order]
 df_summary_test_reordered = df_summary_test[desired_col_order]
 
 # Sort the rows by the two F1-scores
-order_by_cols = ['W-AVG_F1', 'CPCS_F1'] # ['CPCS_F1', 'W-AVG_F1']
-df_summary_valid_reordered = df_summary_valid_reordered.sort_values(by=order_by_cols, inplace=False, ascending=False)
-df_summary_test_reordered = df_summary_test_reordered.sort_values(by=order_by_cols, inplace=False, ascending=False)
+order_by_cols = ['W-AVG_F1', 'MR', 'W-AVG_ROC']  # ['CPCS_F1', 'W-AVG_F1']
+df_summary_valid_reordered = df_summary_valid_reordered.sort_values(by=order_by_cols, inplace=False,
+                                                                    ascending=[False for i in range(0, len(order_by_cols))])
+df_summary_test_reordered = df_summary_test_reordered.sort_values(by=order_by_cols, inplace=False,
+                                                                  ascending=[False for i in range(0, len(order_by_cols))])
 
 # Write the results to files
 with open(os.path.join(path_to_tune, 'summary_valid.p'), 'wb') as file:

@@ -1,6 +1,6 @@
 {
   "name": "CPSC_BaselineWithMultiHeadAttention_uBCE_F1",
-  "run_details": "add_FC_discarded",
+  "run_details": "_additional_FC_discarded_p2",
   "n_gpu": 1,
   "arch": {
     "type": "BaselineModelWithMHAttention",
@@ -76,7 +76,7 @@
   },
   "trainer": {
     "epochs": 300,
-    "save_dir": "savedVM/",
+    "save_dir": "savedVM_v2/",
     "save_period": 1,
     "verbosity": 2,
     "monitor": "max val_weighted_sk_f1",

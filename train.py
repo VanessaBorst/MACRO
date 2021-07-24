@@ -133,7 +133,7 @@ def tuning_params(name):
     elif name == "BaselineModelWithMHAttention":
         return {
             "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
-            "heads": tune.grid_search([3, 5, 8]),
+            "heads": tune.grid_search([16, 32]), # [3, 5, 8, 16, 32]
             "gru_units": tune.grid_search([12, 24, 32]),
         }
     elif name == "BaselineModelWithSkipConnectionsAndNorm":
@@ -201,10 +201,10 @@ class MyTuneCallback(Callback):
             self.already_seen.add(str(config))
 
     def on_trial_start(self, iteration, trials, trial, **info):
-        unwanted_combination = \
-            (trial.config["down_sample"] == "conv" and trial.config["pos_skip"] == "all") or \
-            (trial.config["down_sample"] == "conv" and trial.config["pos_skip"] == "not_first") or \
-            (trial.config["down_sample"] == "max_pool" and trial.config["pos_skip"] == "not_last")
+        unwanted_combination = False
+            # (trial.config["down_sample"] == "conv" and trial.config["pos_skip"] == "all") or \
+            # (trial.config["down_sample"] == "conv" and trial.config["pos_skip"] == "not_first") or \
+            # (trial.config["down_sample"] == "max_pool" and trial.config["pos_skip"] == "not_last")
         if str(trial.config) in self.already_seen or unwanted_combination:
             print("Stop trial with id " + str(trial.trial_id))
             self.manager.stop_trial(trial.trial_id)

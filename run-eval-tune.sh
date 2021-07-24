@@ -2,7 +2,8 @@
 
 source venv/bin/activate
 
-REL_PATH="savedVM_v2/models/BaselineModelWithSkipConnectionsV2/0720_225114_ml_bs64uw-BCE_max_w-F1"
+REL_PATH="savedVM/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/0722_222641_ml_bs64with_add_FC"
+
 
 for dir in $(find $REL_PATH -mindepth 1 -maxdepth 1 -type d )
 do
