@@ -158,7 +158,7 @@ def tuning_params(name):
             "down_sample": tune.grid_search(["conv", "max_pool"]),
             "vary_channels": True,
             "pos_skip": tune.grid_search(["all", "not_last", "not_first"]),
-            "norm_type": tune.grid_search(["BN", "IN"]),
+            "norm_type": tune.grid_search(["BN", "IN", "LN"]),
             "norm_pos": tune.grid_search(["all", "last"]),
             # "norm_before_act": tune.grid_search([True, False])
         }
