@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 
 from utils import get_project_root
 
-path = "savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/tune_run_1"
+path = "savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/tune_run_1" #2_additional_FC_discarded"
 
 df = pd.DataFrame(columns=["Dropout", "GRU Units", "Heads", "Validation F1"])
 for run in os.listdir(path):

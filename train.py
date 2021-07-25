@@ -133,8 +133,8 @@ def tuning_params(name):
     elif name == "BaselineModelWithMHAttention":
         return {
             "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
-            "heads": tune.grid_search([16, 32]), # [3, 5, 8, 16, 32]
-            "gru_units": tune.grid_search([12, 24, 32]),
+            "heads": 32,    # tune.grid_search([3, 5, 8, 16, 32])
+            "gru_units": 32  # tune.grid_search([12, 24, 32]),
         }
     elif name == "BaselineModelWithSkipConnectionsAndNorm":
         return {
@@ -158,9 +158,9 @@ def tuning_params(name):
             "down_sample": tune.grid_search(["conv", "max_pool"]),
             "vary_channels": True,
             "pos_skip": tune.grid_search(["all", "not_last", "not_first"]),
-            "norm_type": tune.grid_search(["BN", "IN", "LN"]),
+            "norm_type": tune.grid_search(["BN", "IN"]),
             "norm_pos": tune.grid_search(["all", "last"]),
-            "norm_before_act": tune.grid_search([True, False])
+            # "norm_before_act": tune.grid_search([True, False])
         }
     else:
         return None
@@ -201,10 +201,9 @@ class MyTuneCallback(Callback):
             self.already_seen.add(str(config))
 
     def on_trial_start(self, iteration, trials, trial, **info):
-        unwanted_combination = False
-            # (trial.config["down_sample"] == "conv" and trial.config["pos_skip"] == "all") or \
-            # (trial.config["down_sample"] == "conv" and trial.config["pos_skip"] == "not_first") or \
-            # (trial.config["down_sample"] == "max_pool" and trial.config["pos_skip"] == "not_last")
+        unwanted_combination = (trial.config["down_sample"] == "conv" and trial.config["pos_skip"] == "all") or \
+            (trial.config["down_sample"] == "conv" and trial.config["pos_skip"] == "not_first") or \
+            (trial.config["down_sample"] == "max_pool" and trial.config["pos_skip"] == "not_last")
         if str(trial.config) in self.already_seen or unwanted_combination:
             print("Stop trial with id " + str(trial.trial_id))
             self.manager.stop_trial(trial.trial_id)
@@ -325,8 +324,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                 "vary_channels": "Varied channels",
                 "pos_skip": "Skip Pos",
                 "norm_type": "Type",
-                "norm_pos": "Position",
-                "norm_before_act": "Before L-ReLU"
+                "norm_pos": "Position"
             },
             metric_columns=["loss", "val_loss",
                             "val_weighted_sk_f1",

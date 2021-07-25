@@ -13,7 +13,7 @@ class BaselineModelWithSkipConnectionsAndNormV2(BaseModel):
                  last_kernel_size_first_conv_blocks=24, last_kernel_size_second_conv_blocks=48,
                  stride_first_conv_blocks=2, stride_second_conv_blocks=2,
                  down_sample="conv", vary_channels=False, pos_skip="all",
-                 norm_type="BN", norm_pos="last", norm_before_act=True):
+                 norm_type="BN", norm_pos="last"):
         """
         :param apply_final_activation: whether the Sigmoid(sl) or the LogSoftmax(ml) should be applied at the end
         :param multi_label_training: if true, Sigmoid is used as final activation, else the LogSoftmax
@@ -44,8 +44,7 @@ class BaselineModelWithSkipConnectionsAndNormV2(BaseModel):
                                                             down_sample=down_sample,
                                                             drop_out=drop_out_first_conv_blocks,
                                                             skips_active=True,
-                                                            norm_type=norm_type, norm_pos=norm_pos,
-                                                            norm_before_act=norm_before_act)
+                                                            norm_type=norm_type, norm_pos=norm_pos)
         elif pos_skip == "not_first":
             self._first_conv_block_1 = BasicBlock1dWithNorm(in_channels=input_channel, out_channels=out_channel_block_1,
                                                             mid_kernels_size=mid_kernel_size_first_conv_blocks,
@@ -54,8 +53,7 @@ class BaselineModelWithSkipConnectionsAndNormV2(BaseModel):
                                                             down_sample=down_sample,
                                                             drop_out=drop_out_first_conv_blocks,
                                                             skips_active=False,
-                                                            norm_type=norm_type, norm_pos=norm_pos,
-                                                            norm_before_act=norm_before_act)
+                                                            norm_type=norm_type, norm_pos=norm_pos)
 
         self._first_conv_block_2 = BasicBlock1dWithNorm(in_channels=out_channel_block_1,
                                                         out_channels=out_channel_block_2,
@@ -65,8 +63,7 @@ class BaselineModelWithSkipConnectionsAndNormV2(BaseModel):
                                                         down_sample=down_sample,
                                                         drop_out=drop_out_first_conv_blocks,
                                                         skips_active=True,
-                                                        norm_type=norm_type, norm_pos=norm_pos,
-                                                        norm_before_act=norm_before_act)
+                                                        norm_type=norm_type, norm_pos=norm_pos)
         self._first_conv_block_3 = BasicBlock1dWithNorm(in_channels=out_channel_block_2,
                                                         out_channels=out_channel_block_3,
                                                         mid_kernels_size=mid_kernel_size_first_conv_blocks,
@@ -75,8 +72,7 @@ class BaselineModelWithSkipConnectionsAndNormV2(BaseModel):
                                                         down_sample=down_sample,
                                                         drop_out=drop_out_first_conv_blocks,
                                                         skips_active=True,
-                                                        norm_type=norm_type, norm_pos=norm_pos,
-                                                        norm_before_act=norm_before_act)
+                                                        norm_type=norm_type, norm_pos=norm_pos)
         self._first_conv_block_4 = BasicBlock1dWithNorm(in_channels=out_channel_block_3,
                                                         out_channels=out_channel_block_4,
                                                         mid_kernels_size=mid_kernel_size_first_conv_blocks,
@@ -85,8 +81,7 @@ class BaselineModelWithSkipConnectionsAndNormV2(BaseModel):
                                                         down_sample=down_sample,
                                                         drop_out=drop_out_first_conv_blocks,
                                                         skips_active=True,
-                                                        norm_type=norm_type, norm_pos=norm_pos,
-                                                        norm_before_act=norm_before_act)
+                                                        norm_type=norm_type, norm_pos=norm_pos)
 
         # Second Type of Conv Blocks
         if pos_skip == "all" or pos_skip == "not_first":
@@ -98,8 +93,7 @@ class BaselineModelWithSkipConnectionsAndNormV2(BaseModel):
                                                              down_sample=down_sample,
                                                              drop_out=drop_out_second_conv_blocks,
                                                              skips_active=True,
-                                                             norm_type=norm_type, norm_pos=norm_pos,
-                                                             norm_before_act=norm_before_act)
+                                                             norm_type=norm_type, norm_pos=norm_pos)
         elif pos_skip == "not_last":
             self._second_conv_block_1 = BasicBlock1dWithNorm(in_channels=out_channel_block_4,
                                                              out_channels=out_channel_block_5,
@@ -109,8 +103,7 @@ class BaselineModelWithSkipConnectionsAndNormV2(BaseModel):
                                                              down_sample=down_sample,
                                                              drop_out=drop_out_second_conv_blocks,
                                                              skips_active=False,
-                                                             norm_type=norm_type, norm_pos=norm_pos,
-                                                             norm_before_act=norm_before_act)
+                                                             norm_type=norm_type, norm_pos=norm_pos)
 
         # Without last option the input would have to be (seq_len, batch, input_size)
         # With batch_first it can be of the shape (batch, seq_len, input/feature_size)

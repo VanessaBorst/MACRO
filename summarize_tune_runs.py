@@ -37,15 +37,15 @@ def _bold_formatter(x, value, num_decimals=2):
 #                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
 #                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
 
-path_to_tune = 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/tune_run_1'
-# Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
-hyper_params = ['dropout_attention', 'gru_units', 'heads']
-integer_vals = ['gru_units', 'heads']
-single_precision = ['dropout_attention']
-desired_col_order = ['dropout_attention', 'heads', 'gru_units',
-                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-                     'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
-                     'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
+# path_to_tune = 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/tune_run_2_additional_FC_discarded'
+# # Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
+# hyper_params = ['dropout_attention', 'gru_units', 'heads']
+# integer_vals = ['gru_units', 'heads']
+# single_precision = ['dropout_attention']
+# desired_col_order = ['dropout_attention', 'heads', 'gru_units',
+#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
+#                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
 
 # path_to_tune = 'savedVM/models/CPSC_BaselineWithSkips/experiment_1_1'
 # hyper_params = ["down_sample", "last_kernel_size_first_conv_blocks", "last_kernel_size_second_conv_blocks",
@@ -59,17 +59,15 @@ desired_col_order = ['dropout_attention', 'heads', 'gru_units',
 #                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
 #                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
 
-# path_to_tune = 'savedVM/models/CPSC_BaselineWithSkipsAndNorm/weightedBCE_experiment_norm_layer'
-# hyper_params = ["down_sample", "last_kernel_size_first_conv_blocks", "last_kernel_size_second_conv_blocks",
-#                 "mid_kernel_size_first_conv_blocks", "mid_kernel_size_second_conv_blocks",
-#                 "norm_before_act", "norm_pos", "norm_type"]
-# integer_vals = ["last_kernel_size_first_conv_blocks", "last_kernel_size_second_conv_blocks",
-#                 "mid_kernel_size_first_conv_blocks", "mid_kernel_size_second_conv_blocks"]
-# single_precision = []
-# desired_col_order = ["norm_type", "norm_pos", "norm_before_act",
-#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
-#                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
+path_to_tune = 'savedVM_v2/models/BaselineModelWithSkipConnectionsAndNormV2/experiment_1_2_all'
+hyper_params = ["down_sample", "norm_pos", "norm_type",
+                "pos_skip", "vary_channels"]
+integer_vals = []
+single_precision = []
+desired_col_order = ["down_sample", "vary_channels", "pos_skip", "norm_type", "norm_pos",
+                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+                     'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
+                     'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
 
 # Columns to format with maximum condition and 2 floating decimals
 max_columns = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
