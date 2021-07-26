@@ -21,7 +21,7 @@
       "pin_memory": false
     },
     "overfit_single_batch": false,
-    "test_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000/valid"
+    "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/eq_len_72000"
   },
   "optimizer": {
     "type": "Adam",

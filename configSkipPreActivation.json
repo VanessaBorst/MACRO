@@ -1,9 +1,9 @@
 {
-  "name": "BaselineModelWithSkipConnectionsAndNormV2",
-  "run_details": "uw-BCE_max_w-F1",
+  "name": "BaselineModelWithSkipConnectionsAndNormV2PreActivation",
+  "run_details": "experiment_1_3",
   "n_gpu": 1,
   "arch": {
-    "type": "BaselineModelWithSkipConnectionsAndNormV2",
+    "type": "BaselineModelWithSkipConnectionsAndNormV2PreActivation",
     "args": {
       "apply_final_activation": false,
       "multi_label_training": true
