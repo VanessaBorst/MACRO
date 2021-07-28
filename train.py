@@ -133,8 +133,9 @@ def tuning_params(name):
     elif name == "BaselineModelWithMHAttention":
         return {
             "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
-            "heads": 32,    # tune.grid_search([3, 5, 8, 16, 32])
-            "gru_units": 32  # tune.grid_search([12, 24, 32]),
+            "heads": tune.grid_search([3, 5, 8, 16, 32]),
+            "gru_units": tune.grid_search([12, 24, 32]),
+            "discard_FC_before_MH": tune.grid_search([True, False])
         }
     elif name == "BaselineModelWithSkipConnectionsAndNorm":
         return {
@@ -170,12 +171,44 @@ def tuning_params(name):
             "pos_skip": tune.grid_search(["all", "not_last"]),
             "norm_type": "BN",  #tune.grid_search(["BN", "IN", "LN"]),
             "norm_pos": "all",  #tune.grid_search(["all", "last"]),
-            "norm_before_act": tune.grid_search([True, False])
+            "norm_before_act": tune.grid_search([True, False]),
             # Tested TOP3 from first experiment, i.e., the following:
             # Conv + True + not_last + BN + all
             # Conv + True + all + BN + all
             # Pool + True + all + BN + all
         }
+    elif name == "FinalModel":
+        # Variant with addittional FC for Attention
+        return {
+            "down_sample": "conv",
+            "vary_channels": True,
+            "pos_skip": "all",
+            "norm_type": "BN",
+            "norm_pos": "all",
+            "norm_before_act": True,
+            "use_pre_activation_design": tune.grid_search([True, False]),
+            "use_pre_conv": True,       # only has a meaning when used with pre-activation design
+            "dropout_attention": tune.grid_search([0.2, 0.4]),  # see table, but also visualization (mark areas)
+            "heads": tune.grid_search([5, 8, 16, 32]),  # No clear direction, 8 and 32 most promising according to plot
+            "gru_units": tune.grid_search([12, 18, 24]),  # See graphical visualization and TOP 5 Table
+            "discard_FC_before_MH": False
+        }
+
+        # # Variant without additional FC for Attention
+        # return {
+        #     "down_sample": "conv",
+        #     "vary_channels": True,
+        #     "pos_skip": "all",
+        #     "norm_type": "BN",
+        #     "norm_pos": "all",
+        #     "norm_before_act": True,
+        #     "use_pre_activation_design": tune.grid_search([True, False]),
+        #     "use_pre_conv": True,  # only has a meaning when used with pre-activation design
+        #     "dropout_attention": tune.grid_search([0.3, 0.4]),  # Majority in TOP5
+        #     "heads": tune.grid_search([5, 8, 12, 16]),    # Runs mit 3 und 32 bis auf eine Ausnahme nicht gut
+        #     "gru_units": tune.grid_search([24, 28, 32]),    # See graphical visualization
+        #     "discard_FC_before_MH": True
+        # }
     else:
         return None
 
@@ -217,7 +250,9 @@ class MyTuneCallback(Callback):
     def on_trial_start(self, iteration, trials, trial, **info):
         # Experiment 1_2
         # Tested TOP3 from first experiment, i.e., the following:
-        # Conv + True + not_last, MaxPool + True + all, MaxPool + True + not_first
+        # Conv + True + not_last
+        # MaxPool + True + all
+        # MaxPool + True + not_first
         # unwanted_combination = (trial.config["down_sample"] == "conv" and trial.config["pos_skip"] == "all") or \
         #     (trial.config["down_sample"] == "conv" and trial.config["pos_skip"] == "not_first") or \
         #     (trial.config["down_sample"] == "max_pool" and trial.config["pos_skip"] == "not_last")
@@ -226,10 +261,9 @@ class MyTuneCallback(Callback):
         # Conv + True + not_last + BN + all
         # Conv + True + all + BN + all
         # Pool + True + all + BN + all
+        # unwanted_combination = (trial.config["down_sample"] == "max_pool" and trial.config["pos_skip"] == "not_last")
 
-        unwanted_combination = (trial.config["down_sample"] == "max_pool" and trial.config["pos_skip"] == "not_last")
-
-        if str(trial.config) in self.already_seen or unwanted_combination:
+        if str(trial.config) in self.already_seen:  # or unwanted_combination:
             print("Stop trial with id " + str(trial.trial_id))
             self.manager.stop_trial(trial.trial_id)
         else:
@@ -377,6 +411,30 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                             "val_cpsc_Fpc",
                             "val_cpsc_Fst",
                             "training_iteration"])
+    elif main_config["arch"]["type"] == "FinalModel":
+        reporter = CLIReporter(
+            parameter_columns={
+                "down_sample": "Downsampling",
+                "vary_channels": "Varied channels",
+                "pos_skip": "Skip Pos",
+                "norm_type": "Type",
+                "norm_pos": "Norm pos",
+                "norm_before_act": "NormBefAct",
+                "use_pre_activation_design": "PreActDesign",
+                "dropout_attention": "DP Att",
+                "heads": "H",
+                "gru_units": "GRU",
+                "discard_FC_before_MH": "WithoutFC"
+            },
+            metric_columns=["loss", "val_loss",
+                            "val_weighted_sk_f1",
+                            "val_cpsc_F1",
+                            "val_cpsc_Faf",
+                            "val_cpsc_Fblock",
+                            "val_cpsc_Fpc",
+                            "val_cpsc_Fst",
+                            "training_iteration"])
+
 
     # experiment_stopper = ExperimentPlateauStopper(
     #     metric=mnt_metric,
@@ -491,7 +549,8 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
 
     num_gpu = 0.5 if not main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsV2" and not \
         main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2" and not \
-        main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2PreActivation" else 1
+        main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2PreActivation" and not \
+        main_config["arch"]["type"] == "FinalModel" else 1
     analysis = tune.run(
         run_or_experiment=train_fn,
         num_samples=num_tune_samples,
@@ -567,6 +626,8 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
         import model.baseline_model_with_MHAttention as module_arch
     elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndNormV2PreActivation':
         import model.baseline_model_with_skips_and_norm_v2_pre_activation_design as module_arch
+    elif config['arch']['type'] == 'FinalModel':
+        import model.final_model as module_arch
 
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric

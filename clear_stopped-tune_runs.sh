@@ -2,8 +2,8 @@
 
 source venv/bin/activate
 
-REL_PATH="savedVM_v2/models/BaselineModelWithSkipConnectionsAndNormV2/0725_140500_ml_bs64uw-BCE_max_w-F1/"
-REL_PATH_LOGS="savedVM_v2/log/BaselineModelWithSkipConnectionsAndNormV2/0725_140500_ml_bs64uw-BCE_max_w-F1/"
+REL_PATH="savedVM_v2/models/BaselineModelWithSkipConnectionsAndNormV2PreActivation/0725_223812_ml_bs64experiment_1_3/"
+REL_PATH_LOGS="savedVM_v2/log/BaselineModelWithSkipConnectionsAndNormV2PreActivation/0725_223812_ml_bs64experiment_1_3/"
 CHECKPOINT_NAME="checkpoint_000001"
 
 #REL_PATH="savedVM/models/CPSC_BaselineWithSkips/tune_random_search"

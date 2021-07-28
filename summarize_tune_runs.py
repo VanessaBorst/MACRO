@@ -35,18 +35,52 @@ def _bold_formatter(x, value, num_decimals=2):
 # desired_col_order = ['down_sample', 'vary_channels', 'pos_skip',
 #                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
 #                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
-#                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
+#                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'Epochs']
+
+# path_to_tune = 'savedVM_v2/models/BaselineModelWithSkipConnectionsAndNormV2/experiment_1_2_all'
+# hyper_params = ["down_sample", "norm_pos", "norm_type",
+#                 "pos_skip", "vary_channels"]
+# integer_vals = []
+# single_precision = []
+# desired_col_order = ["down_sample", "vary_channels", "pos_skip", "norm_type", "norm_pos",
+#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
+#                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'Epochs']
+
+# path_to_tune = 'savedVM_v2/models/BaselineModelWithSkipConnectionsAndNormV2PreActivation/experiment_1_3_with_pre_conv'
+# hyper_params = ["down_sample", "norm_before_act", "norm_pos", "norm_type",
+#                 "pos_skip", "vary_channels"]
+# integer_vals = []
+# single_precision = []
+# desired_col_order = ["down_sample", "pos_skip", "norm_before_act",
+#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
+#                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'Epochs']
 
 # path_to_tune = 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/tune_run_2_additional_FC_discarded'
 # # Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
 # hyper_params = ['dropout_attention', 'gru_units', 'heads']
-# integer_vals = ['gru_units', 'heads']
+# integer_vals = ['gru_units', 'heads', 'Epochs']
 # single_precision = ['dropout_attention']
 # desired_col_order = ['dropout_attention', 'heads', 'gru_units',
 #                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
 #                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
-#                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
+#                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'Epochs']
 
+
+path_to_tune = 'savedVM_v2/models/FinalModel/experiment_3_all'
+# Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
+hyper_params = ["discard_FC_before_MH", "down_sample", "dropout_attention", "gru_units", "heads",
+                "norm_before_act", "norm_pos", "norm_type", "pos_skip",  "use_pre_activation_design",  "use_pre_conv",
+                "vary_channels"]
+integer_vals = ['gru_units', 'heads', 'Epochs']
+single_precision = ['dropout_attention']
+desired_col_order = ['use_pre_activation_design', 'dropout_attention', 'heads', 'gru_units', 'discard_FC_before_MH',
+                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+                     'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
+                     'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'Epochs']
+
+# OLD -------------------------
 # path_to_tune = 'savedVM/models/CPSC_BaselineWithSkips/experiment_1_1'
 # hyper_params = ["down_sample", "last_kernel_size_first_conv_blocks", "last_kernel_size_second_conv_blocks",
 #                 "mid_kernel_size_first_conv_blocks", "mid_kernel_size_second_conv_blocks"]
@@ -56,18 +90,12 @@ def _bold_formatter(x, value, num_decimals=2):
 # desired_col_order = ['down_sample', 'mid_kernel_size_first_conv_blocks', 'last_kernel_size_first_conv_blocks',
 #                      'last_kernel_size_second_conv_blocks',
 #                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
+#                      'W-AVG_F1', 'W-AVG_RO-------------------------C', 'W-AVG_Acc', 'MR',
 #                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
 
-path_to_tune = 'savedVM_v2/models/BaselineModelWithSkipConnectionsAndNormV2/experiment_1_2_all'
-hyper_params = ["down_sample", "norm_pos", "norm_type",
-                "pos_skip", "vary_channels"]
-integer_vals = []
-single_precision = []
-desired_col_order = ["down_sample", "vary_channels", "pos_skip", "norm_type", "norm_pos",
-                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-                     'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
-                     'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
+
+
+
 
 # Columns to format with maximum condition and 2 floating decimals
 max_columns = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
@@ -76,14 +104,16 @@ max_columns = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
 
 df_summary_valid = pd.DataFrame(
     columns=hyper_params + ['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'W-AVG_F1',
-                            'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'W-AVG_ROC', 'W-AVG_Acc', 'MR'])
+                            'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'W-AVG_ROC', 'W-AVG_Acc',
+                            'MR', 'Epochs'])
 
 df_summary_test = pd.DataFrame(
     columns=hyper_params + ['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'W-AVG_F1',
-                            'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'W-AVG_ROC', 'W-AVG_Acc', 'MR'])
+                            'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'W-AVG_ROC', 'W-AVG_Acc',
+                            'MR'])
 
 
-def _append_to_summary(path, df_summary, tune_dict):
+def _append_to_summary(path, df_summary, tune_dict, best_epoch=None):
     with open(os.path.join(path, "eval_class_wise.p"), "rb") as file:
         df_class_wise = pk.load(file)
     with open(os.path.join(path, "eval_single_metrics.p"), "rb") as file:
@@ -104,6 +134,9 @@ def _append_to_summary(path, df_summary, tune_dict):
     row_values.append(df_class_wise.loc['torch_accuracy']['weighted avg'])
     # Append the subset acc (=MR)
     row_values = row_values + df_single_metrics['sk_subset_accuracy'].values.tolist()
+    # Append the number of epochs
+    if best_epoch is not None:
+        row_values = row_values + [best_epoch]
 
     # Add the row to the summary dataframe
     df_summary.loc[len(df_summary)] = row_values
@@ -113,11 +146,16 @@ def _append_to_summary(path, df_summary, tune_dict):
 for tune_run in os.listdir(path_to_tune):
     tune_path = os.path.join(path_to_tune, tune_run)
     if os.path.isdir(tune_path):
+        with open(os.path.join(tune_path, "progress.csv"), "r") as file:
+            # Not improved for 20 epochs -> best was 21 epochs earlier
+            # First line is header, so subtract 22
+            best_epoch = sum(1 for line in file) - 22
+
         with open(os.path.join(tune_path, "params.json"), "r") as file:
             tune_dict = json.load(file)
         # Validation
         path = os.path.join(tune_path, "valid_output")
-        _append_to_summary(path, df_summary_valid, tune_dict)
+        _append_to_summary(path, df_summary_valid, tune_dict, best_epoch)
 
         # Test
         path = os.path.join(tune_path, "test_output")
@@ -126,7 +164,8 @@ for tune_run in os.listdir(path_to_tune):
 # Parse integer values as ints
 for col in integer_vals:
     df_summary_valid[col] = df_summary_valid[col].apply(int)
-    df_summary_test[col] = df_summary_test[col].apply(int)
+    if col!='Epochs':
+        df_summary_test[col] = df_summary_test[col].apply(int)
 
 # Format single-precision floats
 for col in single_precision:
@@ -137,7 +176,7 @@ for col in single_precision:
 
 # Reorder the columns of the dataframe to match the one used in the thesis
 df_summary_valid_reordered = df_summary_valid[desired_col_order]
-df_summary_test_reordered = df_summary_test[desired_col_order]
+df_summary_test_reordered = df_summary_test[desired_col_order[:-1]]  # omit epochs
 
 # Sort the rows by the two F1-scores
 order_by_cols = ['W-AVG_F1', 'MR', 'W-AVG_ROC']  # ['CPCS_F1', 'W-AVG_F1']

@@ -1,13 +1,12 @@
 {
-  "name": "BaselineModelWithSkipConnectionsAndNormV2PreActivation",
-  "run_details": "experiment_1_3_no_pre_conv_before_blocks",
+  "name": "FinalModel",
+  "run_details": "_experiment_3",
   "n_gpu": 1,
   "arch": {
-    "type": "BaselineModelWithSkipConnectionsAndNormV2PreActivation",
+    "type": "FinalModel",
     "args": {
       "apply_final_activation": false,
-      "multi_label_training": true,
-      "use_pre_conv": false
+      "multi_label_training": true
     }
   },
   "data_loader": {

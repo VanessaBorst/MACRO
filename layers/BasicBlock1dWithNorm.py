@@ -270,4 +270,4 @@ class BasicBlock1dWithNorm(nn.Module):
 if __name__ == "__main__":
     model = BasicBlock1dWithNorm(in_channels=12, out_channels=12, mid_kernels_size=3, last_kernel_size=44, stride=2,
                                  down_sample='conv', drop_out=0.2, norm_type="LN", norm_pos="all")
-    summary(model, input_size=(2, 12, 1125), col_names=["input_size", "output_size", "num_params"])
+    summary(model, input_size=(5, 12, 1125), col_names=["input_size", "output_size", "num_params"])

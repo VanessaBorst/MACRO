@@ -2,7 +2,7 @@
 
 source venv/bin/activate
 
-REL_PATH="savedVM_v2/models/BaselineModelWithSkipConnectionsAndNormV2/experiment_1_3_LN_pos_all"
+REL_PATH="savedVM_v2/models/FinalModel/0727_142315_ml_bs64_experiment_3"
 
 
 for dir in $(find $REL_PATH -mindepth 1 -maxdepth 1 -type d )

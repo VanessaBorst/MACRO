@@ -17,7 +17,7 @@ file_name="experiment_3_1_with_FC"
 # select_TOP_x = 5
 # file_name="experiment_3_2_no_FC"
 
-df = pd.DataFrame(columns=["Dropout", "GRU Units", "Heads", "Validation F1"])
+df = pd.DataFrame()
 for run in os.listdir(path):
     path2 = os.path.join(path, run)
     if os.path.isdir(path2):
@@ -25,6 +25,9 @@ for run in os.listdir(path):
             params = json.loads(file.read())
         try:
             progress = pd.read_csv(os.path.join(path2, "progress.csv"))
+            plt.figure()
+            progress["val_loss"].plot()
+            plt.show()
             df = df.append({
                 "Dropout": params["dropout_attention"],
                 "Heads": params["heads"],

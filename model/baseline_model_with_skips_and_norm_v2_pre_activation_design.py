@@ -13,8 +13,8 @@ class BaselineModelWithSkipConnectionsAndNormV2PreActivation(BaseModel):
                  mid_kernel_size_first_conv_blocks=3, mid_kernel_size_second_conv_blocks=3,
                  last_kernel_size_first_conv_blocks=24, last_kernel_size_second_conv_blocks=48,
                  stride_first_conv_blocks=2, stride_second_conv_blocks=2,
-                 down_sample="conv", vary_channels=False, pos_skip="all",
-                 norm_type="BN", norm_pos="last", norm_before_act=True):
+                 down_sample="conv", vary_channels=True, pos_skip="not_last",
+                 norm_type="BN", norm_pos="all", norm_before_act=True, use_pre_conv=True):
         """
         :param apply_final_activation: whether the Sigmoid(sl) or the LogSoftmax(ml) should be applied at the end
         :param multi_label_training: if true, Sigmoid is used as final activation, else the LogSoftmax
@@ -30,8 +30,10 @@ class BaselineModelWithSkipConnectionsAndNormV2PreActivation(BaseModel):
         assert pos_skip == "all" or pos_skip == "not_last", "For the preactivation design, ''not first'' is no valid" \
                                                             "option for the skip connections! Choose between ''all'' " \
                                                             "and ''not last''"
+        assert norm_type == "BN" or norm_type == "IN", "For the preactivation design, only BN and IN are supported"
 
         self._pos_skip = pos_skip
+        self._use_pre_conv = use_pre_conv
 
         if vary_channels:
             out_channel_block_1 = 24
@@ -43,23 +45,25 @@ class BaselineModelWithSkipConnectionsAndNormV2PreActivation(BaseModel):
             out_channel_block_1 = out_channel_block_2 = out_channel_block_3 \
                 = out_channel_block_4 = out_channel_block_5 = 12
 
-        # Start with a convolution with stride 1, which keeps the channel amount constant
-        if norm_type == "BN":
-            starting_norm = nn.BatchNorm1d(num_features=input_channel)
-        elif norm_type == "IN":
-            starting_norm = nn.InstanceNorm1d(num_features=input_channel, affine=True)
-        if norm_before_act:
-            self._starting_conv = nn.Sequential(
-                nn.Conv1d(in_channels=input_channel, out_channels=input_channel, kernel_size=16),
-                starting_norm,
-                nn.LeakyReLU(0.3)
-            )
-        else:
-            self._starting_conv = nn.Sequential(
-                nn.Conv1d(in_channels=input_channel, out_channels=input_channel, kernel_size=16),
-                nn.LeakyReLU(0.3),
-                starting_norm
-            )
+        if use_pre_conv:
+            # Start with a convolution with stride 1, which keeps the channel amount constant
+            if norm_type == "BN":
+                starting_norm = nn.BatchNorm1d(num_features=input_channel)
+            elif norm_type == "IN":
+                starting_norm = nn.InstanceNorm1d(num_features=input_channel, affine=True)
+
+            if norm_before_act:
+                self._starting_conv = nn.Sequential(
+                    nn.Conv1d(in_channels=input_channel, out_channels=input_channel, kernel_size=16),
+                    starting_norm,
+                    nn.LeakyReLU(0.3)
+                )
+            else:
+                self._starting_conv = nn.Sequential(
+                    nn.Conv1d(in_channels=input_channel, out_channels=input_channel, kernel_size=16),
+                    nn.LeakyReLU(0.3),
+                    starting_norm
+                )
 
         self._first_conv_block_1 = BasicBlock1dWithNormPreactivation(in_channels=input_channel,
                                                                      out_channels=out_channel_block_1,
@@ -150,7 +154,8 @@ class BaselineModelWithSkipConnectionsAndNormV2PreActivation(BaseModel):
             self._final_activation = nn.Sigmoid() if multi_label_training else nn.LogSoftmax(dim=1)
 
     def forward(self, x):
-        x = self._starting_conv(x)
+        if self._use_pre_conv:
+            x = self._starting_conv(x)
         # Start with the residual blocks
         x = self._first_conv_block_1((x, x))
         x = self._first_conv_block_2(x)
