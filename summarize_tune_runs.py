@@ -37,15 +37,15 @@ def _bold_formatter(x, value, num_decimals=2):
 #                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
 #                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'Epochs']
 
-# path_to_tune = 'savedVM_v2/models/BaselineModelWithSkipConnectionsAndNormV2/experiment_1_2_all'
-# hyper_params = ["down_sample", "norm_pos", "norm_type",
-#                 "pos_skip", "vary_channels"]
-# integer_vals = []
-# single_precision = []
-# desired_col_order = ["down_sample", "vary_channels", "pos_skip", "norm_type", "norm_pos",
-#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
-#                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'Epochs']
+path_to_tune = 'savedVM_v2/models/BaselineModelWithSkipConnectionsAndNormV2/experiment_1_2_all'
+hyper_params = ["down_sample", "norm_pos", "norm_type",
+                "pos_skip", "vary_channels"]
+integer_vals = []
+single_precision = []
+desired_col_order = ["down_sample", "vary_channels", "pos_skip", "norm_type", "norm_pos",
+                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+                     'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
+                     'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'Epochs']
 
 # path_to_tune = 'savedVM_v2/models/BaselineModelWithSkipConnectionsAndNormV2PreActivation/experiment_1_3_with_pre_conv'
 # hyper_params = ["down_sample", "norm_before_act", "norm_pos", "norm_type",
@@ -68,17 +68,17 @@ def _bold_formatter(x, value, num_decimals=2):
 #                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'Epochs']
 
 
-path_to_tune = 'savedVM_v2/models/FinalModel/experiment_3_all'
-# Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
-hyper_params = ["discard_FC_before_MH", "down_sample", "dropout_attention", "gru_units", "heads",
-                "norm_before_act", "norm_pos", "norm_type", "pos_skip",  "use_pre_activation_design",  "use_pre_conv",
-                "vary_channels"]
-integer_vals = ['gru_units', 'heads', 'Epochs']
-single_precision = ['dropout_attention']
-desired_col_order = ['use_pre_activation_design', 'dropout_attention', 'heads', 'gru_units', 'discard_FC_before_MH',
-                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-                     'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
-                     'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'Epochs']
+# path_to_tune = 'savedVM_v2/models/FinalModel/experiment_3_all'
+# # Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
+# hyper_params = ["discard_FC_before_MH", "down_sample", "dropout_attention", "gru_units", "heads",
+#                 "norm_before_act", "norm_pos", "norm_type", "pos_skip",  "use_pre_activation_design",  "use_pre_conv",
+#                 "vary_channels"]
+# integer_vals = ['gru_units', 'heads', 'Epochs']
+# single_precision = ['dropout_attention']
+# desired_col_order = ['use_pre_activation_design', 'dropout_attention', 'heads', 'gru_units', 'discard_FC_before_MH',
+#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
+#                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'Epochs']
 
 # OLD -------------------------
 # path_to_tune = 'savedVM/models/CPSC_BaselineWithSkips/experiment_1_1'

@@ -159,10 +159,12 @@ def tuning_params(name):
             "down_sample": tune.grid_search(["conv", "max_pool"]),
             "vary_channels": True,
             "pos_skip": tune.grid_search(["all", "not_last", "not_first"]),
-            "norm_type": tune.grid_search(["BN", "IN", "LN"]),
+            "norm_type": "LN",  # tune.grid_search(["BN", "IN", "LN"]),
             "norm_pos": tune.grid_search(["all", "last"])
             # Tested TOP3 from first experiment, i.e., the following:
-            # Conv + True + not_last, MaxPool + True + all, MaxPool + True + not_first
+            # Conv + True + not_last,
+            # MaxPool + True + all,
+            # MaxPool + True + not_first
         }
     elif name == "BaselineModelWithSkipConnectionsAndNormV2PreActivation":
         return {
@@ -178,23 +180,7 @@ def tuning_params(name):
             # Pool + True + all + BN + all
         }
     elif name == "FinalModel":
-        # Variant with addittional FC for Attention
-        return {
-            "down_sample": "conv",
-            "vary_channels": True,
-            "pos_skip": "all",
-            "norm_type": "BN",
-            "norm_pos": "all",
-            "norm_before_act": True,
-            "use_pre_activation_design": tune.grid_search([True, False]),
-            "use_pre_conv": True,       # only has a meaning when used with pre-activation design
-            "dropout_attention": tune.grid_search([0.2, 0.4]),  # see table, but also visualization (mark areas)
-            "heads": tune.grid_search([5, 8, 16, 32]),  # No clear direction, 8 and 32 most promising according to plot
-            "gru_units": tune.grid_search([12, 18, 24]),  # See graphical visualization and TOP 5 Table
-            "discard_FC_before_MH": False
-        }
-
-        # # Variant without additional FC for Attention
+        # # Variant with addittional FC for Attention
         # return {
         #     "down_sample": "conv",
         #     "vary_channels": True,
@@ -203,12 +189,28 @@ def tuning_params(name):
         #     "norm_pos": "all",
         #     "norm_before_act": True,
         #     "use_pre_activation_design": tune.grid_search([True, False]),
-        #     "use_pre_conv": True,  # only has a meaning when used with pre-activation design
-        #     "dropout_attention": tune.grid_search([0.3, 0.4]),  # Majority in TOP5
-        #     "heads": tune.grid_search([5, 8, 12, 16]),    # Runs mit 3 und 32 bis auf eine Ausnahme nicht gut
-        #     "gru_units": tune.grid_search([24, 28, 32]),    # See graphical visualization
-        #     "discard_FC_before_MH": True
+        #     "use_pre_conv": True,       # only has a meaning when used with pre-activation design
+        #     "dropout_attention": tune.grid_search([0.2, 0.4]),  # see table, but also visualization (mark areas)
+        #     "heads": tune.grid_search([5, 8, 16, 32]),  # No clear direction, 8 and 32 most promising according to plot
+        #     "gru_units": tune.grid_search([12, 18, 24]),  # See graphical visualization and TOP 5 Table
+        #     "discard_FC_before_MH": False
         # }
+
+        # Variant without additional FC for Attention
+        return {
+            "down_sample": "conv",
+            "vary_channels": True,
+            "pos_skip": "all",
+            "norm_type": "BN",
+            "norm_pos": "all",
+            "norm_before_act": True,
+            "use_pre_activation_design": tune.grid_search([True, False]),
+            "use_pre_conv": True,  # only has a meaning when used with pre-activation design
+            "dropout_attention": tune.grid_search([0.3, 0.4]),  # Majority in TOP5
+            "heads": tune.grid_search([5, 8, 12, 16]),    # Runs mit 3 und 32 bis auf eine Ausnahme nicht gut
+            "gru_units": tune.grid_search([24, 28, 32]),    # See graphical visualization
+            "discard_FC_before_MH": True
+        }
     else:
         return None
 
@@ -220,28 +222,135 @@ class MyTuneCallback(Callback):
         self.manager = TuneClient(tune_address="127.0.0.1", port_forward=4321)
 
     def setup(self, ):
+        # Experiment 3: Final Model
         seen_configs = [
-            # {
-            #     "mid_kernel_size_first_conv_blocks": 3,
-            #     "mid_kernel_size_second_conv_blocks": 3,
-            #     "last_kernel_size_first_conv_blocks": 24,
-            #     "last_kernel_size_second_conv_blocks": 48,
-            #     "down_sample": "conv"
-            # },
-            # {
-            #     "mid_kernel_size_first_conv_blocks": 3,
-            #     "mid_kernel_size_second_conv_blocks": 3,
-            #     "last_kernel_size_first_conv_blocks": 24,
-            #     "last_kernel_size_second_conv_blocks": 48,
-            #     "down_sample": "max_pool"
-            # },
-            # {
-            #     "mid_kernel_size_first_conv_blocks": 3,
-            #     "mid_kernel_size_second_conv_blocks": 3,
-            #     "last_kernel_size_first_conv_blocks": 21,
-            #     "last_kernel_size_second_conv_blocks": 45,
-            #     "down_sample": "conv"
-            # }
+            {
+                "down_sample": "conv",
+                "vary_channels": True,
+                "pos_skip": "all",
+                "norm_type": "BN",
+                "norm_pos": "all",
+                "norm_before_act": True,
+                "use_pre_activation_design": True,
+                "use_pre_conv": True,
+                "dropout_attention": 0.3,
+                "heads": 5,
+                "gru_units": 24,
+                "discard_FC_before_MH": True
+            },
+            {
+                "down_sample": "conv",
+                "vary_channels": True,
+                "pos_skip": "all",
+                "norm_type": "BN",
+                "norm_pos": "all",
+                "norm_before_act": True,
+                "use_pre_activation_design": True,
+                "use_pre_conv": True,
+                "dropout_attention": 0.4,
+                "heads": 5,
+                "gru_units": 24,
+                "discard_FC_before_MH": True
+            },
+            {
+                "down_sample": "conv",
+                "vary_channels": True,
+                "pos_skip": "all",
+                "norm_type": "BN",
+                "norm_pos": "all",
+                "norm_before_act": True,
+                "use_pre_activation_design": True,
+                "use_pre_conv": True,
+                "dropout_attention": 0.3,
+                "heads": 5,
+                "gru_units": 28,
+                "discard_FC_before_MH": True
+            },
+            {
+                "down_sample": "conv",
+                "vary_channels": True,
+                "pos_skip": "all",
+                "norm_type": "BN",
+                "norm_pos": "all",
+                "norm_before_act": True,
+                "use_pre_activation_design": True,
+                "use_pre_conv": True,
+                "dropout_attention": 0.4,
+                "heads": 5,
+                "gru_units": 28,
+                "discard_FC_before_MH": True
+            },
+            {
+                "down_sample": "conv",
+                "vary_channels": True,
+                "pos_skip": "all",
+                "norm_type": "BN",
+                "norm_pos": "all",
+                "norm_before_act": True,
+                "use_pre_activation_design": True,
+                "use_pre_conv": True,
+                "dropout_attention": 0.3,
+                "heads": 5,
+                "gru_units": 32,
+                "discard_FC_before_MH": True
+            },
+            {
+                "down_sample": "conv",
+                "vary_channels": True,
+                "pos_skip": "all",
+                "norm_type": "BN",
+                "norm_pos": "all",
+                "norm_before_act": True,
+                "use_pre_activation_design": True,
+                "use_pre_conv": True,
+                "dropout_attention": 0.4,
+                "heads": 5,
+                "gru_units": 32,
+                "discard_FC_before_MH": True
+            },
+            {
+                "down_sample": "conv",
+                "vary_channels": True,
+                "pos_skip": "all",
+                "norm_type": "BN",
+                "norm_pos": "all",
+                "norm_before_act": True,
+                "use_pre_activation_design": True,
+                "use_pre_conv": True,
+                "dropout_attention": 0.3,
+                "heads": 8,
+                "gru_units": 24,
+                "discard_FC_before_MH": True
+            },
+            {
+                "down_sample": "conv",
+                "vary_channels": True,
+                "pos_skip": "all",
+                "norm_type": "BN",
+                "norm_pos": "all",
+                "norm_before_act": True,
+                "use_pre_activation_design": True,
+                "use_pre_conv": True,
+                "dropout_attention": 0.4,
+                "heads": 8,
+                "gru_units": 24,
+                "discard_FC_before_MH": True
+            },
+            {
+                "down_sample": "conv",
+                "vary_channels": True,
+                "pos_skip": "all",
+                "norm_type": "BN",
+                "norm_pos": "all",
+                "norm_before_act": True,
+                "use_pre_activation_design": True,
+                "use_pre_conv": True,
+                "dropout_attention": 0.3,
+                "heads": 8,
+                "gru_units": 28,
+                "discard_FC_before_MH": True
+            },
+
         ]
 
         for config in seen_configs:
@@ -257,13 +366,13 @@ class MyTuneCallback(Callback):
         #     (trial.config["down_sample"] == "conv" and trial.config["pos_skip"] == "not_first") or \
         #     (trial.config["down_sample"] == "max_pool" and trial.config["pos_skip"] == "not_last")
 
-        #Experiment 1_3: Wanted
+        # Experiment 1_3: Wanted
         # Conv + True + not_last + BN + all
         # Conv + True + all + BN + all
         # Pool + True + all + BN + all
         # unwanted_combination = (trial.config["down_sample"] == "max_pool" and trial.config["pos_skip"] == "not_last")
 
-        if str(trial.config) in self.already_seen:  # or unwanted_combination:
+        if str(trial.config) in self.already_seen: # or unwanted_combination:
             print("Stop trial with id " + str(trial.trial_id))
             self.manager.stop_trial(trial.trial_id)
         else:

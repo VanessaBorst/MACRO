@@ -1,6 +1,6 @@
 {
   "name": "BaselineModelWithSkipConnectionsAndNormV2",
-  "run_details": "uw-BCE_max_w-F1",
+  "run_details": "_rerun_LN",
   "n_gpu": 1,
   "arch": {
     "type": "BaselineModelWithSkipConnectionsAndNormV2",

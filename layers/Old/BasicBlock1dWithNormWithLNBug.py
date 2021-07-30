@@ -1,5 +1,4 @@
-import math
-
+import torch.cuda
 import torch.nn as nn
 from torchinfo import summary
 
@@ -9,7 +8,7 @@ from layers.LayerUtils import calc_same_padding_for_stride_one
 class BasicBlock1dWithNorm(nn.Module):
 
     def __init__(self, in_channels, out_channels, mid_kernels_size, last_kernel_size, stride, down_sample, drop_out,
-                 norm_type, norm_pos, skips_active=True, input_seq_len=None):
+                 norm_type, norm_pos, skips_active=True):
         """
         The stride is only applied in the last conv layer and can be used for size reduction
         If the resulting number of channel differs, it is done within the first Conv1D and kept for the further ones
@@ -21,11 +20,6 @@ class BasicBlock1dWithNorm(nn.Module):
         :param down_sample: Should be 'conv', 'max_pool' or 'avg_pool'
         :param drop_out: Dropout to be applied at the end of the block
 
-        :param norm_type: BN, IN or LN
-        :param norm_pos: All or last
-        :param skips_active: If skip connection is enabled
-        :param input_seq_len: Should be of an integer representing L=SeqLen (irrespective of the bs and the channels!)
-
         Information. The following restriction may be useful:
             Only odd filter sizes for all kernels with stride 1
             Otherwise for equal seq_lengths the original size can not be kept without one-sided padding
@@ -36,7 +30,6 @@ class BasicBlock1dWithNorm(nn.Module):
         super().__init__()
 
         assert stride == 1 or stride == 2, "Stride should be 1 or 2, otherwise the sizes are too much reduced"
-        assert norm_type != "LN" or input_seq_len is not None, "For LN, the input dimensions are required"
 
         self._in_channels = in_channels
         self._out_channels = out_channels
@@ -46,7 +39,6 @@ class BasicBlock1dWithNorm(nn.Module):
 
         self._norm_type = norm_type
         self._norm_pos = norm_pos
-        self._input_seq_len = input_seq_len
 
         # If stride is 1 and the kernel_size uneven, an additional one-sided 0 is needed to keep/half dimension
         self._one_sided_padding = nn.ConstantPad1d((0, 1), 0)
@@ -68,8 +60,6 @@ class BasicBlock1dWithNorm(nn.Module):
                 self._norm1 = nn.BatchNorm1d(num_features=out_channels)
             elif self._norm_type == "IN":
                 self._norm1 = nn.InstanceNorm1d(num_features=out_channels, affine=True)
-            elif self._norm_type == "LN":
-                self._norm1 = nn.LayerNorm([self._out_channels, self._input_seq_len])
         self._lrelu1 = nn.LeakyReLU(0.3)
 
         self._conv2 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=mid_kernels_size)
@@ -78,8 +68,6 @@ class BasicBlock1dWithNorm(nn.Module):
                 self._norm2 = nn.BatchNorm1d(num_features=out_channels)
             elif self._norm_type == "IN":
                 self._norm2 = nn.InstanceNorm1d(num_features=out_channels, affine=True)
-            elif self._norm_type == "LN":
-                self._norm2 = nn.LayerNorm([self._out_channels, self._input_seq_len])
         self._lrelu2 = nn.LeakyReLU(0.3)
 
         self._conv3 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=last_kernel_size,
@@ -90,8 +78,6 @@ class BasicBlock1dWithNorm(nn.Module):
                 self._norm3 = nn.BatchNorm1d(num_features=out_channels)
             elif self._norm_type == "IN":
                 self._norm3 = nn.InstanceNorm1d(num_features=out_channels, affine=True)
-            elif self._norm_type == "LN":
-                self._norm3 = nn.LayerNorm([self._out_channels, math.ceil(self._input_seq_len/2)])
         self._lrelu3 = nn.LeakyReLU(0.3)
         self._dropout = nn.Dropout(drop_out)
 
@@ -117,60 +103,77 @@ class BasicBlock1dWithNorm(nn.Module):
     def _convolutional_downsample(self, stride):
         # The block is potentially changing the channel amount
         # For stride ==1, down_sample is None, but for stride 2 it decreases the seq len by a factor of 2
-        if self._norm_type == "BN":
-            res_norm = nn.BatchNorm1d(num_features=self._out_channels)
-        elif self._norm_type == "IN":
-            res_norm = nn.InstanceNorm1d(num_features=self._out_channels, affine=True)
-        elif self._norm_type == "LN":
-            res_norm = nn.LayerNorm([self._out_channels, math.ceil(self._input_seq_len/stride)])
-        downsample = nn.Sequential(
-            nn.Conv1d(self._in_channels, self._out_channels, kernel_size=1, stride=stride, bias=False),
-            res_norm
-        )
+        if self._norm_type == "LN":
+            downsample= nn.Conv1d(self._in_channels, self._out_channels, kernel_size=1, stride=stride, bias=False)
+        else:
+            if self._norm_type == "BN":
+                res_norm = nn.BatchNorm1d(num_features=self._out_channels)
+            elif self._norm_type == "IN":
+                res_norm = nn.InstanceNorm1d(num_features=self._out_channels, affine=True)
+            downsample = nn.Sequential(
+                nn.Conv1d(self._in_channels, self._out_channels, kernel_size=1, stride=stride, bias=False),
+                res_norm
+            )
         return downsample
 
     def _max_pooled_downsample(self, stride):
-        if self._norm_type == "BN":
-            res_norm = nn.BatchNorm1d(num_features=self._out_channels)
-        elif self._norm_type == "IN":
-            res_norm = nn.InstanceNorm1d(num_features=self._out_channels, affine=True)
-        elif self._norm_type == "LN":
-            res_norm = nn.LayerNorm([self._out_channels, math.ceil(self._input_seq_len/stride)])
-
-        if self._in_channels == self._out_channels:
-            downsample = nn.Sequential(
-                nn.MaxPool1d(kernel_size=2, stride=stride),
-                res_norm
-            )
+        if self._norm_type == "LN":
+            if self._in_channels == self._out_channels:
+                downsample = nn.MaxPool1d(kernel_size=2, stride=stride)
+            else:
+                downsample = nn.Sequential(
+                    nn.MaxPool1d(kernel_size=2, stride=stride),
+                    # Needed to align the channels before the addition
+                    nn.Conv1d(self._in_channels, self._out_channels, kernel_size=1, stride=1, bias=False)
+                )
         else:
-            downsample = nn.Sequential(
-                nn.MaxPool1d(kernel_size=2, stride=stride),
-                # Needed to align the channels before the addition
-                nn.Conv1d(self._in_channels, self._out_channels, kernel_size=1, stride=1, bias=False),
-                res_norm
-            )
+            if self._norm_type == "BN":
+                res_norm = nn.BatchNorm1d(num_features=self._out_channels)
+            elif self._norm_type == "IN":
+                res_norm = nn.InstanceNorm1d(num_features=self._out_channels, affine=True)
+
+            if self._in_channels == self._out_channels:
+                downsample = nn.Sequential(
+                    nn.MaxPool1d(kernel_size=2, stride=stride),
+                    res_norm
+                )
+            else:
+                downsample = nn.Sequential(
+                    nn.MaxPool1d(kernel_size=2, stride=stride),
+                    # Needed to align the channels before the addition
+                    nn.Conv1d(self._in_channels, self._out_channels, kernel_size=1, stride=1, bias=False),
+                    res_norm
+                )
         return downsample
 
     def _avg_pooled_downsample(self, stride):
-        if self._norm_type == "BN":
-            res_norm = nn.BatchNorm1d(num_features=self._out_channels)
-        elif self._norm_type == "IN":
-            res_norm = nn.InstanceNorm1d(num_features=self._out_channels, affine=True)
-        elif self._norm_type == "LN":
-            res_norm = nn.LayerNorm([self._out_channels, math.ceil(self._input_seq_len/stride)])
-
-        if self._in_channels == self._out_channels:
-            downsample = nn.Sequential(
-                nn.AvgPool1d(kernel_size=2, stride=stride),
-                res_norm
-            )
+        if self._norm_type == "LN":
+            if self._in_channels == self._out_channels:
+                downsample = nn.AvgPool1d(kernel_size=2, stride=stride)
+            else:
+                downsample = nn.Sequential(
+                    nn.AvgPool1d(kernel_size=2, stride=stride),
+                    # Needed to align the channels before the addition
+                    nn.Conv1d(self._in_channels, self._out_channels, kernel_size=1, stride=1, bias=False)
+                )
         else:
-            downsample = nn.Sequential(
-                nn.AvgPool1d(kernel_size=2, stride=stride),
-                # Needed to align the channels before the addition
-                nn.Conv1d(self._in_channels, self._out_channels, kernel_size=1, stride=1, bias=False),
-                res_norm
-            )
+            if self._norm_type == "BN":
+                res_norm = nn.BatchNorm1d(num_features=self._out_channels)
+            elif self._norm_type == "IN":
+                res_norm = nn.InstanceNorm1d(num_features=self._out_channels, affine=True)
+
+            if self._in_channels == self._out_channels:
+                downsample = nn.Sequential(
+                    nn.AvgPool1d(kernel_size=2, stride=stride),
+                    res_norm
+                )
+            else:
+                downsample = nn.Sequential(
+                    nn.AvgPool1d(kernel_size=2, stride=stride),
+                    # Needed to align the channels before the addition
+                    nn.Conv1d(self._in_channels, self._out_channels, kernel_size=1, stride=1, bias=False),
+                    res_norm
+                )
         return downsample
 
     def forward(self, x):
@@ -186,8 +189,14 @@ class BasicBlock1dWithNorm(nn.Module):
         out = self._conv1(x)
         # Normalize here if "all"
         if self._norm_pos == "all":
-            # BN or IN or LN
-            out = self._norm1(out)
+            if self._norm_type == "LN":
+                # Normalize over all dimensions of a sample and ignore batch dim
+                layer_norm_1 = nn.LayerNorm([out.shape[-2], out.shape[-1]])
+                if torch.cuda.is_available():
+                    layer_norm_1.to('cuda:0')
+                out = layer_norm_1(out)
+            else:  # BN or IN
+                out = self._norm1(out)
         out = self._lrelu1(out)
 
         # Conv2 -----------------------------------------------------------------
@@ -199,8 +208,14 @@ class BasicBlock1dWithNorm(nn.Module):
         out = self._conv2(out)
         # Normalize here if "all"
         if self._norm_pos == "all":
-            # BN or IN or LN
-            out = self._norm2(out)
+            if self._norm_type == "LN":
+                # Normalize over all dimensions of a sample and ignore batch dim
+                layer_norm_2 = nn.LayerNorm([out.shape[-2], out.shape[-1]])
+                if torch.cuda.is_available():
+                    layer_norm_2.to('cuda:0')
+                out = layer_norm_2(out)
+            else:  # BN or IN
+                out = self._norm2(out)
         out = self._lrelu2(out)
 
         # Conv3 -----------------------------------------------------------------
@@ -219,8 +234,14 @@ class BasicBlock1dWithNorm(nn.Module):
         out = self._conv3(out)
         # Normalize here if "all" or "last"
         if self._norm_pos == "all" or self._norm_pos == "last":
-            # BN or IN or LN
-            out = self._norm3(out)
+            if self._norm_type == "LN":
+                # Normalize over all dimensions of a sample and ignore batch dim
+                layer_norm_3 = nn.LayerNorm([out.shape[-2], out.shape[-1]])
+                if torch.cuda.is_available():
+                    layer_norm_3.to('cuda:0')
+                out = layer_norm_3(out)
+            else:  # BN or IN
+                out = self._norm3(out)
 
         # Residual -----------------------------------------------------------------
         if self._skips_active:
@@ -230,6 +251,13 @@ class BasicBlock1dWithNorm(nn.Module):
                     if residual.shape[2] % 2 != 0:
                         residual = nn.ConstantPad1d((1, 1), 0)(residual)
                 residual = self._downsample(residual)
+                # For layer norm, the normalization must be handled here explicitly
+                if self._norm_type == "LN":
+                    # Normalize over all dimensions of a sample (num_out_channels, T)  and ignore batch dim
+                    layer_norm_res = nn.LayerNorm([residual.shape[-2], residual.shape[-1]])
+                    if torch.cuda.is_available():
+                        layer_norm_res.to('cuda:0')
+                    residual = layer_norm_res(residual)
             out += residual
 
         # Import: Move the Leaky RELU part AFTER the addition as in ResNet!!!
@@ -241,6 +269,5 @@ class BasicBlock1dWithNorm(nn.Module):
 
 if __name__ == "__main__":
     model = BasicBlock1dWithNorm(in_channels=12, out_channels=12, mid_kernels_size=3, last_kernel_size=44, stride=2,
-                                 down_sample='conv', drop_out=0.2, norm_type="BN", norm_pos="all",
-                                 input_dims=1125)
+                                 down_sample='conv', drop_out=0.2, norm_type="LN", norm_pos="all")
     summary(model, input_size=(5, 12, 1125), col_names=["input_size", "output_size", "num_params"])
