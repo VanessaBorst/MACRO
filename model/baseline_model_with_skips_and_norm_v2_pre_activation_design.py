@@ -14,7 +14,8 @@ class BaselineModelWithSkipConnectionsAndNormV2PreActivation(BaseModel):
                  last_kernel_size_first_conv_blocks=24, last_kernel_size_second_conv_blocks=48,
                  stride_first_conv_blocks=2, stride_second_conv_blocks=2,
                  down_sample="conv", vary_channels=True, pos_skip="not_last",
-                 norm_type="BN", norm_pos="all", norm_before_act=True, use_pre_conv=True):
+                 norm_type="BN", norm_pos="all", norm_before_act=True, use_pre_conv=True,
+                 pre_conv_kernel=16):
         """
         :param apply_final_activation: whether the Sigmoid(sl) or the LogSoftmax(ml) should be applied at the end
         :param multi_label_training: if true, Sigmoid is used as final activation, else the LogSoftmax
@@ -31,6 +32,7 @@ class BaselineModelWithSkipConnectionsAndNormV2PreActivation(BaseModel):
                                                             "option for the skip connections! Choose between ''all'' " \
                                                             "and ''not last''"
         assert norm_type == "BN" or norm_type == "IN", "For the preactivation design, only BN and IN are supported"
+
 
         self._pos_skip = pos_skip
         self._use_pre_conv = use_pre_conv
@@ -54,13 +56,13 @@ class BaselineModelWithSkipConnectionsAndNormV2PreActivation(BaseModel):
 
             if norm_before_act:
                 self._starting_conv = nn.Sequential(
-                    nn.Conv1d(in_channels=input_channel, out_channels=input_channel, kernel_size=16),
+                    nn.Conv1d(in_channels=input_channel, out_channels=input_channel, kernel_size=pre_conv_kernel),
                     starting_norm,
                     nn.LeakyReLU(0.3)
                 )
             else:
                 self._starting_conv = nn.Sequential(
-                    nn.Conv1d(in_channels=input_channel, out_channels=input_channel, kernel_size=16),
+                    nn.Conv1d(in_channels=input_channel, out_channels=input_channel, kernel_size=pre_conv_kernel),
                     nn.LeakyReLU(0.3),
                     starting_norm
                 )

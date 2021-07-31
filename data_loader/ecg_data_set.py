@@ -89,23 +89,26 @@ class ECGDataset(Dataset):
         # Return both as as ndarray
         return class_freqs.values, class_dist.values
 
-    def get_ml_pos_weights(self, idx_list, mode=None):
+    def get_ml_pos_weights(self, idx_list, mode=None, cross_valid_active=False):
         """
         Can be used to determine  the class frequencies and the target classes distribution
         :param idx_list: list of ids, should contain all ids contained in the train, valid or test set
         :param mode: should be 'train' or 'valid'
-        :param log_dir: dir to save the record names to
+        :param cross_valid_active: Set to True during cross validation to ensure weights are re-calculated each run
         :return:  Pos weights, one weight per class
 
         """
-        if mode == "test" and "test" not in self._input_dir:
-            # Catch the case where the model is tested on the validation set
-            file_name = "data_loader/pos_weights_ml_valid.p"
-        else:
-            file_name = "data_loader/pos_weights_ml_" + mode + ".p"
+        if not cross_valid_active:
+            if mode == "test" and "test" not in self._input_dir:
+                # Catch the case where the model is tested on the validation set
+                file_name = "data_loader/pos_weights_ml_valid.p"
+            else:
+                file_name = "data_loader/pos_weights_ml_" + mode + ".p"
 
-        file_name = os.path.join(get_project_root(), file_name)
-        if os.path.isfile(file_name):
+            file_name = os.path.join(get_project_root(), file_name)
+
+        # For cross-validation, statistics change from run to run!
+        if not cross_valid_active and os.path.isfile(file_name):
             with open(file_name, "rb") as file:
                 df = pickle.load(file)
             # inverse_class_freqs = df['Inverse_class_freq']
@@ -143,24 +146,25 @@ class ECGDataset(Dataset):
         # Return the ratio as as ndarray
         return df["ratio_neg_to_pos"].values
 
-    def get_inverse_class_frequency(self, idx_list, multi_label_training, mode):
+    def get_inverse_class_frequency(self, idx_list, multi_label_training, mode, cross_valid_active=False):
         """
         Can be used to determine the inverse class frequencies
         :param idx_list: list of ids, should contain all ids contained in the train, valid or test set
         :param multi_label_training: If true, all labels are considered, otherwise only the first label is counted
-
+        :param cross_valid_active: Set to True during cross validation to ensure weights are re-calculated each run
         :return:  Inverse class frequencies
         """
-        if mode == "test" and "test" not in self._input_dir:
-            # Catch the case where the model is tested on the validation set
-            file_name = "data_loader/class_freq_ml_valid.p" if multi_label_training \
-                else "data_loader/class_freq_sl_valid.p"
-        else:
-            file_name = "data_loader/class_freq_ml_" + mode + ".p" if multi_label_training \
-                else "data_loader/class_freq_sl_" + mode + ".p"
-        file_name = os.path.join(get_project_root(), file_name)
+        if not cross_valid_active:
+            if mode == "test" and "test" not in self._input_dir:
+                # Catch the case where the model is tested on the validation set
+                file_name = "data_loader/class_freq_ml_valid.p" if multi_label_training \
+                    else "data_loader/class_freq_sl_valid.p"
+            else:
+                file_name = "data_loader/class_freq_ml_" + mode + ".p" if multi_label_training \
+                    else "data_loader/class_freq_sl_" + mode + ".p"
+            file_name = os.path.join(get_project_root(), file_name)
 
-        if os.path.isfile(file_name):
+        if not cross_valid_active and os.path.isfile(file_name):
             with open(file_name, "rb") as file:
                 df = pickle.load(file)
             inverse_class_freqs = df['Inverse_class_freq']

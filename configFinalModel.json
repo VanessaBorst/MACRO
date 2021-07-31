@@ -11,6 +11,11 @@
   },
   "data_loader": {
     "type": "ECGDataLoader",
+    "cross_valid": {
+      "enabled": true,
+      "k_fold": 10,
+      "data_dir": "data/CinC_CPSC/cross_valid/"
+    },
     "args": {
       "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000",
       "batch_size": 64,

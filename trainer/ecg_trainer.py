@@ -29,7 +29,8 @@ class ECGTrainer(BaseTrainer):
     """
 
     def __init__(self, model, criterion, metric_ftns_iter, metric_ftns_epoch, metric_ftns_epoch_class_wise, optimizer,
-                 config, device, data_loader, valid_data_loader=None, lr_scheduler=None, use_tune=False, len_epoch=None):
+                 config, device, data_loader, valid_data_loader=None, lr_scheduler=None, use_tune=False, len_epoch=None,
+                 cross_valid_active=False):
         super().__init__(model, criterion, optimizer, config, use_tune)
         self.config = config
         self.device = device
@@ -69,11 +70,11 @@ class ECGTrainer(BaseTrainer):
         # Store potential parameters needed for metrics
         val_class_weights = self.data_loader.dataset.get_inverse_class_frequency(
             idx_list=self.data_loader.valid_sampler.indices, multi_label_training=self.multi_label_training,
-            mode='valid') \
+            mode='valid', cross_valid_active=cross_valid_active) \
             if not self.overfit_single_batch else None
 
         val_pos_weights = self.data_loader.dataset.get_ml_pos_weights(
-            idx_list=self.data_loader.valid_sampler.indices, mode='valid') \
+            idx_list=self.data_loader.valid_sampler.indices, mode='valid', cross_valid_active=cross_valid_active) \
             if not self.overfit_single_batch else None
 
         self._param_dict = {
@@ -83,10 +84,12 @@ class ECGTrainer(BaseTrainer):
             "log_probs": config["metrics"]["additional_metrics_args"].get("log_probs", False),
             "logits": config["metrics"]["additional_metrics_args"].get("logits", False),
             "train_pos_weights": self.data_loader.dataset.get_ml_pos_weights(
-                idx_list=self.data_loader.batch_sampler.sampler.indices, mode='train'),
+                idx_list=self.data_loader.batch_sampler.sampler.indices, mode='train',
+                cross_valid_active=cross_valid_active),
             "train_class_weights": self.data_loader.dataset.get_inverse_class_frequency(
                 idx_list=self.data_loader.batch_sampler.sampler.indices,
-                multi_label_training=self.multi_label_training, mode='train'),
+                multi_label_training=self.multi_label_training, mode='train',
+                cross_valid_active=cross_valid_active),
             "valid_pos_weights": val_pos_weights,
             "valid_class_weights": val_class_weights
         }

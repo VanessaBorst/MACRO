@@ -6,8 +6,7 @@
     "type": "BaselineModelWithSkipConnectionsAndNormV2PreActivation",
     "args": {
       "apply_final_activation": false,
-      "multi_label_training": true,
-      "use_pre_conv": false
+      "multi_label_training": true
     }
   },
   "data_loader": {

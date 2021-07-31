@@ -159,7 +159,7 @@ def tuning_params(name):
             "down_sample": tune.grid_search(["conv", "max_pool"]),
             "vary_channels": True,
             "pos_skip": tune.grid_search(["all", "not_last", "not_first"]),
-            "norm_type": "LN",  # tune.grid_search(["BN", "IN", "LN"]),
+            "norm_type": tune.grid_search(["BN", "IN", "LN"]),
             "norm_pos": tune.grid_search(["all", "last"])
             # Tested TOP3 from first experiment, i.e., the following:
             # Conv + True + not_last,
@@ -167,17 +167,30 @@ def tuning_params(name):
             # MaxPool + True + not_first
         }
     elif name == "BaselineModelWithSkipConnectionsAndNormV2PreActivation":
+        # Run 1
+        # return {
+        #     "down_sample": tune.grid_search(["conv", "max_pool"]),
+        #     "vary_channels": True,
+        #     "pos_skip": tune.grid_search(["all", "not_last"]),
+        #     "norm_type": "BN",
+        #     "norm_pos": "all",  #tune.grid_search(["all", "last"]),
+        #     "norm_before_act": tune.grid_search([True, False]),
+        #     # Tested TOP3 from second experiment, i.e., the following:
+        #     # Conv + True + not_last + BN + all
+        #     # Conv + True + all + BN + all
+        #     # Pool + True + all + BN + all
+        # }
+
+        # Run 2: Only best one of run 1, but this time for different kernel sizes
         return {
-            "down_sample": tune.grid_search(["conv", "max_pool"]),
+            "down_sample": "conv",
             "vary_channels": True,
-            "pos_skip": tune.grid_search(["all", "not_last"]),
-            "norm_type": "BN",  #tune.grid_search(["BN", "IN", "LN"]),
-            "norm_pos": "all",  #tune.grid_search(["all", "last"]),
-            "norm_before_act": tune.grid_search([True, False]),
-            # Tested TOP3 from first experiment, i.e., the following:
-            # Conv + True + not_last + BN + all
-            # Conv + True + all + BN + all
-            # Pool + True + all + BN + all
+            "pos_skip": "all",
+            "norm_type": "BN",
+            "norm_pos": "all",
+            "norm_before_act": True,
+            "use_pre_conv": True,
+            "pre_conv_kernel": tune.grid_search([3, 8, 12, 20, 24])
         }
     elif name == "FinalModel":
         # # Variant with addittional FC for Attention
@@ -223,136 +236,136 @@ class MyTuneCallback(Callback):
 
     def setup(self, ):
         # Experiment 3: Final Model
-        seen_configs = [
-            {
-                "down_sample": "conv",
-                "vary_channels": True,
-                "pos_skip": "all",
-                "norm_type": "BN",
-                "norm_pos": "all",
-                "norm_before_act": True,
-                "use_pre_activation_design": True,
-                "use_pre_conv": True,
-                "dropout_attention": 0.3,
-                "heads": 5,
-                "gru_units": 24,
-                "discard_FC_before_MH": True
-            },
-            {
-                "down_sample": "conv",
-                "vary_channels": True,
-                "pos_skip": "all",
-                "norm_type": "BN",
-                "norm_pos": "all",
-                "norm_before_act": True,
-                "use_pre_activation_design": True,
-                "use_pre_conv": True,
-                "dropout_attention": 0.4,
-                "heads": 5,
-                "gru_units": 24,
-                "discard_FC_before_MH": True
-            },
-            {
-                "down_sample": "conv",
-                "vary_channels": True,
-                "pos_skip": "all",
-                "norm_type": "BN",
-                "norm_pos": "all",
-                "norm_before_act": True,
-                "use_pre_activation_design": True,
-                "use_pre_conv": True,
-                "dropout_attention": 0.3,
-                "heads": 5,
-                "gru_units": 28,
-                "discard_FC_before_MH": True
-            },
-            {
-                "down_sample": "conv",
-                "vary_channels": True,
-                "pos_skip": "all",
-                "norm_type": "BN",
-                "norm_pos": "all",
-                "norm_before_act": True,
-                "use_pre_activation_design": True,
-                "use_pre_conv": True,
-                "dropout_attention": 0.4,
-                "heads": 5,
-                "gru_units": 28,
-                "discard_FC_before_MH": True
-            },
-            {
-                "down_sample": "conv",
-                "vary_channels": True,
-                "pos_skip": "all",
-                "norm_type": "BN",
-                "norm_pos": "all",
-                "norm_before_act": True,
-                "use_pre_activation_design": True,
-                "use_pre_conv": True,
-                "dropout_attention": 0.3,
-                "heads": 5,
-                "gru_units": 32,
-                "discard_FC_before_MH": True
-            },
-            {
-                "down_sample": "conv",
-                "vary_channels": True,
-                "pos_skip": "all",
-                "norm_type": "BN",
-                "norm_pos": "all",
-                "norm_before_act": True,
-                "use_pre_activation_design": True,
-                "use_pre_conv": True,
-                "dropout_attention": 0.4,
-                "heads": 5,
-                "gru_units": 32,
-                "discard_FC_before_MH": True
-            },
-            {
-                "down_sample": "conv",
-                "vary_channels": True,
-                "pos_skip": "all",
-                "norm_type": "BN",
-                "norm_pos": "all",
-                "norm_before_act": True,
-                "use_pre_activation_design": True,
-                "use_pre_conv": True,
-                "dropout_attention": 0.3,
-                "heads": 8,
-                "gru_units": 24,
-                "discard_FC_before_MH": True
-            },
-            {
-                "down_sample": "conv",
-                "vary_channels": True,
-                "pos_skip": "all",
-                "norm_type": "BN",
-                "norm_pos": "all",
-                "norm_before_act": True,
-                "use_pre_activation_design": True,
-                "use_pre_conv": True,
-                "dropout_attention": 0.4,
-                "heads": 8,
-                "gru_units": 24,
-                "discard_FC_before_MH": True
-            },
-            {
-                "down_sample": "conv",
-                "vary_channels": True,
-                "pos_skip": "all",
-                "norm_type": "BN",
-                "norm_pos": "all",
-                "norm_before_act": True,
-                "use_pre_activation_design": True,
-                "use_pre_conv": True,
-                "dropout_attention": 0.3,
-                "heads": 8,
-                "gru_units": 28,
-                "discard_FC_before_MH": True
-            },
-
-        ]
-
+        # seen_configs = [
+        #     {
+        #         "down_sample": "conv",
+        #         "vary_channels": True,
+        #         "pos_skip": "all",
+        #         "norm_type": "BN",
+        #         "norm_pos": "all",
+        #         "norm_before_act": True,
+        #         "use_pre_activation_design": True,
+        #         "use_pre_conv": True,
+        #         "dropout_attention": 0.3,
+        #         "heads": 5,
+        #         "gru_units": 24,
+        #         "discard_FC_before_MH": True
+        #     },
+        #     {
+        #         "down_sample": "conv",
+        #         "vary_channels": True,
+        #         "pos_skip": "all",
+        #         "norm_type": "BN",
+        #         "norm_pos": "all",
+        #         "norm_before_act": True,
+        #         "use_pre_activation_design": True,
+        #         "use_pre_conv": True,
+        #         "dropout_attention": 0.4,
+        #         "heads": 5,
+        #         "gru_units": 24,
+        #         "discard_FC_before_MH": True
+        #     },
+        #     {
+        #         "down_sample": "conv",
+        #         "vary_channels": True,
+        #         "pos_skip": "all",
+        #         "norm_type": "BN",
+        #         "norm_pos": "all",
+        #         "norm_before_act": True,
+        #         "use_pre_activation_design": True,
+        #         "use_pre_conv": True,
+        #         "dropout_attention": 0.3,
+        #         "heads": 5,
+        #         "gru_units": 28,
+        #         "discard_FC_before_MH": True
+        #     },
+        #     {
+        #         "down_sample": "conv",
+        #         "vary_channels": True,
+        #         "pos_skip": "all",
+        #         "norm_type": "BN",
+        #         "norm_pos": "all",
+        #         "norm_before_act": True,
+        #         "use_pre_activation_design": True,
+        #         "use_pre_conv": True,
+        #         "dropout_attention": 0.4,
+        #         "heads": 5,
+        #         "gru_units": 28,
+        #         "discard_FC_before_MH": True
+        #     },
+        #     {
+        #         "down_sample": "conv",
+        #         "vary_channels": True,
+        #         "pos_skip": "all",
+        #         "norm_type": "BN",
+        #         "norm_pos": "all",
+        #         "norm_before_act": True,
+        #         "use_pre_activation_design": True,
+        #         "use_pre_conv": True,
+        #         "dropout_attention": 0.3,
+        #         "heads": 5,
+        #         "gru_units": 32,
+        #         "discard_FC_before_MH": True
+        #     },
+        #     {
+        #         "down_sample": "conv",
+        #         "vary_channels": True,
+        #         "pos_skip": "all",
+        #         "norm_type": "BN",
+        #         "norm_pos": "all",
+        #         "norm_before_act": True,
+        #         "use_pre_activation_design": True,
+        #         "use_pre_conv": True,
+        #         "dropout_attention": 0.4,
+        #         "heads": 5,
+        #         "gru_units": 32,
+        #         "discard_FC_before_MH": True
+        #     },
+        #     {
+        #         "down_sample": "conv",
+        #         "vary_channels": True,
+        #         "pos_skip": "all",
+        #         "norm_type": "BN",
+        #         "norm_pos": "all",
+        #         "norm_before_act": True,
+        #         "use_pre_activation_design": True,
+        #         "use_pre_conv": True,
+        #         "dropout_attention": 0.3,
+        #         "heads": 8,
+        #         "gru_units": 24,
+        #         "discard_FC_before_MH": True
+        #     },
+        #     {
+        #         "down_sample": "conv",
+        #         "vary_channels": True,
+        #         "pos_skip": "all",
+        #         "norm_type": "BN",
+        #         "norm_pos": "all",
+        #         "norm_before_act": True,
+        #         "use_pre_activation_design": True,
+        #         "use_pre_conv": True,
+        #         "dropout_attention": 0.4,
+        #         "heads": 8,
+        #         "gru_units": 24,
+        #         "discard_FC_before_MH": True
+        #     },
+        #     {
+        #         "down_sample": "conv",
+        #         "vary_channels": True,
+        #         "pos_skip": "all",
+        #         "norm_type": "BN",
+        #         "norm_pos": "all",
+        #         "norm_before_act": True,
+        #         "use_pre_activation_design": True,
+        #         "use_pre_conv": True,
+        #         "dropout_attention": 0.3,
+        #         "heads": 8,
+        #         "gru_units": 28,
+        #         "discard_FC_before_MH": True
+        #     },
+        #
+        # ]
+        seen_configs = []
         for config in seen_configs:
             self.already_seen.add(str(config))
 
@@ -492,7 +505,8 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                 "vary_channels": "Varied channels",
                 "pos_skip": "Skip Pos",
                 "norm_type": "Type",
-                "norm_pos": "Position"
+                "norm_pos": "Position",
+                "pre_conv_kernel": "1st Conv Kernel"
             },
             metric_columns=["loss", "val_loss",
                             "val_weighted_sk_f1",

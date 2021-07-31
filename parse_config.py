@@ -163,16 +163,36 @@ class ConfigParser:
         return self._config
 
     @property
+    def resume(self):
+        return self.resume
+
+    @resume.setter
+    def save_dir(self, value):
+        self.resume = value
+
+    @property
     def save_dir(self):
         return self._save_dir
+
+    @save_dir.setter
+    def save_dir(self, value):
+        self._save_dir = value
 
     @property
     def log_dir(self):
         return self._log_dir
 
+    @log_dir.setter
+    def log_dir(self, value):
+        self._log_dir = value
+
     @property
     def test_output_dir(self):
         return self._test_output_dir
+
+    @test_output_dir.setter
+    def test_output_dir(self, value):
+        self._test_output_dir = value
 
     @property
     def use_tune(self):

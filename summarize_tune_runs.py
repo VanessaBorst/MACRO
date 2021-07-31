@@ -37,15 +37,15 @@ def _bold_formatter(x, value, num_decimals=2):
 #                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
 #                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'Epochs']
 
-path_to_tune = 'savedVM_v2/models/BaselineModelWithSkipConnectionsAndNormV2/experiment_1_2_all'
-hyper_params = ["down_sample", "norm_pos", "norm_type",
-                "pos_skip", "vary_channels"]
-integer_vals = []
-single_precision = []
-desired_col_order = ["down_sample", "vary_channels", "pos_skip", "norm_type", "norm_pos",
-                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-                     'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
-                     'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'Epochs']
+# path_to_tune = 'savedVM_v2/models/BaselineModelWithSkipConnectionsAndNormV2/experiment_1_2_all'
+# hyper_params = ["down_sample", "norm_pos", "norm_type",
+#                 "pos_skip", "vary_channels"]
+# integer_vals = []
+# single_precision = []
+# desired_col_order = ["down_sample", "vary_channels", "pos_skip", "norm_type", "norm_pos",
+#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
+#                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'Epochs']
 
 # path_to_tune = 'savedVM_v2/models/BaselineModelWithSkipConnectionsAndNormV2PreActivation/experiment_1_3_with_pre_conv'
 # hyper_params = ["down_sample", "norm_before_act", "norm_pos", "norm_type",
@@ -94,7 +94,17 @@ desired_col_order = ["down_sample", "vary_channels", "pos_skip", "norm_type", "n
 #                      'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst']
 
 
-
+path_to_tune = 'savedVM_v2/models/FinalModel/experiment_3_ohne_FC_preAct_all'
+hyper_params = ["discard_FC_before_MH", "down_sample", "dropout_attention", "gru_units", "heads",
+                "norm_before_act", "norm_pos", "norm_type", "pos_skip",
+                "use_pre_activation_design", "use_pre_conv", "vary_channels"]
+integer_vals = ['gru_units', 'heads', 'Epochs']
+single_precision = ['dropout_attention']
+# Discard FB before MH is either True or False for all runs (depending on VM)
+desired_col_order = ["use_pre_activation_design", "dropout_attention", "gru_units", "heads",
+                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+                     'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR',
+                     'CPCS_F1', 'CPCS_Faf', 'CPCS_Fblock', 'CPCS_Fpc', 'CPCS_Fst', 'Epochs']
 
 
 # Columns to format with maximum condition and 2 floating decimals
