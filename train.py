@@ -15,7 +15,7 @@ from ray.tune.suggest import BasicVariantGenerator
 
 import data_loader.data_loaders as module_data_loader
 import model.loss as module_loss
-from logger import update_logging_setup_for_tune
+from logger import update_logging_setup_for_tune_or_cross_valid
 from parse_config import ConfigParser
 from trainer.ecg_trainer import ECGTrainer
 from utils import prepare_device, get_project_root
@@ -765,7 +765,7 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
         # Adapt the save path for the logging since it differs from trial to trial
         log_dir = Path(tune.get_trial_dir().replace('/models/', '/log/'))
         log_dir.mkdir(parents=True, exist_ok=True)
-        update_logging_setup_for_tune(log_dir)
+        update_logging_setup_for_tune_or_cross_valid(log_dir)
         # Update the config if a checkpoint is passed by Tune
         if checkpoint_dir is not None:
             config.resume = checkpoint_dir

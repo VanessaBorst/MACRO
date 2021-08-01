@@ -60,6 +60,8 @@ class BaseDataLoader(DataLoader):
                 self.sampler = train_sampler
                 self.valid_sampler = valid_sampler
             else:
+                self.batch_size = batch_size
+
                 test_sampler = SubsetRandomSampler(test_idx)
 
                 # turn off shuffle option which is mutually exclusive with sampler

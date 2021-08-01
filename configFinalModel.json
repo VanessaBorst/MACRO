@@ -63,7 +63,8 @@
       },
       "per_epoch": [
         "cpsc_score",
-        "weighted_sk_f1"
+        "weighted_sk_f1",
+        "macro_sk_f1"
       ],
       "per_epoch_class_wise": [
         "class_wise_sk_f1"
@@ -75,7 +76,8 @@
       },
       "per_epoch": [
         "cpsc_score",
-        "weighted_sk_f1"
+        "weighted_sk_f1",
+        "macro_sk_f1"
       ],
       "per_epoch_class_wise": [
         "class_wise_sk_f1"

@@ -13,6 +13,7 @@ import numpy as np
 
 
 from data_loader.ecg_data_set import ECGDataset
+from logger import update_logging_setup_for_tune_or_cross_valid
 
 from parse_config import ConfigParser
 from test import test_model
@@ -113,10 +114,13 @@ def run_cross_validation(config):
         print("Valid Set: " + str(valid_fold_index) + ", Test Set: " + str(test_fold_index))
 
         # Adapt the log and save paths for the current fold
-        config.save_dir = os.path.join(base_save_dir, "Fold_" + str(k+1))
-        config.log_dir = os.path.join(base_log_dir, "Fold_" + str(k+1))
+        config.save_dir = Path(os.path.join(base_save_dir, "Fold_" + str(k+1)))
+        config.log_dir = Path(os.path.join(base_log_dir, "Fold_" + str(k+1)))
         ensure_dir(config.save_dir)
         ensure_dir(config.log_dir)
+        update_logging_setup_for_tune_or_cross_valid(config.log_dir)
+
+
 
         # Write record names to pickle for reproducing single folds
         dict = {
@@ -133,7 +137,7 @@ def run_cross_validation(config):
         valid_results[folds[k]] = fold_train_model_best
 
         # Do the testing and add the fold results to the dfs
-        config.resume = os.path.join(config.save_dir, "model_best.pth")
+        config.resume = Path(os.path.join(config.save_dir, "model_best.pth"))
         config.test_output_dir = Path(os.path.join(config.resume.parent, 'test_output_fold_' + str(k)))
         ensure_dir(config.test_output_dir)
         fold_eval_class_wise, fold_eval_single_metrics = test_fold(config, data_dir=data_dir, test_idx=test_idx,

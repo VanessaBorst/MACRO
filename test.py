@@ -502,6 +502,8 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
     logger_info = f"{eval_log}\n{eval_info_single_metrics}\n{eval_info_class_wise_metrics}\n"
     logger.info(logger_info)
 
+    return df_class_wise_results, df_single_metric_results
+
 
 if __name__ == '__main__':
     args = argparse.ArgumentParser(description='MA Vanessa')
