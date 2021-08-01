@@ -715,11 +715,15 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
         pickle.dump(analysis, file)
 
 
-def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoint_dir=None, use_tune=False):
+def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoint_dir=None, use_tune=False,
+                train_idx=None, valid_idx=None, k_fold=None, cv_active=False):
     # config: type: ConfigParser -> can be used as usual
     # tune_config: type: Dict -> contains the tune params with the samples values,
     #               e.g. {'num_first_conv_blocks': 8, 'num_second_conv_blocks': 9, ...}
     import torch  # Needed to work with asych. tune workers as well
+
+    assert use_tune is False or cv_active is False, "Cross Validation does not work with active tuning!"
+
     if use_tune:
         # When using Ray Tune, this is distributed among worker processes, which requires seeding within the function
         # Otherwise the same config may to different results -> not reproducible
@@ -767,12 +771,21 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
             config.resume = checkpoint_dir
 
     # config is of type parse_config.ConfigParser
-    logger = config.get_logger('train')
+    if k_fold is None:
+        logger = config.get_logger('train')
+    else:
+        logger = config.get_logger('train_fold_' + str(k_fold))
 
     # setup data_loader instances if not already done because use_tune is enabled
     if use_tune:
         data_loader = train_dl
         valid_data_loader = valid_dl
+    elif cv_active:
+        # Setup data_loader instances for current the cross validation run
+        data_loader = config.init_obj('data_loader', module_data_loader,
+                                      cross_valid=True, train_idx=train_idx, valid_idx=valid_idx, cv_train_mode=True,
+                                      single_batch=False)
+        valid_data_loader = data_loader.split_validation()
     else:
         data_loader = config.init_obj('data_loader', module_data_loader,
                                       single_batch=config['data_loader'].get('overfit_single_batch', False))
@@ -825,7 +838,8 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
                          data_loader=data_loader,
                          valid_data_loader=valid_data_loader,
                          lr_scheduler=lr_scheduler,
-                         use_tune=use_tune)
+                         use_tune=use_tune,
+                         cross_valid_active=cv_active)
 
     log_best = trainer.train()
     if use_tune:
@@ -834,6 +848,7 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
         path = os.path.join(config.log_dir, "model_best_metrics.p")
     with open(path, 'wb') as file:
         pickle.dump(log_best, file)
+    return log_best
 
 
 if __name__ == '__main__':

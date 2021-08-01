@@ -29,7 +29,10 @@ SEED = 123
 _set_seed(SEED)
 
 
-def main(config, tune_config=None):
+def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test_idx=None, k_fold=None):
+
+    assert not cv_active or tune_config is None, "For cross validation, please specifiy ALL params in the main config"
+
     # Conditional inputs depending on the config
     if config['arch']['type'] == 'BaselineModelWoRnnWoAttention':
         import model.baseline_model_woRNN_woAttention as module_arch
@@ -57,16 +60,34 @@ def main(config, tune_config=None):
     else:
         import evaluation.single_label_metrics as module_metric
 
-    logger = config.get_logger('test')
+    if not cv_active:
+        logger = config.get_logger('test')
+    else:
+        logger = config.get_logger('test_fold_' + str(k_fold))
 
-    # setup data_loader instances
-    data_loader = getattr(module_data, config['data_loader']['type'])(
-        config['data_loader']['test_dir'],
-        batch_size=64,
-        shuffle=False,
-        validation_split=0.0,
-        num_workers=4
-    )
+    if not cv_active:
+        # setup data_loader instances
+        data_loader = getattr(module_data, config['data_loader']['type'])(
+            config['data_loader']['test_dir'],
+            batch_size=64,
+            shuffle=False,
+            validation_split=0.0,
+            num_workers=4,
+            cross_valid=False,
+            test_idx=None,
+            cv_train_mode=False
+        )
+    else:
+        data_loader = getattr(module_data, config['data_loader']['type'])(
+            cv_data_dir,
+            batch_size=64,
+            shuffle=False,
+            validation_split=0.0,
+            num_workers=4,
+            cross_valid=True,
+            test_idx=test_idx,
+            cv_train_mode=False
+        )
 
     # build model architecture
     if tune_config is None:
@@ -506,4 +527,4 @@ if __name__ == '__main__':
             tune_config = json.load(file)
     else:
         tune_config = None
-    main(config, tune_config)
+    test_model(config, tune_config)

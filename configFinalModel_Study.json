@@ -1,29 +1,12 @@
 {
   "name": "FinalModel",
-  "run_details": "_cross_validation",
+  "run_details": "_experiment_3",
   "n_gpu": 1,
   "arch": {
     "type": "FinalModel",
     "args": {
       "apply_final_activation": false,
-      "multi_label_training": true,
-
-      "down_sample": "conv",
-      "vary_channels": true,
-      "pos_skip": "all",
-
-      "norm_before_act": true,
-      "norm_pos": "all",
-      "norm_type": "BN",
-
-      "use_pre_activation_design": true,
-      "use_pre_conv": true,
-      "pre_conv_kernel": 16,
-
-      "discard_FC_before_MH": false,
-      "dropout_attention": 0.4,
-      "gru_units": 24,
-      "heads": 32
+      "multi_label_training": true
     }
   },
   "data_loader": {
@@ -34,7 +17,7 @@
       "data_dir": "data/CinC_CPSC/cross_valid/"
     },
     "args": {
-      "data_dir": "",
+      "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000",
       "batch_size": 64,
       "shuffle": true,
       "validation_split": 0.25,
@@ -89,13 +72,10 @@
   },
   "lr_scheduler": {
     "active": false,
-    "type": "ReduceLROnPlateau",
+    "type": "StepLR",
     "args": {
-      "mode": "max",
-      "factor": 0.1,
-      "patience": 10,
-      "threshold": 0.0001,
-      "threshold_mode": "rel"
+      "step_size": 50,
+      "gamma": 0.1
     }
   },
   "trainer": {

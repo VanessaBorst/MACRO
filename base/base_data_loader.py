@@ -46,6 +46,10 @@ class BaseDataLoader(DataLoader):
 
         else:
             if cv_train_mode:
+                self.batch_size = batch_size
+
+                np.random.seed(0)
+
                 train_sampler = SubsetRandomSampler(train_idx)
                 valid_sampler = SubsetRandomSampler(valid_idx)
 

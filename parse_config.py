@@ -21,7 +21,7 @@ class ConfigParser:
         """
         # load config file and apply modification
         self._config = _update_config(config, modification)
-        self.resume = resume
+        self._resume = resume
         self._use_tune = use_tune
 
         # set save_dir where trained model and log will be saved.
@@ -164,11 +164,11 @@ class ConfigParser:
 
     @property
     def resume(self):
-        return self.resume
+        return self._resume
 
     @resume.setter
-    def save_dir(self, value):
-        self.resume = value
+    def resume(self, value):
+        self._resume = value
 
     @property
     def save_dir(self):

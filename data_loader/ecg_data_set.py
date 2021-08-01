@@ -98,17 +98,17 @@ class ECGDataset(Dataset):
         :return:  Pos weights, one weight per class
 
         """
-        if not cross_valid_active:
-            if mode == "test" and "test" not in self._input_dir:
-                # Catch the case where the model is tested on the validation set
-                file_name = "data_loader/pos_weights_ml_valid.p"
-            else:
-                file_name = "data_loader/pos_weights_ml_" + mode + ".p"
+        i_o_active = not cross_valid_active
+        if mode == "test" and "test" not in self._input_dir:
+            # Catch the case where the model is tested on the validation set
+            file_name = "data_loader/pos_weights_ml_valid.p"
+        else:
+            file_name = "data_loader/pos_weights_ml_" + mode + ".p"
 
-            file_name = os.path.join(get_project_root(), file_name)
+        file_name = os.path.join(get_project_root(), file_name)
 
         # For cross-validation, statistics change from run to run!
-        if not cross_valid_active and os.path.isfile(file_name):
+        if i_o_active and os.path.isfile(file_name):
             with open(file_name, "rb") as file:
                 df = pickle.load(file)
             # inverse_class_freqs = df['Inverse_class_freq']
@@ -122,7 +122,7 @@ class ECGDataset(Dataset):
 
             # Dump the record names to pickle to ensure they are the same between VMs
             project_root = get_project_root()
-            if mode is not None:
+            if mode is not None and i_o_active:
                 with open(os.path.join(project_root, 'data_loader', 'Record_names_' + str(mode)) + ".p", 'wb+') as file:
                     pickle.dump(record_names, file)
 
@@ -140,8 +140,9 @@ class ECGDataset(Dataset):
             # If num_pos_samples can be 0, a dummy term needs to be added to it to avoid dividing by 0
             # df["ratio_neg_to_pos"] = df.num_neg_samples / (df.num_pos_samples + 1e-5)
 
-            with open(Path(file_name), "wb") as file:
-                pickle.dump(df, file)
+            if i_o_active:
+                with open(Path(file_name), "wb") as file:
+                    pickle.dump(df, file)
 
         # Return the ratio as as ndarray
         return df["ratio_neg_to_pos"].values
@@ -154,17 +155,18 @@ class ECGDataset(Dataset):
         :param cross_valid_active: Set to True during cross validation to ensure weights are re-calculated each run
         :return:  Inverse class frequencies
         """
-        if not cross_valid_active:
-            if mode == "test" and "test" not in self._input_dir:
-                # Catch the case where the model is tested on the validation set
-                file_name = "data_loader/class_freq_ml_valid.p" if multi_label_training \
-                    else "data_loader/class_freq_sl_valid.p"
-            else:
-                file_name = "data_loader/class_freq_ml_" + mode + ".p" if multi_label_training \
-                    else "data_loader/class_freq_sl_" + mode + ".p"
-            file_name = os.path.join(get_project_root(), file_name)
+        i_o_active = not cross_valid_active
 
-        if not cross_valid_active and os.path.isfile(file_name):
+        if mode == "test" and "test" not in self._input_dir:
+            # Catch the case where the model is tested on the validation set
+            file_name = "data_loader/class_freq_ml_valid.p" if multi_label_training \
+                else "data_loader/class_freq_sl_valid.p"
+        else:
+            file_name = "data_loader/class_freq_ml_" + mode + ".p" if multi_label_training \
+                else "data_loader/class_freq_sl_" + mode + ".p"
+        file_name = os.path.join(get_project_root(), file_name)
+
+        if i_o_active and os.path.isfile(file_name):
             with open(file_name, "rb") as file:
                 df = pickle.load(file)
             inverse_class_freqs = df['Inverse_class_freq']
@@ -192,8 +194,9 @@ class ECGDataset(Dataset):
             df = pd.concat([class_freqs, inverse_class_freqs], axis=1)
             df.columns = ['Class_freq', 'Inverse_class_freq']
 
-            with open(Path(file_name), "wb") as file:
-                pickle.dump(df, file)
+            if i_o_active:
+                with open(Path(file_name), "wb") as file:
+                    pickle.dump(df, file)
 
         # Return them as as ndarray
         return inverse_class_freqs.values

@@ -53,7 +53,7 @@ class BaseTrainer:
         self.start_epoch = 1
 
         if not self._use_tune:
-            self.checkpoint_dir = config.save_dir
+            self.checkpoint_dir = Path(config.save_dir)
         else:
             self.checkpoint_dir = Path(tune.get_trial_dir())
 

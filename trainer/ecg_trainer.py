@@ -277,7 +277,8 @@ class ECGTrainer(BaseTrainer):
             # log.update(**{'val_' + k: v for k, v in val_log.items()})  # Extends the dict by the val loss and metrics
 
         if self.lr_scheduler is not None:
-            self.lr_scheduler.step()
+            # self.lr_scheduler.step()
+            self.lr_scheduler.step(valid_log['mean']["val_weighted_sk_f1"])
 
         log = pd.concat([train_log, valid_log]) if self.do_validation else train_log
         summary = "Training summary:\n" + summary_str + "\nValidation summary:\n" + valid_summary_str \

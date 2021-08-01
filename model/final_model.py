@@ -11,12 +11,14 @@ from utils import plot_record_from_np_array
 class FinalModel(BaseModel):
     def __init__(self, apply_final_activation, multi_label_training, input_channel=12, num_classes=9,
                  drop_out_first_conv_blocks=0.2, drop_out_second_conv_blocks=0.2,
+                 drop_out_gru=0.2, dropout_last_bn=0.2,
                  mid_kernel_size_first_conv_blocks=3, mid_kernel_size_second_conv_blocks=3,
                  last_kernel_size_first_conv_blocks=24, last_kernel_size_second_conv_blocks=48,
                  stride_first_conv_blocks=2, stride_second_conv_blocks=2,
                  down_sample="conv", vary_channels=True, pos_skip="not_last",
                  norm_type="BN", norm_pos="all", norm_before_act=True,
                  use_pre_activation_design=True, use_pre_conv=True,
+                 pre_conv_kernel=16,
                  gru_units=12, dropout_attention=0.2, heads=3,
                  discard_FC_before_MH=False):
         """
@@ -62,13 +64,13 @@ class FinalModel(BaseModel):
                 starting_norm = nn.InstanceNorm1d(num_features=input_channel, affine=True)
             if norm_before_act:
                 self._starting_conv = nn.Sequential(
-                    nn.Conv1d(in_channels=input_channel, out_channels=input_channel, kernel_size=16),
+                    nn.Conv1d(in_channels=input_channel, out_channels=input_channel, kernel_size=pre_conv_kernel),
                     starting_norm,
                     nn.LeakyReLU(0.3)
                 )
             else:
                 self._starting_conv = nn.Sequential(
-                    nn.Conv1d(in_channels=input_channel, out_channels=input_channel, kernel_size=16),
+                    nn.Conv1d(in_channels=input_channel, out_channels=input_channel, kernel_size=pre_conv_kernel),
                     nn.LeakyReLU(0.3),
                     starting_norm
                 )
@@ -218,7 +220,7 @@ class FinalModel(BaseModel):
 
         self._biGru_activation_do = nn.Sequential(
             nn.LeakyReLU(0.3),
-            nn.Dropout(0.2)
+            nn.Dropout(drop_out_gru)
         )
 
         self._multi_head_contextual_attention = MultiHeadContextualAttention(gru_dimension=gru_units,
@@ -230,7 +232,7 @@ class FinalModel(BaseModel):
             # The batch normalization layer has 24*2=48 trainable and 24*2=48 non-trainable parameters
             nn.BatchNorm1d(gru_units * 2),
             nn.LeakyReLU(0.3),
-            nn.Dropout(0.2)
+            nn.Dropout(dropout_last_bn)
         )
 
         self._fcn = nn.Linear(in_features=gru_units * 2, out_features=num_classes)
