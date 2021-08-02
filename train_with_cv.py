@@ -1,5 +1,6 @@
 import argparse
 import collections
+import copy
 
 import time
 import os
@@ -8,9 +9,7 @@ import random
 import pandas as pd
 from pathlib import Path
 
-
 import numpy as np
-
 
 from data_loader.ecg_data_set import ECGDataset
 from logger import update_logging_setup_for_tune_or_cross_valid
@@ -42,7 +41,6 @@ def _set_seed(SEED):
 SEED = 123
 _set_seed(SEED)
 
-
 def test_fold(config, data_dir, test_idx, k_fold):
     df_class_wise_results, df_single_metric_results = test_model(config, tune_config=None, cv_active=True,
                                                                  cv_data_dir=data_dir, test_idx=test_idx, k_fold=k_fold)
@@ -65,7 +63,8 @@ def run_cross_validation(config):
     idx_full = np.arange(n_samples)
     np.random.shuffle(idx_full)
 
-    # Get the main dir for logging and saving checkpoints
+    # Get the main config and the dirs for logging and saving checkpoints
+    base_config = copy.deepcopy(config)
     base_log_dir = config.log_dir
     base_save_dir = config.save_dir
 
@@ -114,23 +113,20 @@ def run_cross_validation(config):
         print("Valid Set: " + str(valid_fold_index) + ", Test Set: " + str(test_fold_index))
 
         # Adapt the log and save paths for the current fold
-        config.save_dir = Path(os.path.join(base_save_dir, "Fold_" + str(k+1)))
-        config.log_dir = Path(os.path.join(base_log_dir, "Fold_" + str(k+1)))
+        config.save_dir = Path(os.path.join(base_save_dir, "Fold_" + str(k + 1)))
+        config.log_dir = Path(os.path.join(base_log_dir, "Fold_" + str(k + 1)))
         ensure_dir(config.save_dir)
         ensure_dir(config.log_dir)
         update_logging_setup_for_tune_or_cross_valid(config.log_dir)
 
-
-
         # Write record names to pickle for reproducing single folds
         dict = {
-            "train_records" : np.array(dataset.records)[train_idx],
-            "valid_records" : np.array(dataset.records)[valid_idx],
-            "test_records" : np.array(dataset.records)[test_idx]
+            "train_records": np.array(dataset.records)[train_idx],
+            "valid_records": np.array(dataset.records)[valid_idx],
+            "test_records": np.array(dataset.records)[test_idx]
         }
-        with open(os.path.join(config.save_dir,"data_split.csv"),"w") as file:
+        with open(os.path.join(config.save_dir, "data_split.csv"), "w") as file:
             pd.DataFrame.from_dict(data=dict, orient='index').to_csv(file, header=False)
-
 
         # Do the training and add the fold results to the df
         fold_train_model_best = train_fold(config, train_idx=train_idx, valid_idx=valid_idx, k_fold=k)
@@ -138,7 +134,7 @@ def run_cross_validation(config):
 
         # Do the testing and add the fold results to the dfs
         config.resume = Path(os.path.join(config.save_dir, "model_best.pth"))
-        config.test_output_dir = Path(os.path.join(config.resume.parent, 'test_output_fold_' + str(k)))
+        config.test_output_dir = Path(os.path.join(config.resume.parent, 'test_output_fold_' + str(k + 1)))
         ensure_dir(config.test_output_dir)
         fold_eval_class_wise, fold_eval_single_metrics = test_fold(config, data_dir=data_dir, test_idx=test_idx,
                                                                    k_fold=k)
@@ -150,9 +146,10 @@ def run_cross_validation(config):
         pd_series.name = folds[k]
         test_results_single_metrics = test_results_single_metrics.append(pd_series)
 
-        # Update the indices
+        # Update the indices and reset the config (including resume!)
         valid_fold_index = (valid_fold_index + 1) % (k_fold)
         test_fold_index = (test_fold_index + 1) % (k_fold)
+        config = copy.deepcopy(base_config)
 
     # Summarize the results of the cross validation and write everything to files
     # --------------------------- Test Class-Wise Metrics ---------------------------

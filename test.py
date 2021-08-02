@@ -75,7 +75,8 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
             num_workers=4,
             cross_valid=False,
             test_idx=None,
-            cv_train_mode=False
+            cv_train_mode=False,
+            fold_id=None
         )
     else:
         data_loader = getattr(module_data, config['data_loader']['type'])(
@@ -86,7 +87,8 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
             num_workers=4,
             cross_valid=True,
             test_idx=test_idx,
-            cv_train_mode=False
+            cv_train_mode=False,
+            fold_id=k_fold
         )
 
     # build model architecture

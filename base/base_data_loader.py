@@ -1,7 +1,12 @@
 import numpy as np
+import os
+
+import random
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 from torch.utils.data.sampler import SubsetRandomSampler
+
+from utils import get_project_root
 
 
 class BaseDataLoader(DataLoader):
@@ -11,7 +16,7 @@ class BaseDataLoader(DataLoader):
     """
 
     def __init__(self, dataset, batch_size, shuffle, validation_split=None, num_workers=1, pin_memory=False,
-                 cross_valid=False, train_idx=None, valid_idx=None, test_idx=None, cv_train_mode=True,
+                 cross_valid=False, train_idx=None, valid_idx=None, test_idx=None, cv_train_mode=True, fold_id=None,
                  collate_fn=default_collate,
                  single_batch=False):
         """
@@ -36,7 +41,7 @@ class BaseDataLoader(DataLoader):
                 idx_full = np.arange(self.n_samples)
                 np.random.shuffle(idx_full)
                 # Use only the number of samples contained in one batch and try to overfit them
-                num_samples = batch_size if not batch_size % 2 == 1 else batch_size-1
+                num_samples = batch_size if not batch_size % 2 == 1 else batch_size - 1
                 self.sampler = SubsetRandomSampler(idx_full[:num_samples])
                 # Set the new batch_size to 2 to update the gradient after each two samples
                 self.batch_size = 2
@@ -52,6 +57,11 @@ class BaseDataLoader(DataLoader):
 
                 train_sampler = SubsetRandomSampler(train_idx)
                 valid_sampler = SubsetRandomSampler(valid_idx)
+                # Write it to file for reproducibility
+                path = os.path.join(get_project_root(), "cross_fold_log",
+                                    "cross_validation_valid_" + str(fold_id+1) + ".txt")
+                with open(path, "w") as file:
+                    np.savetxt(file, valid_idx.astype(int), fmt='%i', delimiter=",")
 
                 # turn off shuffle option which is mutually exclusive with sampler
                 self.shuffle = False
@@ -63,6 +73,11 @@ class BaseDataLoader(DataLoader):
                 self.batch_size = batch_size
 
                 test_sampler = SubsetRandomSampler(test_idx)
+                # Write it to file for reproducibility
+                path = os.path.join(get_project_root(), "cross_fold_log",
+                                    "cross_validation_test_" + str(fold_id+1) + ".txt")
+                with open(path, "w") as file:
+                    np.savetxt(file, test_idx.astype(int), fmt='%i', delimiter=",")
 
                 # turn off shuffle option which is mutually exclusive with sampler
                 self.shuffle = False

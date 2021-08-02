@@ -784,6 +784,7 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
         # Setup data_loader instances for current the cross validation run
         data_loader = config.init_obj('data_loader', module_data_loader,
                                       cross_valid=True, train_idx=train_idx, valid_idx=valid_idx, cv_train_mode=True,
+                                      fold_id=k_fold,
                                       single_batch=False)
         valid_data_loader = data_loader.split_validation()
     else:
