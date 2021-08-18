@@ -9,13 +9,14 @@ from matplotlib import pyplot as plt
 
 from utils import get_project_root
 
-path = "savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/tune_run_1"
-select_TOP_x = 5 #6
-file_name="experiment_3_1_with_FC"
+# path = "savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/0810_215735_ml_bs64_rerun_100821_noFC"
+# path = "savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/0810_215444_ml_bs64_rerun_100821_withFC"
+# select_TOP_x = 5 #6
+# file_name="experiment_3_1_with_FC_rerun"
 
-# path = "savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/tune_run_2_additional_FC_discarded"
-# select_TOP_x = 5
-# file_name="experiment_3_2_no_FC"
+path = "savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/tune_run_2_additional_FC_discarded"
+select_TOP_x = 5
+file_name="experiment_3_2_no_FC"
 
 df = pd.DataFrame()
 for run in os.listdir(path):

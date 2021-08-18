@@ -2,7 +2,7 @@
 
 source venv/bin/activate
 
-REL_PATH="savedVM/models/CPSC_BaselineModel/lr_10e-3"
+REL_PATH="savedVM_v2/models/FinalModel/manual_runs/"
 
 for dir in $(find $REL_PATH -mindepth 1 -maxdepth 1 -type d )
 do

@@ -87,20 +87,20 @@ class MultiHeadAttention(nn.Module):
         Parameters
         ----------
         query:
-            Input tensor with shape (batch_size, K, d_model) used to compute queries.
+            Input tensor with shape (batch_size, 1, d_model) used to compute queries.
         key:
-            Input tensor with shape (batch_size, K, d_model) used to compute keys.
+            Input tensor with shape (batch_size, T, d_model) used to compute keys.
         value:
-            Input tensor with shape (batch_size, K, d_model) used to compute values.
+            Input tensor with shape (batch_size, T, d_model) used to compute values.
         mask:
             Mask to apply on scores before computing attention.
             One of ``'subsequent'``, None. Default is None.
 
         Returns
         -------
-            Self attention tensor with shape (batch_size, K, d_model).
+            MH attention tensor with shape (batch_size, 1, d_model).
         """
-        K = key.shape[1]
+        K = key.shape[2]        #shape[1] corresponds to T, shape[2] corresponds to 2x GRU cells
 
         # Compute Q, K and V, concatenate heads on batch dimension
         queries = torch.cat(self._W_q(query).chunk(self._h, dim=-1), dim=0)

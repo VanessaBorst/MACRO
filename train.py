@@ -156,11 +156,11 @@ def tuning_params(name):
         }
     elif name == "BaselineModelWithSkipConnectionsAndNormV2":
         return {
-            "down_sample": tune.grid_search(["conv", "max_pool"]),
+            "down_sample": "conv", #tune.grid_search(["conv", "max_pool"]),
             "vary_channels": True,
-            "pos_skip": tune.grid_search(["all", "not_last", "not_first"]),
-            "norm_type": tune.grid_search(["BN", "IN", "LN"]),
-            "norm_pos": tune.grid_search(["all", "last"])
+            "pos_skip": "not_first",  #tune.grid_search(["all", "not_last", "not_first"]),
+            "norm_type": "BN", #tune.grid_search(["BN", "IN", "LN"]),
+            "norm_pos": "all" # tune.grid_search(["all", "last"])
             # Tested TOP3 from first experiment, i.e., the following:
             # Conv + True + not_last,
             # MaxPool + True + all,
@@ -208,8 +208,24 @@ def tuning_params(name):
         #     "gru_units": tune.grid_search([12, 18, 24]),  # See graphical visualization and TOP 5 Table
         #     "discard_FC_before_MH": False
         # }
+        #
+        # # Variant without additional FC for Attention
+        # return {
+        #     "down_sample": "conv",
+        #     "vary_channels": True,
+        #     "pos_skip": "all",
+        #     "norm_type": "BN",
+        #     "norm_pos": "all",
+        #     "norm_before_act": True,
+        #     "use_pre_activation_design": True, # tune.grid_search([True, False]),
+        #     "use_pre_conv": True,  # only has a meaning when used with pre-activation design
+        #     "dropout_attention": tune.grid_search([0.3, 0.4]),  # Majority in TOP5
+        #     "heads": tune.grid_search([5, 8, 12, 16]),    # Runs mit 3 und 32 bis auf eine Ausnahme nicht gut
+        #     "gru_units": tune.grid_search([24, 28, 32]),    # See graphical visualization
+        #     "discard_FC_before_MH": True
+        # }
 
-        # Variant without additional FC for Attention
+        #Rerun without FC
         return {
             "down_sample": "conv",
             "vary_channels": True,
@@ -217,13 +233,29 @@ def tuning_params(name):
             "norm_type": "BN",
             "norm_pos": "all",
             "norm_before_act": True,
-            "use_pre_activation_design": tune.grid_search([True, False]),
+            "use_pre_activation_design": True, # tune.grid_search([True, False]),
             "use_pre_conv": True,  # only has a meaning when used with pre-activation design
-            "dropout_attention": tune.grid_search([0.3, 0.4]),  # Majority in TOP5
-            "heads": tune.grid_search([5, 8, 12, 16]),    # Runs mit 3 und 32 bis auf eine Ausnahme nicht gut
-            "gru_units": tune.grid_search([24, 28, 32]),    # See graphical visualization
+            "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
+            "heads": 32, #tune.grid_search([3, 8, 32]),      # See visualization, 5 and 16 do not work well
+            "gru_units": 32, #tune.grid_search([12, 24, 32]), # Eventually add 18
             "discard_FC_before_MH": True
         }
+
+        # # Rerun with FC
+        # return {
+        #     "down_sample": "conv",
+        #     "vary_channels": True,
+        #     "pos_skip": "all",
+        #     "norm_type": "BN",
+        #     "norm_pos": "all",
+        #     "norm_before_act": True,
+        #     "use_pre_activation_design": True,  # tune.grid_search([True, False]),
+        #     "use_pre_conv": True,  # only has a meaning when used with pre-activation design
+        #     "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
+        #     "heads": tune.grid_search([3, 8, 16, 32]),  # See visualization, 5 does not work well in comparison
+        #     "gru_units": tune.grid_search([12, 24, 32]),  # Eventually add 18
+        #     "discard_FC_before_MH": False
+        # }
     else:
         return None
 

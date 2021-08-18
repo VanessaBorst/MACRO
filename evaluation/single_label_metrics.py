@@ -14,7 +14,7 @@ from sklearn.metrics import confusion_matrix, multilabel_confusion_matrix, \
 #       => Biases the classes towards the most populated class
 #       => Micro-Average Precision and Recall are the same values, therefore the MicroAverage F1-Score is also the same
 #           (and corresponds to the accuracy when all classes are considered)
-from torchmetrics import F1, Precision, Accuracy, Recall
+from torchmetrics import F1, Precision, Accuracy, Recall, ROC
 from torchmetrics.classification.auroc import AUROC
 
 
@@ -515,7 +515,7 @@ def torch_roc(output, target, log_probs, logits, labels):
 
         assert probs.shape[0] == len(target)
         # returns a tuple (fpr, tpr, thresholds)
-        auroc = AUROC(num_classes=len(labels))
+        auroc = ROC(num_classes=len(labels))
         return auroc(probs, target)
 
 

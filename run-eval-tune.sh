@@ -2,7 +2,7 @@
 
 source venv/bin/activate
 
-REL_PATH="savedVM_v2/models/FinalModel/experiment_3_with_FC"
+REL_PATH="savedVM_v2/models/FinalModel/experiment_3_rerun_noFC"
 
 for dir in $(find $REL_PATH -mindepth 1 -maxdepth 1 -type d )
 do

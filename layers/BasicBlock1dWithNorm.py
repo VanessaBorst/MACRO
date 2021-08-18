@@ -3,13 +3,14 @@ import math
 import torch.nn as nn
 from torchinfo import summary
 
+from layers.CBAM import CBAM
 from layers.LayerUtils import calc_same_padding_for_stride_one
 
 
 class BasicBlock1dWithNorm(nn.Module):
 
     def __init__(self, in_channels, out_channels, mid_kernels_size, last_kernel_size, stride, down_sample, drop_out,
-                 norm_type, norm_pos, skips_active=True, input_seq_len=None):
+                 norm_type, norm_pos, skips_active=True, input_seq_len=None, cbam_active=False):
         """
         The stride is only applied in the last conv layer and can be used for size reduction
         If the resulting number of channel differs, it is done within the first Conv1D and kept for the further ones
@@ -47,6 +48,8 @@ class BasicBlock1dWithNorm(nn.Module):
         self._norm_type = norm_type
         self._norm_pos = norm_pos
         self._input_seq_len = input_seq_len
+
+        self._cbam_active = cbam_active
 
         # If stride is 1 and the kernel_size uneven, an additional one-sided 0 is needed to keep/half dimension
         self._one_sided_padding = nn.ConstantPad1d((0, 1), 0)
@@ -113,6 +116,9 @@ class BasicBlock1dWithNorm(nn.Module):
             elif down_sample == 'avg_pool':
                 self._downsample = self._avg_pooled_downsample(stride=stride)
                 self._poooled_downsample = True
+
+        if cbam_active:
+            self.cbam = CBAM(out_channels, 6)
 
     def _convolutional_downsample(self, stride):
         # The block is potentially changing the channel amount
@@ -230,6 +236,8 @@ class BasicBlock1dWithNorm(nn.Module):
                     if residual.shape[2] % 2 != 0:
                         residual = nn.ConstantPad1d((1, 1), 0)(residual)
                 residual = self._downsample(residual)
+            if self._cbam_active:
+                out = self.cbam(out)
             out += residual
 
         # Import: Move the Leaky RELU part AFTER the addition as in ResNet!!!

@@ -118,7 +118,7 @@ class BaselineModelWithSkipConnectionsAndNormV2PreActivation(BaseModel):
                                                                           norm_before_act=norm_before_act)
         elif pos_skip == "not_last":
             # Use the normal block without pre-activation and deactivate the skip connections
-            # Attention: This must be handled in the forward, since the normal block exspects a single
+            # Attention: This must be handled in the forward, since the normal block expects a single
             # input value, but the pre-activation block output a tuple (out, residuals)
             self._second_conv_block_1 = BasicBlock1dWithNorm(in_channels=out_channel_block_4,
                                                              out_channels=out_channel_block_5,

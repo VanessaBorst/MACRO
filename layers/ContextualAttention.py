@@ -165,5 +165,5 @@ class MultiHeadContextualAttention(nn.Module):
 
 
 if __name__ == "__main__":
-    model = MultiHeadContextualAttention()
-    summary(model, input_size=(2, 2250, 24), col_names=["input_size", "output_size", "num_params"])
+    model = MultiHeadContextualAttention(gru_dimension=12, heads=8, discard_FC_before_MH=False)
+    summary(model, input_size=(64, 2250, 24), col_names=["input_size", "output_size", "num_params"])

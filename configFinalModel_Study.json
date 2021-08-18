@@ -1,6 +1,6 @@
 {
   "name": "FinalModel",
-  "run_details": "_experiment_3",
+  "run_details": "_experiment_3_rerun",
   "n_gpu": 1,
   "arch": {
     "type": "FinalModel",
@@ -12,9 +12,7 @@
   "data_loader": {
     "type": "ECGDataLoader",
     "cross_valid": {
-      "enabled": true,
-      "k_fold": 10,
-      "data_dir": "data/CinC_CPSC/cross_valid/"
+      "enabled": false
     },
     "args": {
       "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000",

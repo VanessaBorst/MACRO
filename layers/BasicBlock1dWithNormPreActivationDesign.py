@@ -2,13 +2,14 @@ import torch.cuda
 import torch.nn as nn
 from torchinfo import summary
 
+from layers.CBAM import CBAM
 from layers.LayerUtils import calc_same_padding_for_stride_one
 
 
 class BasicBlock1dWithNormPreactivation(nn.Module):
 
     def __init__(self, in_channels, out_channels, mid_kernels_size, last_kernel_size, stride, down_sample, drop_out,
-                 norm_type, norm_pos, norm_before_act=True):
+                 norm_type, norm_pos, norm_before_act=True, cbam_active=False):
         """
         The stride is only applied in the last conv layer and can be used for size reduction
         If the resulting number of channel differs, it is done within the first Conv1D and kept for the further ones
@@ -38,6 +39,8 @@ class BasicBlock1dWithNormPreactivation(nn.Module):
         self._norm_type = norm_type
         self._norm_pos = norm_pos
         self._norm_before_act = norm_before_act
+
+        self._cbam_active=cbam_active
 
         # If stride is 1 and the kernel_size uneven, an additional one-sided 0 is needed to keep/half dimension
         self._one_sided_padding = nn.ConstantPad1d((0, 1), 0)
@@ -96,6 +99,13 @@ class BasicBlock1dWithNormPreactivation(nn.Module):
         elif down_sample == 'avg_pool':
             self._downsample = self._avg_pooled_downsample(down_sample=stride)
             self._poooled_downsample = True
+
+        # TODO: Add cases for other normalization types
+        if cbam_active:
+            self.cbam = nn.Sequential(
+                nn.BatchNorm1d(num_features=out_channels),
+                CBAM(out_channels, 6)
+            )
 
     def _convolutional_downsample(self, down_sample):
         # The block is potentially changing the channel amount
@@ -186,6 +196,10 @@ class BasicBlock1dWithNormPreactivation(nn.Module):
                 if residual.shape[2] % 2 != 0:
                     residual = nn.ConstantPad1d((1, 1), 0)(residual)
             residual = self._downsample(residual)
+
+        if self._cbam_active:
+            # TODO: Check placement!
+            out = self.cbam(out)
 
         out += residual
         residual = out

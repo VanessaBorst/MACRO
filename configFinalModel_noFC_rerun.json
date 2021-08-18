@@ -1,18 +1,40 @@
 {
-  "name": "CPSC_BaselineWithMultiHeadAttention_uBCE_F1",
-  "run_details": "_rerun_100821_noFC",
+  "name": "FinalModel",
+  "run_details": "cross_validation_rerun_withFC_0.2_32_16",
   "n_gpu": 1,
   "arch": {
-    "type": "BaselineModelWithMHAttention",
+    "type": "FinalModel",
     "args": {
       "apply_final_activation": false,
-      "multi_label_training": true
+      "multi_label_training": true,
+
+      "down_sample": "conv",
+      "vary_channels": true,
+      "pos_skip": "all",
+
+      "norm_before_act": true,
+      "norm_pos": "all",
+      "norm_type": "BN",
+
+      "use_pre_activation_design": true,
+      "use_pre_conv": true,
+      "pre_conv_kernel": 16,
+
+      "discard_FC_before_MH": true,
+      "dropout_attention": 0.2,
+      "gru_units": 24,
+      "heads": 8
     }
   },
   "data_loader": {
     "type": "ECGDataLoader",
+    "cross_valid": {
+      "enabled": true,
+      "k_fold": 10,
+      "data_dir": "data/CinC_CPSC/cross_valid/"
+    },
     "args": {
-      "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000",
+      "data_dir": "",
       "batch_size": 64,
       "shuffle": true,
       "validation_split": 0.25,
@@ -41,7 +63,8 @@
       },
       "per_epoch": [
         "cpsc_score",
-        "weighted_sk_f1"
+        "weighted_sk_f1",
+        "macro_sk_f1"
       ],
       "per_epoch_class_wise": [
         "class_wise_sk_f1"
@@ -53,7 +76,8 @@
       },
       "per_epoch": [
         "cpsc_score",
-        "weighted_sk_f1"
+        "weighted_sk_f1",
+        "macro_sk_f1"
       ],
       "per_epoch_class_wise": [
         "class_wise_sk_f1"
@@ -67,10 +91,13 @@
   },
   "lr_scheduler": {
     "active": false,
-    "type": "StepLR",
+    "type": "ReduceLROnPlateau",
     "args": {
-      "step_size": 50,
-      "gamma": 0.1
+      "mode": "max",
+      "factor": 0.1,
+      "patience": 10,
+      "threshold": 0.0001,
+      "threshold_mode": "rel"
     }
   },
   "trainer": {
@@ -78,7 +105,7 @@
     "save_dir": "savedVM_v2/",
     "save_period": 1,
     "verbosity": 2,
-    "monitor": "max val_weighted_sk_f1",
+    "monitor": "max val_macro_sk_f1",
     "early_stop": 20,
     "tensorboard": true,
     "try_run": false,
