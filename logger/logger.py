@@ -59,3 +59,7 @@ def setup_logging(save_dir, log_config_path='logger/logger_config.json', default
     else:
         print("Warning: logging configuration file is not found in {}.".format(log_config_path))
         logging.basicConfig(level=default_level)
+
+
+def update_logging_setup_for_tune_or_cross_valid(new_save_path):
+    setup_logging(new_save_path)

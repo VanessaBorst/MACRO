@@ -49,11 +49,13 @@ def score(answers_csv_path, reference_csv_path):
     with open(answers_csv_path) as f:
         reader = csv.DictReader(f)
         for row in reader:
+            # They read one prediction
             answers.setdefault(row['Recording'], []).append(row['Result'])
         f.close()
     with open(reference_csv_path) as ref:
         reader = csv.DictReader(ref)
         for row in reader:
+            # They read up to three labels
             reference.setdefault(row['Recording'], []).append([row['First_label'], row['Second_label'], row['Third_label']])
         ref.close()
 
@@ -66,6 +68,7 @@ def score(answers_csv_path, reference_csv_path):
                 item = 0
             value.append(np.int(item))
 
+        # If the predicted label is one of the up to three annotations, it is considered correct for the predicted class
         if predict in value:
             A[predict-1][predict-1] += 1
         else:

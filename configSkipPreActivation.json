@@ -1,23 +1,23 @@
 {
-  "name": "CPSC_BaselineModel",
-  "run_details": "_weightedCE",
+  "name": "BaselineModelWithSkipConnectionsAndNormV2PreActivation",
+  "run_details": "experiment_1_3_no_pre_conv_before_blocks",
   "n_gpu": 1,
   "arch": {
-    "type": "BaselineModel",
+    "type": "BaselineModelWithSkipConnectionsAndNormV2PreActivation",
     "args": {
       "apply_final_activation": false,
-      "multi_label_training": false
+      "multi_label_training": true
     }
   },
   "data_loader": {
     "type": "ECGDataLoader",
     "args": {
       "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000",
-      "batch_size": 8,
+      "batch_size": 64,
       "shuffle": true,
       "validation_split": 0.25,
       "num_workers": 4,
-      "pin_memory": true
+      "pin_memory": false
     },
     "overfit_single_batch": false,
     "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/eq_len_72000"
@@ -31,8 +31,8 @@
     }
   },
   "loss": {
-    "type": "balanced_cross_entropy",
-    "add_args": ["class_weights", "device"]
+    "type": "BCE_with_logits",
+    "add_args": []
   },
   "metrics": {
     "sl": {
@@ -74,11 +74,11 @@
     }
   },
   "trainer": {
-    "epochs": 500,
-    "save_dir": "savedVMSkips/",
+    "epochs": 300,
+    "save_dir": "savedVM_v2/",
     "save_period": 1,
     "verbosity": 2,
-    "monitor": "max val_cpsc_F1",
+    "monitor": "max val_weighted_sk_f1",
     "early_stop": 20,
     "tensorboard": true,
     "try_run": false,

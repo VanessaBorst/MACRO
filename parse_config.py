@@ -10,7 +10,7 @@ from utils import get_project_root, read_json, write_json
 
 
 class ConfigParser:
-    def __init__(self, config, resume=None, modification=None, mode=None, run_id=None):
+    def __init__(self, config, resume=None, modification=None, mode=None, use_tune=False, run_id=None):
         """
         class to parse configuration json file. Handles hyperparameters for training, initializations of modules, checkpoint saving
         and logging module.
@@ -21,7 +21,8 @@ class ConfigParser:
         """
         # load config file and apply modification
         self._config = _update_config(config, modification)
-        self.resume = resume
+        self._resume = resume
+        self._use_tune = use_tune
 
         # set save_dir where trained model and log will be saved.
         save_dir = Path(self.config['trainer']['save_dir'])
@@ -67,7 +68,8 @@ class ConfigParser:
         if self._save_dir is not None:
             write_json(self.config, self.save_dir / 'config.json')
 
-        # configure logging module
+        #if not self._use_tune:
+        # configure logging module if tuning is not active, else do it within the train method
         setup_logging(self.log_dir)
         self.log_levels = {
             0: logging.WARNING,
@@ -91,12 +93,16 @@ class ConfigParser:
             os.environ["CUDA_VISIBLE_DEVICES"] = args.device
         if args.resume is not None:
             resume = Path(args.resume)
-            cfg_path = resume.parent / 'config.json'
+            if args.tune:
+                cfg_path = resume.parent.parent / 'config.json'
+            else:
+                cfg_path = resume.parent / 'config.json'
         else:
             msg_no_cfg = "Configuration file need to be specified. Add '-c config.json', for example."
             assert args.config is not None, msg_no_cfg
             resume = None
             cfg_path = Path(os.path.join(get_project_root(), args.config))
+
 
         config = read_json(cfg_path)
         if args.config and resume:
@@ -105,7 +111,7 @@ class ConfigParser:
 
         # parse custom cli options into dictionary
         modification = {opt.target: getattr(args, _get_opt_name(opt.flags)) for opt in options}
-        return cls(config, resume, modification, mode)
+        return cls(config, resume, modification, mode, args.tune)
 
     def init_obj(self, name, module, *args, **kwargs):
         """
@@ -119,7 +125,7 @@ class ConfigParser:
         module_name = self[name]['type']  # e.g., MnistDataLoader
         module_args = dict(self[name]['args'])  # e.g., {'data_dir': 'data/', 'batch_size': 4, ..., 'seq_len': 72000}
         # kwargs, i.e., single_batch for the data_loader
-        assert all([k not in module_args for k in kwargs]), 'Overwriting kwargs given in config file is not allowed'
+        # assert all([k not in module_args for k in kwargs]), 'Overwriting kwargs given in config file is not allowed'
         module_args.update(kwargs)
         # Gets a named attribute (here named "module_name") from an object (here from the given data-loader module)
         return getattr(module, module_name)(*args, **module_args)
@@ -157,16 +163,40 @@ class ConfigParser:
         return self._config
 
     @property
+    def resume(self):
+        return self._resume
+
+    @resume.setter
+    def resume(self, value):
+        self._resume = value
+
+    @property
     def save_dir(self):
         return self._save_dir
+
+    @save_dir.setter
+    def save_dir(self, value):
+        self._save_dir = value
 
     @property
     def log_dir(self):
         return self._log_dir
 
+    @log_dir.setter
+    def log_dir(self, value):
+        self._log_dir = value
+
     @property
     def test_output_dir(self):
         return self._test_output_dir
+
+    @test_output_dir.setter
+    def test_output_dir(self, value):
+        self._test_output_dir = value
+
+    @property
+    def use_tune(self):
+        return self._use_tune
 
     def _do_some_sanity_checks(self):
         if self.config["loss"]["type"] == "BCE_with_logits" or self.config["loss"]["type"] == "balanced_BCE_with_logits":

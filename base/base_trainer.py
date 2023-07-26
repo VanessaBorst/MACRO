@@ -1,19 +1,22 @@
+import os
+import pickle
 import random
 from abc import abstractmethod
+from pathlib import Path
 
 import numpy.random
 import torch
 from numpy import inf
 
 from logger import TensorboardWriter
-
+from ray import tune
 
 class BaseTrainer:
     """
     Base class for all trainers:
     Handles checkpoint saving/resuming, training process logging, and more (including early stopping)
     """
-    def __init__(self, model, criterion, optimizer, config):
+    def __init__(self, model, criterion, optimizer, config, use_tune=False):
         self.config = config
         # create a logger with name "trainer" and the verbosity specified in the config.json
         self.logger = config.get_logger('trainer', config['trainer']['verbosity'])
@@ -32,6 +35,8 @@ class BaseTrainer:
         self.try_run = cfg_trainer['try_run']
         self.profiler_active = cfg_trainer['profiler_active']
 
+        self._use_tune = use_tune
+
         # configuration to monitor model performance and save best
         if self.monitor == 'off':
             self.mnt_mode = 'off'
@@ -47,10 +52,16 @@ class BaseTrainer:
 
         self.start_epoch = 1
 
-        self.checkpoint_dir = config.save_dir
+        if not self._use_tune:
+            self.checkpoint_dir = Path(config.save_dir)
+        else:
+            self.checkpoint_dir = Path(tune.get_trial_dir())
 
-        # setup visualization writer instance                
-        self.writer = TensorboardWriter(config.log_dir, self.logger, cfg_trainer['tensorboard'])
+        if not self._use_tune:
+            # setup visualization writer instance
+            self.writer = TensorboardWriter(config.log_dir, self.logger, cfg_trainer['tensorboard'])
+        else:
+            self.writer = None
 
         if config.resume is not None:
             self._resume_checkpoint(config.resume)
@@ -91,6 +102,14 @@ class BaseTrainer:
                 if improved:
                     self.mnt_best = log_mean[self.mnt_metric]
                     log_best = log_mean
+
+                    if self._use_tune:
+                        # Save in case the training is stopped by a scheduler before return log best,
+                        # which only is returned when the training finishes regularly
+                        path = os.path.join(self.checkpoint_dir, "model_best_metrics.p")
+                        with open(path, 'wb') as file:
+                            pickle.dump(log_best, file)
+
                     not_improved_count = 0
                     best = True
                     epoch_idx_best = epoch
@@ -119,9 +138,6 @@ class BaseTrainer:
         :param save_best: if True, rename the saved checkpoint to 'model_best.pth'
         """
         arch = type(self.model).__name__
-        # TODO: Hier wird nur der Klassenname gespeichert, Code hinter dem Modell muss gespeichert werden,
-        #  da er sich mit der Zeit ändert
-        #  Oder wie Robert: Pro Modell ein Branch und immer darauf arbeiten
         state = {
             'arch': arch,
             'epoch': epoch,
@@ -134,9 +150,15 @@ class BaseTrainer:
             'random_state': random.getstate(),
             'torch_cuda_rng_states': torch.cuda.get_rng_state_all()
         }
-        filename = str(self.checkpoint_dir / 'checkpoint-epoch{}.pth'.format(epoch))
+        if self._use_tune:
+            with tune.checkpoint_dir(step=epoch) as checkpoint_dir:
+                filename = str(os.path.join(checkpoint_dir, 'checkpoint-epoch{}.pth'.format(epoch)))
+        else:
+            filename = str(self.checkpoint_dir / 'checkpoint-epoch{}.pth'.format(epoch))
+
         torch.save(state, filename)
         self.logger.info("Saving checkpoint: {} ...".format(filename))
+
         if save_best:
             best_path = str(self.checkpoint_dir / 'model_best.pth')
             torch.save(state, best_path)

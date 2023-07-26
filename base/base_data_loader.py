@@ -1,7 +1,12 @@
 import numpy as np
+import os
+
+import random
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 from torch.utils.data.sampler import SubsetRandomSampler
+
+from utils import get_project_root
 
 
 class BaseDataLoader(DataLoader):
@@ -10,35 +15,75 @@ class BaseDataLoader(DataLoader):
     Handles batch generation, data shuffling, and validation data splitting.
     """
 
-    def __init__(self, dataset, batch_size, shuffle, validation_split, num_workers, pin_memory, collate_fn=default_collate,
+    def __init__(self, dataset, batch_size, shuffle, validation_split=None, num_workers=1, pin_memory=False,
+                 cross_valid=False, train_idx=None, valid_idx=None, test_idx=None, cv_train_mode=True, fold_id=None,
+                 collate_fn=default_collate,
                  single_batch=False):
         """
         single_batch: If set to True, this reduces the training set to a single batch and turns off the validation set.
         Training on a single batch should quickly overfit and reach accuracy 1.0.
         This is a recommended step for debugging networks, see https://twitter.com/karpathy/status/1013244313327681536
         """
-        self.validation_split = validation_split
-        self.shuffle = shuffle
 
-        self.batch_idx = 0
-        self.batch_size = batch_size
-        self.n_samples = len(dataset)
+        if not cross_valid:
+            self.validation_split = validation_split
+            self.shuffle = shuffle
 
-        np.random.seed(0)
+            self.batch_idx = 0
+            self.batch_size = batch_size
+            self.n_samples = len(dataset)
 
-        if not single_batch:
-            self.sampler, self.valid_sampler = self._split_sampler(self.validation_split)
+            np.random.seed(0)
+
+            if not single_batch:
+                self.sampler, self.valid_sampler = self._split_sampler(self.validation_split)
+            else:
+                idx_full = np.arange(self.n_samples)
+                np.random.shuffle(idx_full)
+                # Use only the number of samples contained in one batch and try to overfit them
+                num_samples = batch_size if not batch_size % 2 == 1 else batch_size - 1
+                self.sampler = SubsetRandomSampler(idx_full[:num_samples])
+                # Set the new batch_size to 2 to update the gradient after each two samples
+                self.batch_size = 2
+                self.n_samples = num_samples
+                self.valid_sampler = None
+                self.shuffle = None
+
         else:
-            idx_full = np.arange(self.n_samples)
-            np.random.shuffle(idx_full)
-            # Use only the number of samples contained in one batch and try to overfit them
-            num_samples = batch_size if not batch_size % 2 == 1 else batch_size-1
-            self.sampler = SubsetRandomSampler(idx_full[:num_samples])
-            # Set the new batch_size to 2 to update the gradient after each two samples
-            self.batch_size = 2
-            self.n_samples = num_samples
-            self.valid_sampler = None
-            self.shuffle = None
+            if cv_train_mode:
+                self.batch_size = batch_size
+
+                np.random.seed(0)
+
+                train_sampler = SubsetRandomSampler(train_idx)
+                valid_sampler = SubsetRandomSampler(valid_idx)
+                # Write it to file for reproducibility
+                path = os.path.join(get_project_root(), "cross_fold_log",
+                                    "cross_validation_valid_" + str(fold_id+1) + ".txt")
+                with open(path, "w") as file:
+                    np.savetxt(file, valid_idx.astype(int), fmt='%i', delimiter=",")
+
+                # turn off shuffle option which is mutually exclusive with sampler
+                self.shuffle = False
+                self.n_samples = len(train_idx)
+
+                self.sampler = train_sampler
+                self.valid_sampler = valid_sampler
+            else:
+                self.batch_size = batch_size
+
+                test_sampler = SubsetRandomSampler(test_idx)
+                # Write it to file for reproducibility
+                path = os.path.join(get_project_root(), "cross_fold_log",
+                                    "cross_validation_test_" + str(fold_id+1) + ".txt")
+                with open(path, "w") as file:
+                    np.savetxt(file, test_idx.astype(int), fmt='%i', delimiter=",")
+
+                # turn off shuffle option which is mutually exclusive with sampler
+                self.shuffle = False
+                self.n_samples = len(test_idx)
+
+                self.sampler = test_sampler
 
         self.init_kwargs = {
             'dataset': dataset,

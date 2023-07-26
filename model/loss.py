@@ -16,10 +16,9 @@ def multi_label_soft_margin(output, target, class_weights):
     return loss(output, target)
 
 
-def BCE(output, target):
-    loss = BCELoss()
-    return loss(output, target.float())
-
+# def BCE(output, target):
+#     loss = BCELoss()
+#     return loss(output, target.float())
 
 # This contains Sigmoid itself
 def BCE_with_logits(output, target):

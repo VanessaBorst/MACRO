@@ -35,12 +35,33 @@ def load_12ECG_data(input_directory):
         headers.append(header)
 
     counter = Counter(lengths)
+    print(counter.most_common())
 
     # V1
     min_bin = min(counter.keys())
     max_bin = max(counter.keys())
-    bins = np.arange(min_bin, max_bin + 1, 100)
+    bins = np.arange(min_bin, max_bin + 1, 1000)
+    plt.xlabel("Record Length", fontsize=16, labelpad=10)
+    plt.ylabel("Frequency", fontsize=16, labelpad=10)
+    plt.tick_params(axis='both', which='major', labelsize=12)
+    # plt.figure(figsize=(14, 8))
     plt.hist(lengths, bins=bins)
+
+    # plt.show()
+
+    # location for the zoomed portion
+    sub_axes = plt.axes([.45, .45, .45, .45])
+
+    # plot the zoomed portion
+    subset_counter = {k: counter[k] for k in counter.keys() if k > 30000}
+    min_bin = min(subset_counter.keys())
+    max_bin = max(subset_counter.keys())
+    bins = np.arange(min_bin, max_bin + 1, 1000)
+    sub_axes.set_yticks([1, 2])
+    sub_axes.hist(subset_counter, bins=bins)
+    sub_axes.tick_params(axis='both', which='major', labelsize=11)
+    plt.tight_layout()
+    plt.savefig("plots/seq_len_hist.pdf")
     plt.show()
 
     all_lengths = sorted(counter.items(), key=lambda pair: pair[1], reverse=True)
@@ -137,4 +158,5 @@ def _extract_multi_labeled_records(input_directory):
 
 # load_12ECG_data(input_directory=input_directory)
 df = _extract_multi_labeled_records(input_directory)
+load_12ECG_data(input_directory)
 print("")
