@@ -12,6 +12,7 @@ import torch
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
+from sklearn.metrics import confusion_matrix
 from tqdm import tqdm
 
 import data_loader.data_loaders as module_data
@@ -20,6 +21,8 @@ from evaluation import multi_label_metrics, single_label_metrics, multi_label_me
 from evaluation.multi_label_metrics import class_wise_confusion_matrices_multi_label_sk, THRESHOLD
 from evaluation.single_label_metrics import overall_confusion_matrix_sk, class_wise_confusion_matrices_single_label_sk
 from parse_config import ConfigParser
+
+import numpy as np
 
 # fix random seeds for reproducibility
 from train import _set_seed
@@ -69,7 +72,9 @@ def test_model_with_threshold(config, cv_data_dir=None, test_idx=None, k_fold=No
     metrics_iter = [getattr(module_metric, met) for met in ['sk_subset_accuracy']]
     metrics_epoch = [getattr(module_metric, met) for met in ['cpsc_score',
                                                              'weighted_torch_roc_auc',
-                                                             'macro_torch_roc_auc']]
+                                                             'macro_torch_roc_auc',
+                                                             'macro_torch_acc',
+                                                             'weighted_torch_acc']]
     metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_torch_roc_auc',
                                                                         'class_wise_torch_acc']]
 
@@ -87,6 +92,9 @@ def test_model_with_threshold(config, cv_data_dir=None, test_idx=None, k_fold=No
         "pos_weights": data_loader.dataset.get_ml_pos_weights(
             idx_list=list(range(len(data_loader.sampler))), mode='test'),
         "class_weights": data_loader.dataset.get_inverse_class_frequency(
+            idx_list=list(range(len(data_loader.sampler))),
+            multi_label_training=multi_label_training, mode='test'),
+        "class_freqs": data_loader.dataset.get_class_frequency(
             idx_list=list(range(len(data_loader.sampler))),
             multi_label_training=multi_label_training, mode='test')
     }
@@ -232,6 +240,15 @@ def test_model_with_threshold(config, cv_data_dir=None, test_idx=None, k_fold=No
     line_width = 2
     target_names = ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]
     desired_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE']
+    class_shares = {'SNR': ' (12.5%)',
+                    'AF': ' (16.6%)',
+                    'IAVB': ' (9.8%)',
+                    'LBBB': ' (3.2%)',
+                    'RBBB': ' (25.2%)',
+                    'PAC': ' (8.4%)',
+                    'PVC': ' (9.5%)',
+                    'STD': ' (11.8%)',
+                    'STE': ' (3.0%)'}
     for i in range(0, 9):
         desired_class = desired_order[i]
         idx = target_names.index(desired_class)
@@ -246,7 +263,7 @@ def test_model_with_threshold(config, cv_data_dir=None, test_idx=None, k_fold=No
         axs[axis_0, axis_1].set_xlim([0.0, 1.0])
         axs[axis_0, axis_1].set_ylim([0.0, 1.05])
         axs[axis_0, axis_1].legend(loc="lower right")
-        axs[axis_0, axis_1].set_title('ROC curve for class ' + str(target_names[idx]))
+        axs[axis_0, axis_1].set_title('ROC curve for class ' + str(target_names[idx]) + str(class_shares[target_names[idx]]))
         # Also save the single plots per class
         file_name = 'roc_curve_' + target_names[idx] + '.pdf'
         extent = axs[axis_0, axis_1].get_window_extent().transformed(fig.dpi_scale_trans.inverted())
@@ -262,12 +279,13 @@ def test_model_with_threshold(config, cv_data_dir=None, test_idx=None, k_fold=No
     # Dump the confusion matrices into a pickle file and write figures of them to file
     # 1) Update the confusion matrices maintained by the ClassificationTracker
     upd_class_wise_cms = module_metric.class_wise_confusion_matrices_multi_label_sk(output=det_outputs,
-                                                                      target=det_targets,
-                                                                      sigmoid_probs=_param_dict[
-                                                                          'sigmoid_probs'],
-                                                                      logits=_param_dict['logits'],
-                                                                      labels=_param_dict['labels'],
-                                                                      thresholds=_param_dict['thresholds'])
+                                                                                    target=det_targets,
+                                                                                    sigmoid_probs=_param_dict[
+                                                                                        'sigmoid_probs'],
+                                                                                    logits=_param_dict['logits'],
+                                                                                    labels=_param_dict['labels'],
+                                                                                    thresholds=_param_dict[
+                                                                                        'thresholds'])
     cm_tracker.update_class_wise_cms(upd_class_wise_cms)
     # 2) Explicitly write a plot of the confusion matrices to a file
     cm_tracker.save_result_cms_to_file(config.test_output_dir)
@@ -642,12 +660,21 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
                                                                 logits=_param_dict["logits"],
                                                                 labels=_param_dict["labels"])
 
-    fig, axs = plt.subplots(3, 3, figsize=(15, 10))
+    fig, axs = plt.subplots(3, 3, figsize=(18, 10))
     axis_0 = 0
     axis_1 = 0
     line_width = 2
     target_names = ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]
     desired_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE']
+    class_shares = {'SNR': ' (12.5%)',
+                    'AF': ' (16.6%)',
+                    'I-AVB': ' (9.8%)',
+                    'LBBB': ' (3.2%)',
+                    'RBBB': ' (25.2%)',
+                    'PAC': ' (8.4%)',
+                    'PVC': ' (9.5%)',
+                    'STD': ' (11.8%)',
+                    'STE': ' (3.0%)'}
     for i in range(0, 9):
         desired_class = desired_order[i]
         idx = target_names.index(desired_class)
@@ -655,24 +682,33 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
         tpr_class_i = tpr[idx].numpy()
         # Scale values by a factor of 1000 to better match the cpsc raw values
         axs[axis_0, axis_1].plot(fpr_class_i, tpr_class_i, color='darkorange', lw=line_width,
-                                 label='ROC curve (area = %0.3f)' % roc_auc_scores[idx])
+                                 label='ROC curve (AUC = %0.3f)' % roc_auc_scores[idx])
         axs[axis_0, axis_1].plot([0, 1], [0, 1], color='navy', lw=line_width, linestyle='--')
-        axs[axis_0, axis_1].set_xlabel('False Positive Rate')
-        axs[axis_0, axis_1].set_ylabel('True Positive Rate')
+        axs[axis_0, axis_1].tick_params(axis='both', which='major', labelsize=20)
+        axs[axis_0, axis_1].set_yticks([0.25, 0.5, 0.75, 1])
+
+        if axis_0 == 2:
+            axs[axis_0, axis_1].set_xlabel('False Positive Rate', fontsize=20)
+        if axis_1 == 0:
+            axs[axis_0, axis_1].set_ylabel('True Positive Rate', fontsize=20)
+
         axs[axis_0, axis_1].set_xlim([0.0, 1.0])
         axs[axis_0, axis_1].set_ylim([0.0, 1.05])
-        axs[axis_0, axis_1].legend(loc="lower right")
-        axs[axis_0, axis_1].set_title('ROC curve for class ' + str(target_names[idx]))
+        axs[axis_0, axis_1].legend(loc="lower right", fontsize=20)
+
+        class_name = str(target_names[idx]).replace('IAVB', 'I-AVB').replace('VEB', 'PVC')
+        axs[axis_0, axis_1].set_title('Class ' + class_name + class_shares[class_name], fontsize=20)
         # Also save the single plots per class
         file_name = 'roc_curve_' + target_names[idx] + '.pdf'
+        # 'ROC curve for class ' + str(target_names[idx]) + str())
         extent = axs[axis_0, axis_1].get_window_extent().transformed(fig.dpi_scale_trans.inverted())
         # Pad the saved area by 30% in the x-direction and 35% in the y-direction
         fig.savefig(config.test_output_dir / file_name, bbox_inches=extent.expanded(1.3, 1.35))
         axis_1 = (axis_1 + 1) % 3
         if axis_1 == 0:
             axis_0 += 1
-    plt.tight_layout()
-    plt.savefig(config.test_output_dir / "roc_curves.pdf")
+    plt.tight_layout(pad=2, h_pad=3, w_pad=1.5)
+    plt.savefig(config.test_output_dir / "roc_curves_with_shares.pdf")
 
     # ------------ Confusion matrices ------------------------
     # Dump the confusion matrices into a pickle file and write figures of them to file
@@ -704,6 +740,42 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
     with open(path_name, 'wb') as cm_file:
         all_cms = [cm_tracker.cm, cm_tracker.class_wise_cms]
         pickle.dump(all_cms, cm_file)
+
+    # # Beautified version, see Zhang et al
+    # target_names = ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]
+    # desired_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE']
+    # normalize = True
+    # for counter in range(0,9):
+    #     desired_class = desired_order[counter]
+    #     idx = target_names.index(desired_class)
+    #
+    #     cm = cm_tracker.class_wise_cms[idx]  # confusion_matrix(y_true, y_pred)
+    #     # Normalize
+    #     if normalize:
+    #         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+    #     fig, ax = plt.subplots(figsize=(4, 4))
+    #     im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+    #     ax.figure.colorbar(im, ax=ax)
+    #     ax.set(xticks=np.arange(cm.shape[1]),
+    #            yticks=np.arange(cm.shape[0]),
+    #            xticklabels=[0, 1], yticklabels=[0, 1],
+    #            title=desired_class.replace('IAVB', 'I-AVB').replace('VEB', 'PVC'),
+    #            ylabel='True label',
+    #            xlabel='Predicted label')
+    #     plt.setp(ax.get_xticklabels(), ha="center")
+    #
+    #     fmt = '.3f' if normalize else 'd'
+    #     thresh = cm.max() / 2.
+    #     for i in range(cm.shape[0]):
+    #         for j in range(cm.shape[1]):
+    #             ax.text(j, i, format(cm[i, j], fmt),
+    #                     ha="center", va="center",
+    #                     color="white" if cm[i, j] > thresh else "black")
+    #     np.set_printoptions(precision=3)
+    #     fig.tight_layout()
+    #     plt.savefig(config.test_output_dir / "cm_plots_beautified.pdf")
+    #     # plt.savefig(f'results/{label}.png')
+    #     plt.close(fig)
 
     # ------------------- Predicted Scores and Classes -------------------
     str_mode = "Test" if 'test' in str(config.test_output_dir).lower() else "Validation"

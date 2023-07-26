@@ -66,7 +66,13 @@ def fine_tune_thresholds_cross_validation(config):
     base_config = copy.deepcopy(config)
     base_log_dir = config.log_dir
     base_save_dir = config.save_dir
-    models_path = Path("savedVM_v2/models/FinalModel/cross_validation_rerun_withFC_0.3_32_16") #Path("savedVM_v2/models/FinalModel/final_cross_validation")   # /home/ubuntu/ext_volume/vanessa/ma/savedVM_v2/models/FinalModel/final_cross_validation")
+
+    # Path("savedVM_v2/models/FinalModel/cross_validation_rerun_withFC_0.3_32_16")
+    # Path("savedVM_v2/models/FinalModel/final_cross_validation")
+    # Path("savedVM_v2/models/FinalModel/cross_validation_rerun_withFC_0.2_12_8")
+    # Path("savedVM_v2/models/FinalModel/cross_validation_rerun_noFC_0.2_24_8")
+    # Path("savedVM_v2/models/FinalModel/final_cross_validation_sqrtT")
+    models_path = Path("savedVM_v2/models/FinalModel/final_cross_validation_sqrtT")
 
     # Divide the samples into k distinct sets
     fold_size = n_samples // k_fold
@@ -84,7 +90,7 @@ def fine_tune_thresholds_cross_validation(config):
     # Each time, one of the subset functions as valid and another as test set
 
     # Save the results of each run
-    class_wise_metrics = ["precision", "recall", "f1-score", "torch_roc_auc", "torch_accuracy", "support"]
+    class_wise_metrics = ["precision", "recall", "f1-score", "torch_roc_auc", "torch_acc", "support"]
     folds = ['fold_' + str(i) for i in range(1, k_fold + 1)]
 
     iterables = [folds, class_wise_metrics]

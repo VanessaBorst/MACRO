@@ -103,3 +103,16 @@ Shell Skript und Anleitung wie man Netz zum Laufen bekommt
 (0.953 + 0.952 + 0.992 + 0.910 + 0.946 + 0.874 + 0.920 + 0.917 + 0.939)/9
 (0.881 + 0.862 + 0.769 + 0.731 + 0.876 + 0.864 + 0.793 + 0.415 + 0.819)/9
 (0.852 + 0.870 + 0.738 + 0.667 + 0.840 + 0.818 + 0.769 + 0.395 + 0.742)/9
+
+
+Normal & \Large{$N_{11}$} & \Large{$N_{12}$} & \Large{$N_{13}$} & \Large{$N_{14}$} & \Large{$N_{15}$} & \Large{$N_{16}$} & \Large{$N_{17}$} & \Large{$N_{18}$} & \Large{$N_{19}$} & \Large{$N_{1X}$} \\
+AF	   & \Large{$N_{21}$} & \Large{$N_{22}$} & \Large{$N_{23}$} & \Large{$N_{24}$} & \Large{$N_{25}$} & \Large{$N_{26}$} & \Large{$N_{27}$} & \Large{$N_{28}$} & \Large{$N_{29}$} & \Large{$N_{2X}$} \\
+I-AVB  & \Large{$N_{31}$} & \Large{$N_{32}$} & \Large{$N_{33}$} & \Large{$N_{34}$} & \Large{$N_{35}$} & \Large{$N_{36}$} & \Large{$N_{37}$} & \Large{$N_{38}$} & \Large{$N_{39}$} & \Large{$N_{3X}$} \\
+LBBB   & \Large{$N_{41}$} & \Large{$N_{42}$} & \Large{$N_{43}$} & \Large{$N_{44}$} & \Large{$N_{45}$} & \Large{$N_{46}$} & \Large{$N_{47}$} & \Large{$N_{48}$} & \Large{$N_{49}$} & \Large{$N_{4X}$} \\
+RBBB   & \Large{$N_{51}$} & \Large{$N_{52}$} & \Large{$N_{53}$} & \Large{$N_{54}$} & \Large{$N_{55}$} & \Large{$N_{56}$} & \Large{$N_{57}$} & \Large{$N_{58}$} & \Large{$N_{59}$} & \Large{$N_{5X}$} \\
+PAC    & \Large{$N_{61}$} & \Large{$N_{62}$} & \Large{$N_{63}$} & \Large{$N_{64}$} & \Large{$N_{65}$} & \Large{$N_{66}$} & \Large{$N_{67}$} & \Large{$N_{68}$} & \Large{$N_{69}$} & \Large{$N_{6X}$} \\
+PVC    & \Large{$N_{71}$} & \Large{$N_{72}$} & \Large{$N_{73}$} & \Large{$N_{74}$} & \Large{$N_{75}$} & \Large{$N_{76}$} & \Large{$N_{77}$} & \Large{$N_{78}$} & \Large{$N_{79}$} & \Large{$N_{7X}$} \\
+STD    & \Large{$N_{81}$} & \Large{$N_{82}$} & \Large{$N_{83}$} & \Large{$N_{84}$} & \Large{$N_{85}$} & \Large{$N_{86}$} & \Large{$N_{87}$} & \Large{$N_{88}$} & \Large{$N_{89}$} & \Large{$N_{8X}$} \\
+STE    & \Large{$N_{91}$} & \Large{$N_{92}$} & \Large{$N_{93}$} & \Large{$N_{94}$} & \Large{$N_{95}$} & \Large{$N_{96}$} & \Large{$N_{97}$} & \Large{$N_{98}$} & \Large{$N_{99}$} & \Large{$N_{9X}$} \\
+\midrule
+Total  & \Large{$N_{X1}$} & \Large{$N_{X2}$} & \Large{$N_{X3}$} & \Large{$N_{X4}$} & \Large{$N_{X5}$} & \Large{$N_{X6}$} & \Large{$N_{X7}$} & \Large{$N_{X8}$} & \Large{$N_{X9}$} &  \\

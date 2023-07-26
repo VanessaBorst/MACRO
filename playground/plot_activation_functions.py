@@ -29,15 +29,15 @@ def tanh(x):
 
 
 binary_step = np.vectorize(lambda x: 1 if x > 0 else 0, otypes=[np.float])
-plot(binary_step, yaxis=(-1.4, 1.4), title="BinaryStep")
+plot(binary_step, yaxis=(-0.2, 1.4), title="BinaryStep")
 
-plot(sigmoid, yaxis=(-1.4, 1.4), title="Sigmoid")
+plot(sigmoid, yaxis=(-0.2, 1.4), title="Sigmoid")
 
 relu = np.vectorize(lambda x: x if x > 0 else 0, otypes=[np.float])
-plot(relu, yaxis=(-1.4, 1.4), title="ReLU")
+plot(relu, yaxis=(-2, 5), title="ReLU")
 
 leaky_relu = np.vectorize(lambda x: max(0.1 * x, x), otypes=[np.float])
-plot(leaky_relu, yaxis=(-1.4, 1.4), title="LeakyReLU")
+plot(leaky_relu, yaxis=(-2, 5), title="LeakyReLU")
 
 plot(tanh, yaxis=(-1.4, 1.4), title="tanH")
 
