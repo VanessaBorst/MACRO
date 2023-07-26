@@ -73,7 +73,7 @@ def optimize_ts_manual(logits, target, labels):
 
     best = []
     best_score = -1
-    # Way too much!
+    # Way too much! Must be done for each class separately -> TODO (compare https://github.com/onlyzdd/ecg-diagnosis)
     base_options = [np.arange(0, 1, 0.1) for _ in range(0, target.shape[1])]
     all_combinations = list(itertools.product(*base_options))
     for t in all_combinations:

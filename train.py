@@ -181,6 +181,7 @@ def tuning_params(name):
         #     # Pool + True + all + BN + all
         # }
 
+
         # Run 2: Only best one of run 1, but this time for different kernel sizes
         return {
             "down_sample": "conv",
@@ -193,7 +194,7 @@ def tuning_params(name):
             "pre_conv_kernel": tune.grid_search([3, 8, 12, 20, 24])
         }
     elif name == "FinalModel":
-        # # Variant with addittional FC for Attention
+        # # Variant with additional FC for Attention
         # return {
         #     "down_sample": "conv",
         #     "vary_channels": True,
@@ -236,8 +237,8 @@ def tuning_params(name):
             "use_pre_activation_design": True, # tune.grid_search([True, False]),
             "use_pre_conv": True,  # only has a meaning when used with pre-activation design
             "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
-            "heads": 32, #tune.grid_search([3, 8, 32]),      # See visualization, 5 and 16 do not work well
-            "gru_units": 32, #tune.grid_search([12, 24, 32]), # Eventually add 18
+            "heads": tune.grid_search([3, 5, 8, 32]),  # See visualization, 16 does not work well (was trained nevertheless)
+            "gru_units": tune.grid_search([12, 24, 32]),  # Eventually add 18
             "discard_FC_before_MH": True
         }
 

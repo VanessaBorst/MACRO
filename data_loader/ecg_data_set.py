@@ -201,6 +201,50 @@ class ECGDataset(Dataset):
         # Return them as as ndarray
         return inverse_class_freqs.values
 
+    def get_class_frequency(self, idx_list, multi_label_training, mode, cross_valid_active=False):
+        """
+        Can be used to determine the inverse class frequencies
+        :param idx_list: list of ids, should contain all ids contained in the train, valid or test set
+        :param multi_label_training: If true, all labels are considered, otherwise only the first label is counted
+        :param cross_valid_active: Set to True during cross validation to ensure weights are re-calculated each run
+        :return:  Class frequencies
+        """
+        i_o_active = not cross_valid_active
+
+        if mode == "test" and "test" not in self._input_dir:
+            # Catch the case where the model is tested on the validation set
+            file_name = "data_loader/class_freq_ml_valid.p" if multi_label_training \
+                else "data_loader/class_freq_sl_valid.p"
+        else:
+            file_name = "data_loader/class_freq_ml_" + mode + ".p" if multi_label_training \
+                else "data_loader/class_freq_sl_" + mode + ".p"
+        file_name = os.path.join(get_project_root(), file_name)
+
+        if i_o_active and os.path.isfile(file_name):
+            with open(file_name, "rb") as file:
+                df = pickle.load(file)
+            class_freqs = df['Class_freq']
+        else:
+            classes = []
+            for idx in idx_list:
+                _, _, first_class_encoded, classes_one_hot, record_name = self.__getitem__(idx)
+                if multi_label_training:
+                    classes.append(classes_one_hot)
+                else:
+                    # Only consider the first label
+                    classes_one_hot[:] = 0
+                    classes_one_hot[first_class_encoded] = 1
+                    classes.append(classes_one_hot)
+
+            # Get the class freqs as Pandas series
+            class_freqs = pd.DataFrame(classes).sum()
+
+            # Each class should occur at least ones
+            assert not class_freqs.isin([0]).any(), "Each class should occur at least ones"
+
+        # Return them as as ndarray
+        return class_freqs.values
+
 
 if __name__ == '__main__':
     dataset = ECGDataset("data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000/")

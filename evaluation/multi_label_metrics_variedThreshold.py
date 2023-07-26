@@ -555,15 +555,24 @@ def class_wise_torch_acc(output, target, sigmoid_probs, logits, labels, threshol
         pred = output if sigmoid_probs else torch.sigmoid(output)
         # Calculate the accuracy with different thresholds
         class_wise_accs = []
-        for label_idx in len(thresholds):
+        for label_idx in range(0,len(thresholds)):
             threshold = thresholds[label_idx]
             # Function accepts logits or probabilities from a model output or integer class values in prediction.
             # The default Threshold for transforming probability or logit predictions to binary (0,1) predictions,
             # in the case of binary or multi-label inputs is 0.5 and corresponds to input being probabilities.
             accuracy = Accuracy(num_classes=len(labels), average=None, threshold=threshold)
             all_accs = accuracy(pred, target)
-            class_wise_accs.append(all_accs[label_idx])
+            class_wise_accs.append(all_accs[label_idx].item())
+        return torch.Tensor(class_wise_accs)
 
 
+def macro_torch_acc(output, target, sigmoid_probs, logits, labels, thresholds):
+    class_wise_accs = class_wise_torch_acc(output, target, sigmoid_probs, logits, labels, thresholds)
+    return torch.mean(class_wise_accs)
 
 
+def weighted_torch_acc(output, target, sigmoid_probs, logits, labels, thresholds, class_freqs):
+    class_wise_accs = class_wise_torch_acc(output, target, sigmoid_probs, logits, labels, thresholds)
+    class_freqs_t = torch.Tensor(class_freqs)
+    N = class_freqs_t.sum()
+    return torch.mul(class_wise_accs, class_freqs_t).div(N).sum()

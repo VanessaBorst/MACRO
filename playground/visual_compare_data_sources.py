@@ -74,12 +74,16 @@ for i in range(len(data_src)):
     # Scale values by a factor of 1000 to better match the cpsc raw values
     lead = 1/1000 * lead
     axs[axis_0, axis_1].plot(X,lead)
-    axs[axis_0, axis_1].set_title("Lead " + leads[i], fontsize=14)
+    axs[axis_0, axis_1].set_title("Lead " + leads[i], fontsize=17)
+    axs[axis_0, axis_1].tick_params(axis='both', which='major', labelsize=17)
     if axis_0 == 5:
-        axs[axis_0, axis_1].set_xlabel("Time (in seconds)", fontsize=14)
+        axs[axis_0, axis_1].set_xlabel("Time (in seconds)", fontsize=17)
+    if axis_1 == 0:
+        axs[axis_0, axis_1].set_ylabel("Value", fontsize=17)
     axis_0 = (axis_0 + 1) % 6
     if axis_0 == 0:
         axis_1 += 1
+fig.align_ylabels(axs[:, 0])
 plt.tight_layout()
 plt.savefig('plots/Record A0011 - First 10s.pdf')
 plt.show()
@@ -101,5 +105,5 @@ for i in range(len(data_src)):
     if axis_0 == 0:
         axis_1 += 1
 plt.tight_layout()
-plt.savefig('plots/Record A0011 - First 10s.pdf')
+plt.savefig('plots/Record A0011 - First 10s - Wide.pdf')
 plt.show()

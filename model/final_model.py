@@ -278,3 +278,20 @@ class FinalModel(BaseModel):
             return x
 
 
+if __name__ == "__main__":
+    model = FinalModel(apply_final_activation=False,
+                       multi_label_training=True,
+                       down_sample="conv",
+                       vary_channels=True,
+                       pos_skip="all",
+                       norm_before_act=True,
+                       norm_pos="all",
+                       norm_type="BN",
+                       use_pre_activation_design=True,
+                       use_pre_conv=True,
+                       pre_conv_kernel=16,
+                       discard_FC_before_MH=False,
+                       dropout_attention=0.3,
+                       gru_units=32,
+                       heads=16)
+    summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "kernel_size", "num_params"])
