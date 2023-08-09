@@ -9,8 +9,10 @@ import pandas as pd
 
 # 'savedVM_v2/models/FinalModel/cross_vals_sqrtT/final_cross_validation_sqrtT'
 # 'savedVM_v2/models/FinalModel/cross_vals_sqrtT/cross_validation_withFC_0.4_24_32_finetune_BO'
-path = 'savedVM_v2/models/FinalModel/cross_vals/cross_validation_rerun_withFC_0.3_32_16_finetune_bayesian'
-thresholds_active=True
+# path = 'savedVM_v2/models/FinalModel/cross_vals/cross_validation_rerun_withFC_0.3_32_16_finetune_bayesian'
+
+path = 'savedVM/models/FinalModel_MACRO/0804_171418_ml_bs64_cross_validation_MACRO_withFC_0.3_32_16'
+thresholds_active=False
 include_weighted_avg=False
 include_at_least_weighted_F1 = True
 

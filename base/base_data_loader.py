@@ -2,11 +2,24 @@ import numpy as np
 import os
 
 import random
+import torch
+import numpy as np
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 from torch.utils.data.sampler import SubsetRandomSampler
-
 from utils import get_project_root
+
+
+SEED = 123
+
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+
+g = torch.Generator()
+g.manual_seed(SEED)
 
 
 class BaseDataLoader(DataLoader):
@@ -18,7 +31,7 @@ class BaseDataLoader(DataLoader):
     def __init__(self, dataset, batch_size, shuffle, validation_split=None, num_workers=1, pin_memory=False,
                  cross_valid=False, train_idx=None, valid_idx=None, test_idx=None, cv_train_mode=True, fold_id=None,
                  collate_fn=default_collate,
-                 single_batch=False):
+                 single_batch=False, worker_init_fn=seed_worker, generator=g):
         """
         single_batch: If set to True, this reduces the training set to a single batch and turns off the validation set.
         Training on a single batch should quickly overfit and reach accuracy 1.0.
@@ -60,7 +73,7 @@ class BaseDataLoader(DataLoader):
                 # Write it to file for reproducibility
                 path = os.path.join(get_project_root(), "cross_fold_log",
                                     "cross_validation_valid_" + str(fold_id+1) + ".txt")
-                with open(path, "w") as file:
+                with open(path, "w+") as file:
                     np.savetxt(file, valid_idx.astype(int), fmt='%i', delimiter=",")
 
                 # turn off shuffle option which is mutually exclusive with sampler
@@ -90,7 +103,9 @@ class BaseDataLoader(DataLoader):
             'batch_size': self.batch_size,
             'shuffle': self.shuffle,
             'collate_fn': collate_fn,
-            'num_workers': num_workers
+            'num_workers': num_workers,
+            'worker_init_fn': worker_init_fn,
+            'generator': generator
         }
         super().__init__(sampler=self.sampler, pin_memory=pin_memory, **self.init_kwargs)
 

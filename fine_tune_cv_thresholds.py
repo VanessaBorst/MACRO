@@ -72,7 +72,9 @@ def fine_tune_thresholds_cross_validation(config):
     # Path("savedVM_v2/models/FinalModel/cross_validation_rerun_withFC_0.2_12_8")
     # Path("savedVM_v2/models/FinalModel/cross_validation_rerun_noFC_0.2_24_8")
     # Path("savedVM_v2/models/FinalModel/final_cross_validation_sqrtT")
-    models_path = Path("savedVM_v2/models/FinalModel/final_cross_validation_sqrtT")
+    # models_path = Path("savedVM_v2/models/FinalModel/final_cross_validation_sqrtT")
+
+    models_path = Path("savedVM/models/FinalModel_MACRO/0804_171418_ml_bs64_cross_validation_MACRO_withFC_0.3_32_16")
 
     # Divide the samples into k distinct sets
     fold_size = n_samples // k_fold

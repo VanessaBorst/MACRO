@@ -23,17 +23,30 @@ import torch
 
 
 def _set_seed(SEED):
+    # OLD VERSION MA
+    # np.random.seed(SEED)
+    # torch.manual_seed(SEED)
+    # # VB: Replaced by use_deterministic_algorithms, which will make more PyTorch operations behave deterministically
+    # # See https://pytorch.org/docs/stable/notes/randomness.html
+    # torch.backends.cudnn.deterministic = True
+    # # torch.use_deterministic_algorithms(True)
+    # torch.backends.cudnn.benchmark = False
+    #
+    # random.seed(SEED)
+    # torch.cuda.manual_seed_all(SEED)
+    # # os.environ['PYTHONHASHSEED'] = str(SEED)
+
+    # NEW VERSION
+    # https://pytorch.org/docs/stable/notes/randomness.html
     np.random.seed(SEED)
     torch.manual_seed(SEED)
-    # VB: Replaced by use_deterministic_algorithms, which will make more PyTorch operations behave deterministically
-    # See https://pytorch.org/docs/stable/notes/randomness.html
-    torch.backends.cudnn.deterministic = True
-    # torch.use_deterministic_algorithms(True)
-    torch.backends.cudnn.benchmark = False
-
     random.seed(SEED)
     torch.cuda.manual_seed_all(SEED)
-    # os.environ['PYTHONHASHSEED'] = str(SEED)
+    os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
+    torch.use_deterministic_algorithms(True)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 # fix random seeds for reproducibility
@@ -788,6 +801,8 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
         import model.baseline_model_with_skips_and_norm_v2_pre_activation_design as module_arch
     elif config['arch']['type'] == 'FinalModel':
         import model.final_model as module_arch
+    elif config['arch']['type'] == 'FinalModelMultiBranch':
+        import model.final_model_multibranch as module_arch
 
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric
