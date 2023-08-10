@@ -11,7 +11,7 @@ import seaborn as sns
 import torch
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.lines import Line2D
-from torch._C._autograd import ProfilerActivity
+from torch._C._profiler import ProfilerActivity
 from torch.profiler import tensorboard_trace_handler
 
 from base import BaseTrainer
@@ -22,6 +22,7 @@ from utils import inf_loop, plot_grad_flow_lines, plot_grad_flow_bars
 from utils.tracker import MetricTracker, ConfusionMatrixTracker
 
 from ray import tune
+
 
 class ECGTrainer(BaseTrainer):
     """
@@ -182,11 +183,12 @@ class ECGTrainer(BaseTrainer):
                 else:
                     # target contains the first GT label, target_all_labels contains all labels in 1-hot-encoding
                     data, target, target_all_labels = padded_records.to(self.device), first_labels.to(self.device), \
-                                                      labels_one_hot.to(self.device)
+                        labels_one_hot.to(self.device)
                 data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)
 
                 self.optimizer.zero_grad()
                 # data has shape [batch_size, 12, seq_len]
+                # TODO check if format still applied to multi-branch MACRO
                 output = self.model(data)
 
                 if type(output) is tuple:
@@ -212,8 +214,9 @@ class ECGTrainer(BaseTrainer):
                 additional_args = self.config['loss']['add_args']
                 additional_kwargs = {
                     param_name: self._param_dict[param_name.replace('pos_weights', 'train_pos_weights').
-                        replace('class_weights', 'train_class_weights')] for param_name in additional_args
+                    replace('class_weights', 'train_class_weights')] for param_name in additional_args
                 }
+                # TODO: Check how loss has to be applied here
                 loss = self.criterion(target=target, output=output, **additional_kwargs)
                 loss.backward()
 
@@ -342,7 +345,7 @@ class ECGTrainer(BaseTrainer):
                 else:
                     # target contains the first GT label, target_all_labels contains all labels in 1-hot-encoding
                     data, target, target_all_labels = padded_records.to(self.device), first_labels.to(self.device), \
-                                                      labels_one_hot.to(self.device)
+                        labels_one_hot.to(self.device)
 
                 data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)
 
@@ -368,7 +371,7 @@ class ECGTrainer(BaseTrainer):
                 additional_args = self.config['loss']['add_args']
                 additional_kwargs = {
                     param_name: self._param_dict[param_name.replace('pos_weights', 'valid_pos_weights').
-                                       replace('class_weights', 'valid_class_weights')] for param_name in additional_args
+                    replace('class_weights', 'valid_class_weights')] for param_name in additional_args
                 }
                 loss = self.criterion(target=target, output=output, **additional_kwargs)
 
@@ -516,7 +519,7 @@ class ECGTrainer(BaseTrainer):
             upd_class_wise_cms = class_wise_confusion_matrices_multi_label_sk(output=output,
                                                                               target=target,
                                                                               sigmoid_probs=self._param_dict[
-                                                                               'sigmoid_probs'],
+                                                                                  'sigmoid_probs'],
                                                                               logits=self._param_dict['logits'],
                                                                               labels=self._param_dict['labels'])
         cm_tracker.update_class_wise_cms(upd_class_wise_cms)
@@ -541,7 +544,8 @@ class ECGTrainer(BaseTrainer):
     def _create_report_summary(self, det_outputs, det_targets, epoch):
         if self.multi_label_training:
             summary_dict = multi_label_metrics.sk_classification_summary(output=det_outputs, target=det_targets,
-                                                                         sigmoid_probs=self._param_dict["sigmoid_probs"],
+                                                                         sigmoid_probs=self._param_dict[
+                                                                             "sigmoid_probs"],
                                                                          logits=self._param_dict["logits"],
                                                                          labels=self._param_dict["labels"],
                                                                          output_dict=True)

@@ -1,5 +1,5 @@
 {
-    "name": "FinalModel_MACRO",
+    "name": "FinalModel_MACRO_CV",
     "run_details": "_cross_validation_MACRO_withFC_0.3_32_16",
     "n_gpu": 1,
     "arch": {

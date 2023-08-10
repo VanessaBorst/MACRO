@@ -7,25 +7,10 @@ from sklearn.metrics import multilabel_confusion_matrix, \
     accuracy_score, roc_auc_score, f1_score, precision_score, \
     recall_score, classification_report
 
-# This file contains multiclass classification metrics (currently not adapted for multi-label classification!)
-# Macro metrics: Macro-level metrics gives equal weight to each class
-#       => Each class has the same weight in the average
-#       => There is no distinction between highly and poorly populated classes
-# Micro metrics: Micro-level metrics weight all items equally.
-#       => Considers all the units together, without taking into consideration possible differences between classes
-#       => Classes with more observations will have more influence in the metric
-#       => Biases the classes towards the most populated class
-#       => Micro-Average Precision and Recall are the same values, therefore the MicroAverage F1-Score is also the same
-#           (and corresponds to the accuracy when all classes are considered)
-
-# Details:
-# https://datascience.stackexchange.com/questions/15989/micro-average-vs-macro-average-performance-in-a-multiclass-classification-settin/16001
-from torchmetrics import AUROC, F1, Precision, Accuracy, Recall, ROC
+from torchmetrics import AUROC, Accuracy, ROC
 
 THRESHOLD = 0.5
 
-
-# ----------------------------------- Sklearn Metric -----------------------------------------------
 
 def _convert_sigmoid_probs_to_prediction(sigmoid_probs, thresholds):
     if isinstance(thresholds, dict):
@@ -39,6 +24,12 @@ def _convert_logits_to_prediction(logits, thresholds):
     # Good post: https://web.stanford.edu/~nanbhas/blog/sigmoid-softmax/
     sigmoid_probs = torch.sigmoid(logits)
     return _convert_sigmoid_probs_to_prediction(sigmoid_probs, thresholds)
+
+
+# ----------------------------------- Sklearn Metric -----------------------------------------------
+
+# 2023-08-10: Checked scikit-learn for API updates
+# All sk functions seem to be working as before -> no changes needed
 
 def _sk_f1(output, target, sigmoid_probs, logits, labels, thresholds, average):
     """
@@ -169,7 +160,7 @@ def _sk_roc_auc(output, target, sigmoid_probs, logits, labels, average):
     with torch.no_grad():
         assert sigmoid_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
 
-        # Predictions should be passes as probabilities, not as one-hot-vector!
+        # Predictions should be passed as probabilities, not as one-hot-vector!
         pred = output if sigmoid_probs else torch.sigmoid(output)
 
         assert pred.shape[0] == len(target)
@@ -435,7 +426,7 @@ def cpsc_score(output, target, sigmoid_probs, logits):
 
         assert len(answers) == len(reference), "Answers and References should have equal length"
 
-        A = np.zeros((9, 9), dtype=np.float)
+        A = np.zeros((9, 9), dtype=float)
 
         for sample_idx in range(0, len(answers)):
             pred_class = answers[sample_idx]
@@ -486,6 +477,15 @@ def cpsc_score(output, target, sigmoid_probs, logits):
 
 # ----------------------------------- TORCHMETRICS -----------------------------------------------
 
+# 2023-08-10: Checked torchmetrics for API updates
+# The torchmetrics functions don't seem to be working as before -> Changes needed and applied
+
+# Not used in the current version
+def _inverse_sigmoid(x):
+    # torch.log is the natural logarithm
+    return torch.log(x / (1 - x))
+
+
 def _torch_roc_auc(output, target, sigmoid_probs, logits, labels, average):
     """
     The following parameter description applies for the multilabel case
@@ -496,16 +496,22 @@ def _torch_roc_auc(output, target, sigmoid_probs, logits, labels, average):
     :param logits:  If set to True, the vectors are expected to contain logits/raw scores
     :param target: (N, ...) or (N, C, ...) with integer labels
     :param labels: List of labels that index the classes in output
-    :param average: Either ‘macro’, 'micro', ‘weighted’, or None
+    :param average: Either ‘macro’, ‘weighted’, or None
     :return: Area Under the Receiver Operating Characteristic Curve (ROC AUC) for the multilabel case
     """
     with torch.no_grad():
-        sigmoid_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+        assert sigmoid_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
 
-        # Pred should be a tensor with probabilities of shape (N, C, ...), where C is the number of classes.
+        assert average in ['macro', 'weighted', None], "Average must be one of 'macro', 'weighted', None"
+
+        # In newer lib versions, pred should be a tensor of shape (N, C, ...) with probabilities, where C is the number
+        # of classes, or logits  (logits are expected if preds has values outside [0,1] range)
+        # Here, we stick to calculating the probs before as in the original thesis code
         pred = output if sigmoid_probs else torch.sigmoid(output)
 
-        auroc = AUROC(num_classes=len(labels), average=average, pos_label=1)
+        # pos_label is no longer a valid argument in newer torchmetrics versions
+        # Strange bug: in multilabel settings, num_labels is used instead of num_classes
+        auroc = AUROC(task='multilabel', num_classes=len(labels), num_labels=len(labels), average=average)
         return auroc(pred, target)
 
 
@@ -520,12 +526,16 @@ def torch_roc(output, target, sigmoid_probs, logits, labels):
     :return: Receiver Operating Characteristic Curve (ROC) for the multilabel case
     """
     with torch.no_grad():
-        sigmoid_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
+        assert sigmoid_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
 
-        # Pred should be a tensor with probabilities of shape (N, C, ...), where C is the number of classes.
+        # In newer lib versions, pred should be a tensor of shape (N, C, ...) with probabilities, where C is the number
+        # of classes, or logits  (logits are expected if preds has values outside [0,1] range)
+        # Here, we stick to calculating the probs before as in the original thesis code
         pred = output if sigmoid_probs else torch.sigmoid(output)
 
-        roc = ROC(num_classes=len(labels), pos_label=1)
+        # pos_label is no longer a valid argument in newer torchmetrics versions
+        # Strange bug: in multilabel settings, num_labels is used instead of num_classes
+        roc = ROC(task='multilabel', num_classes=len(labels), num_labels=len(labels))
         # returns a tuple (fpr, tpr, thresholds)
         return roc(pred, target)
 
@@ -546,13 +556,14 @@ def macro_torch_roc_auc(output, target, sigmoid_probs, logits, labels):
 
 def class_wise_torch_acc(output, target, sigmoid_probs, logits, labels, thresholds): # average=none
     with torch.no_grad():
-        assert sigmoid_probs ^ logits, "In the single-label case, exactly one of the two must be true"
+        assert sigmoid_probs ^ logits, "In the multi-label case, exactly one of the two must be true"
 
         if isinstance(thresholds, dict):
             thresholds = list(thresholds.values())
 
         # Function accepts logits or probabilities from a model output or integer class values in prediction.
         pred = output if sigmoid_probs else torch.sigmoid(output)
+
         # Calculate the accuracy with different thresholds
         class_wise_accs = []
         for label_idx in range(0,len(thresholds)):
@@ -560,7 +571,9 @@ def class_wise_torch_acc(output, target, sigmoid_probs, logits, labels, threshol
             # Function accepts logits or probabilities from a model output or integer class values in prediction.
             # The default Threshold for transforming probability or logit predictions to binary (0,1) predictions,
             # in the case of binary or multi-label inputs is 0.5 and corresponds to input being probabilities.
-            accuracy = Accuracy(num_classes=len(labels), average=None, threshold=threshold)
+
+            # Strange bug: in multilabel settings, num_labels is used instead of num_classes
+            accuracy = Accuracy(task='multilabel', num_labels=len(labels), average=None, threshold=threshold)
             all_accs = accuracy(pred, target)
             class_wise_accs.append(all_accs[label_idx].item())
         return torch.Tensor(class_wise_accs)

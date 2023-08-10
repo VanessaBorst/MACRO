@@ -8,7 +8,12 @@ import time
 from pathlib import Path
 
 import pandas as pd
+
+# Needed for working with SSH Interpreter...
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "MIG-11c29e81-e611-50b5-b5ef-609c0a0fe58b"
 import torch
+
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
@@ -403,6 +408,7 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric
     else:
+        raise NotImplementedError("Single label metrics haven't been checked after the Python update! Do not use them!")
         import evaluation.single_label_metrics as module_metric
 
     if not cv_active:

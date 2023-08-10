@@ -18,6 +18,9 @@ from parse_config import ConfigParser
 from test import test_model
 from train import train_model
 
+# Needed for working with SSH Interpreter...
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "MIG-11c29e81-e611-50b5-b5ef-609c0a0fe58b"
 import torch
 
 from utils import ensure_dir

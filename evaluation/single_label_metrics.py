@@ -14,9 +14,10 @@ from sklearn.metrics import confusion_matrix, multilabel_confusion_matrix, \
 #       => Biases the classes towards the most populated class
 #       => Micro-Average Precision and Recall are the same values, therefore the MicroAverage F1-Score is also the same
 #           (and corresponds to the accuracy when all classes are considered)
-from torchmetrics import F1, Precision, Accuracy, Recall, ROC
+from torchmetrics import Precision, Accuracy, Recall, ROC
 from torchmetrics.classification.auroc import AUROC
 
+# TODO: This file has not yet been checked for API updates, since single label metrics are not used for the Macro paper
 
 # ----------------------------------- SKlearn Metric -----------------------------------------------
 

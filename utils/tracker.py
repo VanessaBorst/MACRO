@@ -5,10 +5,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from torch.utils.tensorboard import SummaryWriter
-
-from evaluation.multi_label_metrics import class_wise_confusion_matrices_multi_label_sk
-from evaluation.single_label_metrics import overall_confusion_matrix_sk, class_wise_confusion_matrices_single_label_sk
 
 smooth = 0  # 1e-6
 
@@ -74,7 +70,7 @@ class MetricTracker:
         else:
             if self.writer is not None:
                 self.writer.add_scalar(key, value, global_step=self._epoch)
-            self._data_epoch.at[key, 'mean'] = value
+            self._data_epoch.at[key, 'mean'] = value.item()
 
     # class_wise_epoch_update(met.__name__, met(target=targets, output=outputs, **additional_kwargs), epoch)
     def class_wise_epoch_update(self, key, values):
@@ -82,7 +78,7 @@ class MetricTracker:
             full_key_name = key + '_class_' + str(self._labels[idx_class])
             if self.writer is not None:
                 self.writer.add_scalar(full_key_name, values[idx_class], global_step=self._epoch)
-            self._data_epoch.at[full_key_name, 'mean'] = values[idx_class]
+            self._data_epoch.at[full_key_name, 'mean'] = values[idx_class].item()
 
     def current(self):
         return dict(self._data_iter['current'])

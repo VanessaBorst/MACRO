@@ -8,10 +8,11 @@ from pathlib import Path
 
 import ray
 import numpy as np
+from ray.tune.search import BasicVariantGenerator
 from ray.tune.web_server import TuneClient
 from ray import tune
 from ray.tune import CLIReporter, Callback
-from ray.tune.suggest import BasicVariantGenerator
+
 
 import data_loader.data_loaders as module_data_loader
 import model.loss as module_loss
@@ -19,7 +20,12 @@ from logger import update_logging_setup_for_tune_or_cross_valid
 from parse_config import ConfigParser
 from trainer.ecg_trainer import ECGTrainer
 from utils import prepare_device, get_project_root
+
+# Needed for working with SSH Interpreter...
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "MIG-11c29e81-e611-50b5-b5ef-609c0a0fe58b"
 import torch
+
 
 
 def _set_seed(SEED):
@@ -807,6 +813,7 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric
     else:
+        raise NotImplementedError("Single label metrics haven't been checked after the Python update! Do not use them!")
         import evaluation.single_label_metrics as module_metric
 
     if use_tune:
