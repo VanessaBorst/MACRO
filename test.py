@@ -268,9 +268,11 @@ def test_model_with_threshold(config, cv_data_dir=None, test_idx=None, k_fold=No
         axs[axis_0, axis_1].set_xlim([0.0, 1.0])
         axs[axis_0, axis_1].set_ylim([0.0, 1.05])
         axs[axis_0, axis_1].legend(loc="lower right")
-        axs[axis_0, axis_1].set_title('ROC curve for class ' + str(target_names[idx]) + str(class_shares[target_names[idx]]))
+
+        class_name = str(target_names[idx]).replace('VEB', 'PVC')
+        axs[axis_0, axis_1].set_title('ROC curve for class ' + class_name + str(class_shares[class_name]))
         # Also save the single plots per class
-        file_name = 'roc_curve_' + target_names[idx] + '.pdf'
+        file_name = 'roc_curve_' + class_name + '.pdf'
         extent = axs[axis_0, axis_1].get_window_extent().transformed(fig.dpi_scale_trans.inverted())
         # Pad the saved area by 30% in the x-direction and 35% in the y-direction
         fig.savefig(config.test_output_dir / file_name, bbox_inches=extent.expanded(1.3, 1.35))

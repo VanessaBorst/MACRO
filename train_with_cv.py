@@ -16,7 +16,7 @@ from logger import update_logging_setup_for_tune_or_cross_valid
 
 from parse_config import ConfigParser
 from test import test_model
-from train import train_model
+from train import train_model, _set_seed
 
 # Needed for working with SSH Interpreter...
 import os
@@ -24,20 +24,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "MIG-11c29e81-e611-50b5-b5ef-609c0a0fe58b"
 import torch
 
 from utils import ensure_dir
-
-
-def _set_seed(SEED):
-    np.random.seed(SEED)
-    torch.manual_seed(SEED)
-    # VB: Replaced by use_deterministic_algorithms, which will make more PyTorch operations behave deterministically
-    # See https://pytorch.org/docs/stable/notes/randomness.html
-    torch.backends.cudnn.deterministic = True
-    # torch.use_deterministic_algorithms(True)
-    torch.backends.cudnn.benchmark = False
-
-    random.seed(SEED)
-    torch.cuda.manual_seed_all(SEED)
-    # os.environ['PYTHONHASHSEED'] = str(SEED)
 
 
 # fix random seeds for reproducibility

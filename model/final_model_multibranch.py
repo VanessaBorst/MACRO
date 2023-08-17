@@ -16,7 +16,6 @@ class FinalModelMultiBranch(BaseModel):
     def __init__(self,
                  multi_branch_gru_units=32,
                  multi_branch_heads=16,
-                 multi_label_training=True,
                  num_classes=9):
         """
 
@@ -27,20 +26,10 @@ class FinalModelMultiBranch(BaseModel):
             gru_units=multi_branch_gru_units,
             heads=multi_branch_heads,
             input_channel=1) for _ in range(12)]
-        # self._test = nn.Sequential(self._final_model_single_leads[0],
-        #                            self._final_model_single_leads[1],
-        #                            self._final_model_single_leads[2],
-        #                            self._final_model_single_leads[3],
-        #                            self._final_model_single_leads[4],
-        #                            self._final_model_single_leads[5],
-        #                            self._final_model_single_leads[6],
-        #                            self._final_model_single_leads[7],
-        #                            self._final_model_single_leads[8],
-        #                            self._final_model_single_leads[9],
-        #                            self._final_model_single_leads[10],
-        #                            self._final_model_single_leads[11])
 
-        # TODO Check gru_dimension_param
+        # self._test = nn.Sequential(*self._final_model_single_leads)
+
+        # d_model = 2 * gru_dimension = 2 * multi_branch_gru_units * 12
         self._multi_head_contextual_attention = MultiHeadContextualAttention(gru_dimension=multi_branch_gru_units * 12,
                                                                              dropout=0.3,
                                                                              heads=multi_branch_heads,

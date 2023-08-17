@@ -22,21 +22,9 @@ from test import test_model_with_threshold
 
 import torch
 
+from train import _set_seed
 from utils import ensure_dir
 
-
-def _set_seed(SEED):
-    np.random.seed(SEED)
-    torch.manual_seed(SEED)
-    # VB: Replaced by use_deterministic_algorithms, which will make more PyTorch operations behave deterministically
-    # See https://pytorch.org/docs/stable/notes/randomness.html
-    torch.backends.cudnn.deterministic = True
-    # torch.use_deterministic_algorithms(True)
-    torch.backends.cudnn.benchmark = False
-
-    random.seed(SEED)
-    torch.cuda.manual_seed_all(SEED)
-    # os.environ['PYTHONHASHSEED'] = str(SEED)
 
 
 # fix random seeds for reproducibility
@@ -74,7 +62,7 @@ def fine_tune_thresholds_cross_validation(config):
     # Path("savedVM_v2/models/FinalModel/final_cross_validation_sqrtT")
     # models_path = Path("savedVM_v2/models/FinalModel/final_cross_validation_sqrtT")
 
-    models_path = Path("savedVM/models/FinalModel_MACRO/0804_171418_ml_bs64_cross_validation_MACRO_withFC_0.3_32_16")
+    models_path = Path("savedVM/models/FinalModel_MACRO_CV/0810_130757_ml_bs64_cross_validation_MACRO_withFC_0.3_32_16")
 
     # Divide the samples into k distinct sets
     fold_size = n_samples // k_fold
@@ -215,7 +203,7 @@ def fine_tune_thresholds_cross_validation(config):
     ty_res = time.gmtime(end - start)
     res = time.strftime("%H hours, %M minutes, %S seconds", ty_res)
 
-    print("Finished cross-fold-validation")
+    print("Finished cross-fold-validation threshold fine-tuning")
     print("Consuming time: " + str(res))
 
 

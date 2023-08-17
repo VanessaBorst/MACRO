@@ -112,9 +112,7 @@ class MultiHeadContextualAttention(nn.Module):
     Parameters
     ----------
     gru_dimension:
-        Number of units contained per GRU
-    attention_dimension:
-        Dimension of the output of the layer (default: 2xgru_dimension)
+        Number of units contained per GRU -> is transferred to d_model by 2*gru_dimension
     use_bias:
         Bool specifying whether an bias should be used to retrieve the hidden representation for
         the hidden states of the BiGRU (which serve as values)
