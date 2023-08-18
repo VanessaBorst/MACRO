@@ -26,17 +26,16 @@ def BCE_with_logits(output, target):
     return loss(output, target.float())
 
 
-def multi_branch_BCE_with_logits(output, target, lambda_balance):
+def multi_branch_BCE_with_logits(output, target, single_lead_outputs , lambda_balance):
     loss_fn = BCEWithLogitsLoss()
     # Calculate loss for each branch
-    # TODO adapt formula
     sum_single_branch_losses = 0
+    for single_lead_output in single_lead_outputs:
+        sum_single_branch_losses += loss_fn(single_lead_output, target.float())
     # Calculate loss for concatenated multi-branched output
-    # TODO adapt formula
-    multi_branch_loss = loss_fn(_, _)
-    # Calculate the overall loss by weighted addition of both losses
+    multi_branch_loss = loss_fn(output, target.float())
+    # Calculate the joint loss of each single lead branch and the overall network (weighted sum)
     return multi_branch_loss + lambda_balance * sum_single_branch_losses
-
 
 
 # This contains Sigmoid itself

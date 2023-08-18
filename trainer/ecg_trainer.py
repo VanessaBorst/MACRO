@@ -92,7 +92,8 @@ class ECGTrainer(BaseTrainer):
                 multi_label_training=self.multi_label_training, mode='train',
                 cross_valid_active=cross_valid_active),
             "valid_pos_weights": val_pos_weights,
-            "valid_class_weights": val_class_weights
+            "valid_class_weights": val_class_weights,
+            "lambda_balance": config["loss"]["add_args"].get("lambda_balance", 1),
         }
 
         # confusion matrices
@@ -188,15 +189,23 @@ class ECGTrainer(BaseTrainer):
 
                 self.optimizer.zero_grad()
                 # data has shape [batch_size, 12, seq_len]
-                # TODO check if format still applied to multi-branch MACRO
                 output = self.model(data)
 
+                multi_lead_branch_active = False
                 if type(output) is tuple:
-                    output, attention_weights = output
-                    if self.try_run and self.writer is not None:
-                        self._send_attention_weights_to_writer(
-                            attention_weights=attention_weights.detach().cpu().numpy()[:, :, 0],
-                            batch_idx=batch_idx, epoch=epoch, str_mode="training")
+                    if isinstance(output[1], list):
+                        # multi-branch network
+                        # first element is the overall network output, the second one a list of the single lead branches
+                        multi_lead_branch_active = True
+                        output, single_lead_outputs = output
+                        # detached_single_lead_outputs = torch.stack(single_lead_outputs).detach().cpu()
+                    else:
+                        # single-branch network
+                        output, attention_weights = output
+                        if self.try_run and self.writer is not None:
+                            self._send_attention_weights_to_writer(
+                                attention_weights=attention_weights.detach().cpu().numpy()[:, :, 0],
+                                batch_idx=batch_idx, epoch=epoch, str_mode="training")
 
                 # Detach tensors needed for further tracing and metrics calculation to remove them from the graph
                 detached_output = output.detach().cpu()
@@ -205,6 +214,7 @@ class ECGTrainer(BaseTrainer):
                     detached_target_all_labels = target_all_labels.detach().cpu()
 
                 if epoch == 1 or epoch % self.epoch_log_step_train == 0:
+                    # TODO Maybe also track the single lead outputs here?
                     outputs_list.append(detached_output)
                     targets_list.append(detached_target)
                     if not self.multi_label_training:
@@ -216,8 +226,19 @@ class ECGTrainer(BaseTrainer):
                     param_name: self._param_dict[param_name.replace('pos_weights', 'train_pos_weights').
                     replace('class_weights', 'train_class_weights')] for param_name in additional_args
                 }
-                # TODO: Check how loss has to be applied here
-                loss = self.criterion(target=target, output=output, **additional_kwargs)
+
+                if not multi_lead_branch_active:
+                    loss = self.criterion(target=target, output=output, **additional_kwargs)
+                else:
+                    # Ensure that self.criterion is a function, namely multi_branch_BCE_with_logits
+                    assert callable(self.criterion) and self.criterion.__name__ == "multi_branch_BCE_with_logits", \
+                        "For the multibranch network, the multibranch BCE with logits loss function has to be used!"
+                    # Calculate the joint loss of each single lead branch and the overall network
+                    loss = self.criterion(target=target, output=output,
+                                          single_lead_outputs = single_lead_outputs,
+                                          **additional_kwargs)
+
+
                 loss.backward()
 
                 if self.try_run:
@@ -231,6 +252,7 @@ class ECGTrainer(BaseTrainer):
                     self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
 
                 # Iteratively update the loss and the metrics with the MetricTracker for each batch
+                # TODO Maybe also track the single lead outputs here?
                 self._do_iter_update(metric_tracker=self.train_metrics, output=detached_output,
                                      target=detached_target, loss_val=loss.item())
 
@@ -261,6 +283,7 @@ class ECGTrainer(BaseTrainer):
         # the SummaryWriter/TensorboardWriter, but only each epoch_log_step steps
         if epoch == 1 or epoch % self.epoch_log_step_train == 0:
             # Update the cms and metrics
+            # TODO Maybe also track the single lead outputs here?
             summary_str = self._handle_tracking_at_epoch_end(metric_tracker=self.train_metrics, epoch=epoch,
                                                              outputs=outputs_list, targets=targets_list,
                                                              targets_all_labels=targets_all_labels_list,
@@ -350,12 +373,22 @@ class ECGTrainer(BaseTrainer):
                 data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)
 
                 output = self.model(data)
+
+                multi_lead_branch_active = False
                 if type(output) is tuple:
-                    output, attention_weights = output
-                    if self.try_run:
-                        self._send_attention_weights_to_writer(
-                            attention_weights=attention_weights.detach().cpu().numpy()[:, :, 0],
-                            batch_idx=batch_idx, epoch=epoch, str_mode="validation")
+                    if isinstance(output[1], list):
+                        # multi-branch network
+                        # first element is the overall network output, the second one a list of the single lead branches
+                        multi_lead_branch_active = True
+                        output, single_lead_outputs = output
+                    # detached_single_lead_outputs = torch.stack(single_lead_outputs).detach().cpu()
+                    else:
+                        # single-branch network
+                        output, attention_weights = output
+                        if self.try_run and self.writer is not None:
+                            self._send_attention_weights_to_writer(
+                                attention_weights=attention_weights.detach().cpu().numpy()[:, :, 0],
+                                batch_idx=batch_idx, epoch=epoch, str_mode="validation")
 
                 # Detach tensors needed for further tracing and metrics calculation to remove them from the graph
                 detached_output = output.detach().cpu()
@@ -363,6 +396,7 @@ class ECGTrainer(BaseTrainer):
                 if not self.multi_label_training:
                     detached_target_all_labels = target_all_labels.detach().cpu()
 
+                # TODO Maybe also track the single lead outputs here?
                 outputs_list.append(detached_output)
                 targets_list.append(detached_target)
                 if not self.multi_label_training:
@@ -370,15 +404,26 @@ class ECGTrainer(BaseTrainer):
 
                 additional_args = self.config['loss']['add_args']
                 additional_kwargs = {
-                    param_name: self._param_dict[param_name.replace('pos_weights', 'valid_pos_weights').
-                    replace('class_weights', 'valid_class_weights')] for param_name in additional_args
+                    param_name: self._param_dict[param_name.replace('pos_weights', 'train_pos_weights').
+                    replace('class_weights', 'train_class_weights')] for param_name in additional_args
                 }
-                loss = self.criterion(target=target, output=output, **additional_kwargs)
+
+                if not multi_lead_branch_active:
+                    loss = self.criterion(target=target, output=output, **additional_kwargs)
+                else:
+                    # Ensure that self.criterion is a function, namely multi_branch_BCE_with_logits
+                    assert callable(self.criterion) and self.criterion.__name__ == "multi_branch_BCE_with_logits", \
+                        "For the multibranch network, the multibranch BCE with logits loss function has to be used!"
+                    # Calculate the joint loss of each single lead branch and the overall network
+                    loss = self.criterion(target=target, output=output,
+                                          single_lead_outputs=single_lead_outputs,
+                                          **additional_kwargs)
 
                 if self.writer is not None:
                     self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx)
 
                 # Iteratively update the loss and the metrics with the MetricTracker
+                # TODO Maybe also track the single lead outputs here?
                 self._do_iter_update(metric_tracker=self.valid_metrics, output=detached_output,
                                      target=detached_target, loss_val=loss.item())
 
@@ -392,6 +437,7 @@ class ECGTrainer(BaseTrainer):
         # the SummaryWriter/TensorboardWriter
         # For validation, metrics are calculated each epoch
         # Do not calculate and track the confusion matrices each time, ony each few epochs
+        # TODO Maybe also track the single lead outputs here?
         valid_sum_str = self._handle_tracking_at_epoch_end(metric_tracker=self.valid_metrics, epoch=epoch,
                                                            outputs=outputs_list, targets=targets_list,
                                                            targets_all_labels=targets_all_labels_list, mode='valid',

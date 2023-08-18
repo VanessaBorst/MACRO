@@ -16,7 +16,7 @@ class MultiHeadAttention(nn.Module):
     Parameters
     ----------
     d_model:
-        Dimension of the input vector.
+        Dimension of the input (and hence, also the output) vector.
     k:
         Dimension of all key matrix.
     q:
@@ -42,13 +42,12 @@ class MultiHeadAttention(nn.Module):
                  h: int,
                  dropout: float,
                  discard_FC_before_MH: bool,
-                 attention_size: int = None,
                  **kwargs):
         """Initialize the Multi Head Block."""
         super().__init__()
 
         self._h = h
-        self._attention_size = attention_size
+        self._k = k  # Needed for the scaled dot product attention
         self._discard_FC_before_MH = discard_FC_before_MH
 
         # Query, keys and value matrices
@@ -100,7 +99,9 @@ class MultiHeadAttention(nn.Module):
         -------
             MH attention tensor with shape (batch_size, 1, d_model).
         """
-        K = key.shape[2]        #shape[1] corresponds to T, shape[2] corresponds to 2x GRU cells
+        # Old version (works only as long as d_k = d_model):
+        # K = key.shape[2]        #shape[1] corresponds to T, shape[2] corresponds to 2x GRU cells
+        # After modifications (d_k = d_v = d_model/h in the multi-branch-attention) use self._k instead of K)
 
         # Compute Q, K and V, concatenate heads on batch dimension
         queries = torch.cat(self._W_q(query).chunk(self._h, dim=-1), dim=0)
@@ -108,7 +109,7 @@ class MultiHeadAttention(nn.Module):
         values = torch.cat(self._W_v(value).chunk(self._h, dim=-1), dim=0)
 
         # Scaled Dot Product
-        self._scores = torch.bmm(queries, keys.transpose(1, 2)) / np.sqrt(K)
+        self._scores = torch.bmm(queries, keys.transpose(1, 2)) / np.sqrt(self._k)
 
         # Apply sotfmax
         self._scores = F.softmax(self._scores, dim=-1)

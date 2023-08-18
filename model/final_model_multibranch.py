@@ -7,8 +7,7 @@ from torchinfo import summary
 from base import BaseModel
 from layers.BasicBlock1dWithNorm import BasicBlock1dWithNorm
 from layers.BasicBlock1dWithNormPreActivationDesign import BasicBlock1dWithNormPreactivation
-from layers.ContextualAttention import ContextualAttention, MultiHeadContextualAttention
-from utils import plot_record_from_np_array
+from layers.ContextualAttention import MultiHeadContextualAttention
 
 
 class FinalModelMultiBranch(BaseModel):
@@ -16,24 +15,28 @@ class FinalModelMultiBranch(BaseModel):
     def __init__(self,
                  multi_branch_gru_units=32,
                  multi_branch_heads=16,
+                 multi_label_training=True,
                  num_classes=9):
         """
 
         @return:
         """
         super().__init__()
+
         self._final_model_single_leads = [FinalModelBranchNet(
             gru_units=multi_branch_gru_units,
             heads=multi_branch_heads,
+            multi_label_training=multi_label_training,
             input_channel=1) for _ in range(12)]
 
-        # self._test = nn.Sequential(*self._final_model_single_leads)
+        self._test = nn.Sequential(*self._final_model_single_leads)
 
-        # d_model = 2 * gru_dimension = 2 * multi_branch_gru_units * 12
-        self._multi_head_contextual_attention = MultiHeadContextualAttention(gru_dimension=multi_branch_gru_units * 12,
+        # d_model = 2 * multi_branch_gru_units * 12
+        self._multi_head_contextual_attention = MultiHeadContextualAttention(gru_dimension=multi_branch_gru_units,
                                                                              dropout=0.3,
                                                                              heads=multi_branch_heads,
-                                                                             discard_FC_before_MH=False)
+                                                                             discard_FC_before_MH=False,
+                                                                             multi_branch=True)
 
         self._batchNorm = nn.Sequential(
             nn.BatchNorm1d(multi_branch_gru_units * 2 * 12),
@@ -126,11 +129,18 @@ class FinalModelBranchNet(BaseModel):
         self._use_pre_activation_design = use_pre_activation_design
 
         if vary_channels:
-            out_channel_block_1 = 24
-            out_channel_block_2 = 48
-            out_channel_block_3 = 48
-            out_channel_block_4 = 24
-            out_channel_block_5 = 12
+            # Old version -> when used in multi-branch setting, reduce the amount of channels
+            # out_channel_block_1 = 24
+            # out_channel_block_2 = 48
+            # out_channel_block_3 = 48
+            # out_channel_block_4 = 24
+            # out_channel_block_5 = 12
+
+            out_channel_block_1 = 12
+            out_channel_block_2 = 24
+            out_channel_block_3 = 24
+            out_channel_block_4 = 12
+            out_channel_block_5 = 1
         else:
             out_channel_block_1 = out_channel_block_2 = out_channel_block_3 \
                 = out_channel_block_4 = out_channel_block_5 = 12

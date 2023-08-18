@@ -4,8 +4,7 @@ from torchinfo import summary
 from base import BaseModel
 from layers.BasicBlock1dWithNorm import BasicBlock1dWithNorm
 from layers.BasicBlock1dWithNormPreActivationDesign import BasicBlock1dWithNormPreactivation
-from layers.ContextualAttention import ContextualAttention, MultiHeadContextualAttention
-from utils import plot_record_from_np_array
+from layers.ContextualAttention import  MultiHeadContextualAttention
 
 
 class FinalModel(BaseModel):

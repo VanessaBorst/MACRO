@@ -117,11 +117,12 @@ class MultiHeadContextualAttention(nn.Module):
         Bool specifying whether an bias should be used to retrieve the hidden representation for
         the hidden states of the BiGRU (which serve as values)
     """
-    def __init__(self, gru_dimension, heads, dropout=None, use_bias=True, discard_FC_before_MH=False):
+    def __init__(self, gru_dimension, heads, dropout=None, use_bias=True, discard_FC_before_MH=False,
+                 multi_branch=False):
         super().__init__()
         self._use_bias = use_bias
         self._discard_FC_before_MH = discard_FC_before_MH
-        d_model = 2 * gru_dimension
+        d_model = 2 * gru_dimension if not multi_branch else 2 * gru_dimension * 12
 
         if not self._discard_FC_before_MH:
             # The input dimension will be twice the number of units of a single GRU (since it is a BiGRU)
@@ -138,8 +139,12 @@ class MultiHeadContextualAttention(nn.Module):
         u = nn.init.xavier_uniform_(u)
         self._query = nn.Parameter(u, requires_grad=True)
 
-        self._multihead_attention = MultiHeadAttention(d_model=d_model, k=d_model,
-                                                       q=d_model, v=d_model, h=heads,
+        # To avoid to large matrices, reduce the dimensions of the keys, queries, and values
+        # Based on the paper "Attention is all you need" d_k = d_v =d_model/h is chosen
+        d_k = d_q = d_v = d_model // heads if multi_branch else d_model
+
+        self._multihead_attention = MultiHeadAttention(d_model=d_model, k=d_k,
+                                                       q=d_q, v=d_v, h=heads,
                                                        dropout=dropout,
                                                        discard_FC_before_MH=self._discard_FC_before_MH)
 

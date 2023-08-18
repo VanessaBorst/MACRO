@@ -1,6 +1,6 @@
 {
   "name": "FinalModel_MACRO_MultiBranch",
-  "run_details": "_WIP_run_withFC_0.3_32_16",
+  "run_details": "_WIP_run_withFC_0.3_12_3_BS32",
   "n_gpu": 1,
   "arch": {
     "type": "FinalModelMultiBranch",
@@ -19,7 +19,7 @@
     },
     "args": {
       "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000",
-      "batch_size": 64,
+      "batch_size": 32,
       "shuffle": true,
       "validation_split": 0.25,
       "num_workers": 4,
