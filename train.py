@@ -276,6 +276,14 @@ def tuning_params(name):
         #     "gru_units": tune.grid_search([12, 24, 32]),  # Eventually add 18
         #     "discard_FC_before_MH": False
         # }
+    elif name == "FinalModelMultiBranch":
+        return {
+            # "lr"
+            "multi_branch_gru_units": tune.grid_search([12, 24, 32]),
+            "multi_branch_heads": tune.grid_search([1, 4, 8, 16]),
+
+
+        }
     else:
         return None
 
