@@ -1,6 +1,6 @@
 {
-  "name": "FinalModel_MACRO_MultiBranch",
-  "run_details": "_paramstudy_bs_16",
+  "name": "FinalModel_MACRO_MultiBranch_ParamStudy",
+  "run_details": "",
   "n_gpu": 1,
   "arch": {
     "type": "FinalModelMultiBranch",

@@ -246,20 +246,20 @@ def tuning_params(name):
         # }
 
         #Rerun without FC
-        return {
-            "down_sample": "conv",
-            "vary_channels": True,
-            "pos_skip": "all",
-            "norm_type": "BN",
-            "norm_pos": "all",
-            "norm_before_act": True,
-            "use_pre_activation_design": True, # tune.grid_search([True, False]),
-            "use_pre_conv": True,  # only has a meaning when used with pre-activation design
-            "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
-            "heads": tune.grid_search([3, 5, 8, 32]),  # See visualization, 16 does not work well (was trained nevertheless)
-            "gru_units": tune.grid_search([12, 24, 32]),  # Eventually add 18
-            "discard_FC_before_MH": True
-        }
+        # return {
+        #     "down_sample": "conv",
+        #     "vary_channels": True,
+        #     "pos_skip": "all",
+        #     "norm_type": "BN",
+        #     "norm_pos": "all",
+        #     "norm_before_act": True,
+        #     "use_pre_activation_design": True, # tune.grid_search([True, False]),
+        #     "use_pre_conv": True,  # only has a meaning when used with pre-activation design
+        #     "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
+        #     "heads": tune.grid_search([3, 5, 8, 32]),  # See visualization, 16 does not work well (was trained nevertheless)
+        #     "gru_units": tune.grid_search([12, 24, 32]),  # Eventually add 18
+        #     "discard_FC_before_MH": True
+        # }
 
         # # Rerun with FC
         # return {
@@ -276,13 +276,31 @@ def tuning_params(name):
         #     "gru_units": tune.grid_search([12, 24, 32]),  # Eventually add 18
         #     "discard_FC_before_MH": False
         # }
+
+        # NEW MACRO PAPER, Batchsize is varied in Config
+        return {
+            "down_sample": "conv",
+            "vary_channels": True,
+            "pos_skip": "all",
+            "norm_type": "BN",
+            "norm_pos": "all",
+            "norm_before_act": True,
+            "use_pre_activation_design": True,
+            "use_pre_conv": True,
+            "pre_conv_kernel": 16,
+            "dropout_attention": 0.3,
+            "heads":  tune.grid_search([1, 2, 3, 8]),
+            "gru_units": tune.grid_search([12, 24, 32]),
+            "discard_FC_before_MH":  tune.grid_search([True, False])
+        }
+
     elif name == "FinalModelMultiBranch":
         return {
-            # "lr"
+            # TODO Rework
+            # "lr": tune.grid_search([0.001, 0.0001]),  # maybe also try 0.00001
             "multi_branch_gru_units": tune.grid_search([12, 24, 32]),
             "multi_branch_heads": tune.grid_search([1, 4, 8, 16]),
-
-
+            "vary_channels_lighter_version": tune.grid_search([True, False])
         }
     else:
         return None
@@ -294,7 +312,7 @@ class MyTuneCallback(Callback):
         self.already_seen = set()
         self.manager = TuneClient(tune_address="127.0.0.1", port_forward=4321)
 
-    def setup(self, ):
+    def setup(self):
         # Experiment 3: Final Model
         # seen_configs = [
         #     {
@@ -465,15 +483,19 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
 
     data_dir = main_config['data_loader']['args']['data_dir']
     full_data_dir = os.path.join(str(get_project_root()), data_dir)
-    data_loader = main_config.init_obj('data_loader', module_data_loader, data_dir=full_data_dir,
-                                       single_batch=config['data_loader'].get('overfit_single_batch', False))
-    valid_data_loader = data_loader.split_validation()
+    # data_loader = main_config.init_obj('data_loader', module_data_loader, data_dir=full_data_dir,
+    #                                    single_batch=config['data_loader'].get('overfit_single_batch', False))
+    # valid_data_loader = data_loader.split_validation()
 
     def train_fn(config, checkpoint_dir=None):
+        # TODO check
+        data_loader = main_config.init_obj('data_loader', module_data_loader, data_dir=full_data_dir,
+                                           single_batch=main_config['data_loader'].get('overfit_single_batch', False))
+        valid_data_loader = data_loader.split_validation()
         train_model(config=main_config, tune_config=config, train_dl=data_loader, valid_dl=valid_data_loader,
                     checkpoint_dir=checkpoint_dir, use_tune=True)
 
-    ray.init(_temp_dir=os.path.join(get_project_root(), 'ray_tmp'))
+    ray.init(_temp_dir=os.path.join('/home/vab30xh/','ray_tmp'))   # get_project_root(), 'ray_tmp'))
 
     trainer = main_config['trainer']
     early_stop = trainer.get('monitor', 'off')
@@ -596,18 +618,40 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                             "training_iteration"])
     elif main_config["arch"]["type"] == "FinalModel":
         reporter = CLIReporter(
+            # parameter_columns={
+            #     "down_sample": "Downsampling",
+            #     "vary_channels": "Varied channels",
+            #     "pos_skip": "Skip Pos",
+            #     "norm_type": "Type",
+            #     "norm_pos": "Norm pos",
+            #     "norm_before_act": "NormBefAct",
+            #     "use_pre_activation_design": "PreActDesign",
+            #     "dropout_attention": "DP Att",
+            #     "heads": "H",
+            #     "gru_units": "GRU",
+            #     "discard_FC_before_MH": "WithoutFC"
+            # },
+            # MACRO
             parameter_columns={
-                "down_sample": "Downsampling",
-                "vary_channels": "Varied channels",
-                "pos_skip": "Skip Pos",
-                "norm_type": "Type",
-                "norm_pos": "Norm pos",
-                "norm_before_act": "NormBefAct",
-                "use_pre_activation_design": "PreActDesign",
-                "dropout_attention": "DP Att",
                 "heads": "H",
                 "gru_units": "GRU",
                 "discard_FC_before_MH": "WithoutFC"
+            },
+            metric_columns=["loss", "val_loss",
+                            "val_weighted_sk_f1",
+                            "val_cpsc_F1",
+                            "val_cpsc_Faf",
+                            "val_cpsc_Fblock",
+                            "val_cpsc_Fpc",
+                            "val_cpsc_Fst",
+                            "training_iteration"])
+    elif main_config["arch"]["type"] == "FinalModelMultiBranch":
+        reporter = CLIReporter(
+            parameter_columns={
+                # "lr": "LR",
+                "multi_branch_gru_units": "GRU",
+                "multi_branch_heads": "H",
+                "vary_channels_lighter_version": "Vary Channels Light",
             },
             metric_columns=["loss", "val_loss",
                             "val_weighted_sk_f1",
@@ -730,16 +774,25 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
     #                                               "out_channel_first_conv_blocks <= out_channel_second_conv_blocks"])
     # ax_searcher = ConcurrencyLimiter(ax_searcher, max_concurrent=2)
 
+    # TODO check if 0.5 is also needed for the multi-branch model
     num_gpu = 0.5 if not main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsV2" and not \
         main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2" and not \
-        main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2PreActivation" and not \
-        main_config["arch"]["type"] == "FinalModel" else 1
+        main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2PreActivation" else 1
+        # and not main_config["arch"]["type"] == "FinalModel" else 1
+
+
     analysis = tune.run(
         run_or_experiment=train_fn,
         num_samples=num_tune_samples,
         name=str(main_config.save_dir),  # experiment_name
         trial_dirname_creator=name_trial,  # trial_name
-        local_dir=str(main_config.save_dir),
+        storage_path=str(main_config.save_dir),
+        sync_config=tune.SyncConfig(
+            syncer="auto",
+            # Sync approximately every minute rather than on every checkpoint
+            sync_on_checkpoint=False,
+            sync_period=60,
+        ),
 
         #  scheduler=scheduler,             # Do not use any scheduler, early stopping can be configured in the Config!
         metric=mnt_metric,
@@ -787,12 +840,17 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
     if use_tune:
         # When using Ray Tune, this is distributed among worker processes, which requires seeding within the function
         # Otherwise the same config may to different results -> not reproducible
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
         np.random.seed(SEED)
         torch.manual_seed(SEED)
         random.seed(SEED)
         torch.cuda.manual_seed_all(SEED)
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
+        torch.use_deterministic_algorithms(True)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+        os.environ["CUDA_VISIBLE_DEVICES"] = "MIG-11c29e81-e611-50b5-b5ef-609c0a0fe58b"
 
     # Conditional inputs depending on the config
     if config['arch']['type'] == 'BaselineModelWoRnnWoAttention':
@@ -816,7 +874,7 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
     elif config['arch']['type'] == 'FinalModel':
         import model.final_model as module_arch
     elif config['arch']['type'] == 'FinalModelMultiBranch':
-        import model.final_model_multibranch as module_arch
+        import model.final_model_multibranch_old as module_arch
 
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric

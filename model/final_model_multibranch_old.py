@@ -24,14 +24,14 @@ class FinalModelMultiBranch(BaseModel):
         """
         super().__init__()
 
-        final_model_single_leads = [FinalModelBranchNet(
+        self._final_model_single_leads = [FinalModelBranchNet(
             gru_units=multi_branch_gru_units,
             heads=multi_branch_heads,
             vary_channels_lighter_version=vary_channels_lighter_version,
             multi_label_training=multi_label_training,
             input_channel=1) for _ in range(12)]
 
-        self._final_model_single_leads = nn.Sequential(*final_model_single_leads)
+        self._test = nn.Sequential(*self._final_model_single_leads)
 
         # d_model = 2 * multi_branch_gru_units * 12
         self._multi_head_contextual_attention = MultiHeadContextualAttention(gru_dimension=multi_branch_gru_units,
@@ -68,12 +68,6 @@ class FinalModelMultiBranch(BaseModel):
         # BiGRU output has shape batch_size x (seq_len/(2^5)) x (multi_branch_gru_units * 2)
         # Hence, after concat, the shape is: batch_size x (seq_len/(2^5)) x (multi_branch_gru_units * 2 * 12)
         x = torch.cat([single_lead_results[i][1] for i in range(12)], dim=2)
-
-        # x -> batch_size x 2250 x (multi_branch_gru_units * 2 * 12)
-        # (multi_branch_gru_units * 2 * 12) is 288, 576 or 768
-        # Conv1 ->
-        # Conv2 ->
-        # Conv3 ->
 
         x = self._multi_head_contextual_attention(x)
         x = self._batchNorm(x)

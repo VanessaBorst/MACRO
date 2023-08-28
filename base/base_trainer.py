@@ -49,6 +49,7 @@ class BaseTrainer:
             self.early_stop = cfg_trainer.get('early_stop', inf)
             if self.early_stop <= 0:
                 self.early_stop = inf
+            self.minimum_diff_for_improvement = cfg_trainer.get('minimum_diff_for_improvement', None)
 
         self.start_epoch = 1
 
@@ -91,8 +92,16 @@ class BaseTrainer:
             if self.mnt_mode != 'off':
                 try:
                     # check whether model performance improved or not, according to specified metric(mnt_metric)
-                    improved = (self.mnt_mode == 'min' and log_mean[self.mnt_metric] <= self.mnt_best) or \
-                               (self.mnt_mode == 'max' and log_mean[self.mnt_metric] >= self.mnt_best)
+                    if self.minimum_diff_for_improvement is None:
+                        # Every improvement is considered as an improvement, no matter how small it is
+                        improved = (self.mnt_mode == 'min' and log_mean[self.mnt_metric] <= self.mnt_best) or \
+                                   (self.mnt_mode == 'max' and log_mean[self.mnt_metric] >= self.mnt_best)
+                    else:
+                        # Improvement is considered only if it is larger than a minimum difference
+                        improved = (self.mnt_mode == 'min' and
+                                    log_mean[self.mnt_metric] <= self.mnt_best - self.minimum_diff_for_improvement) \
+                                   or (self.mnt_mode == 'max' and
+                                       log_mean[self.mnt_metric] >= self.mnt_best + self.minimum_diff_for_improvement)
                 except KeyError:
                     self.logger.warning("Warning: Metric '{}' is not found. "
                                         "Model performance monitoring is disabled.".format(self.mnt_metric))
@@ -123,7 +132,8 @@ class BaseTrainer:
                     self.logger.info("Best Validation performance achieved in epoch {}.".format(epoch_idx_best))
                     break
 
-            if epoch % self.save_period == 0:
+            if epoch % self.save_period == 0 or best:
+                # Save checkpoint if best in any case
                 self.logger.info("Best {}: {:.6f}".format(self.mnt_metric, self.mnt_best))
                 self._save_checkpoint(epoch, save_best=best)
 

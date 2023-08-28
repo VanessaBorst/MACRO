@@ -1,13 +1,11 @@
 {
-  "name": "FinalModel_MACRO_MultiBranch",
-  "run_details": "_WIP_run_withFC_0.3_12_3_BS32_larger_CNN_channels",
+  "name": "FinalModel_MACRO_ParamStudy",
+  "run_details": "",
   "n_gpu": 1,
   "arch": {
-    "type": "FinalModelMultiBranch",
+    "type": "FinalModel",
     "args": {
-      "multi_branch_gru_units": 12,
-      "multi_branch_heads": 3,
-      "vary_channels_lighter_version": false,
+      "apply_final_activation": false,
       "multi_label_training": true
     }
   },
@@ -20,7 +18,7 @@
     },
     "args": {
       "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000",
-      "batch_size": 32,
+      "batch_size": 8,
       "shuffle": true,
       "validation_split": 0.25,
       "num_workers": 4,
@@ -38,10 +36,8 @@
     }
   },
   "loss": {
-    "type": "multi_branch_BCE_with_logits",
-    "add_args": {
-      "lambda_balance": 1
-    }
+    "type": "BCE_with_logits",
+    "add_args": {}
   },
   "metrics": {
     "sl": {
@@ -94,6 +90,7 @@
     "verbosity": 2,
     "monitor": "max val_weighted_sk_f1",
     "early_stop": 20,
+    "minimum_diff_for_improvement": 0.001,
     "tensorboard": true,
     "try_run": false,
     "profiler_active": false

@@ -293,4 +293,5 @@ if __name__ == "__main__":
                        dropout_attention=0.3,
                        gru_units=32,
                        heads=16)
+    #print(str(model))
     summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "kernel_size", "num_params"])

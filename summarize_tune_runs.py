@@ -94,17 +94,30 @@ def _bold_formatter(x, value, num_decimals=2):
 # 'savedVM_v2/models/FinalModel/experiment_3_with_FC'
 # 'savedVM_v2/models/FinalModel/experiment_3_ohne_FC_preAct_all'
 
-path_to_tune = 'savedVM_v2/models/FinalModel/experiment_3_rerun_noFC'
+# path_to_tune = 'savedVM_v2/models/FinalModel/experiment_3_rerun_noFC'
+# hyper_params = ["discard_FC_before_MH", "down_sample", "dropout_attention", "gru_units", "heads",
+#                 "norm_before_act", "norm_pos", "norm_type", "pos_skip",
+#                 "use_pre_activation_design", "use_pre_conv", "vary_channels"]
+# integer_vals = ['gru_units', 'heads', 'Epochs']
+# single_precision = ['dropout_attention']
+# desired_col_order = None
+# #  Discard FC before MH is either True or False for all runs (depending on VM), PreAct always True
+# desired_col_order = ["dropout_attention", "heads", "gru_units",
+#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs']
+
+
+path_to_tune = 'savedVM/models/FinalModel_MACRO_ParamStudy/0824_175925_ml_bs16'
 hyper_params = ["discard_FC_before_MH", "down_sample", "dropout_attention", "gru_units", "heads",
-                "norm_before_act", "norm_pos", "norm_type", "pos_skip",
+                "norm_before_act", "norm_pos", "norm_type", "pos_skip", "pre_conv_kernel",
                 "use_pre_activation_design", "use_pre_conv", "vary_channels"]
 integer_vals = ['gru_units', 'heads', 'Epochs']
 single_precision = ['dropout_attention']
-desired_col_order = None
-#  Discard FC before MH is either True or False for all runs (depending on VM), PreAct always True
-desired_col_order = ["dropout_attention", "heads", "gru_units",
+desired_col_order = ["discard_FC_before_MH", "heads", "gru_units",
                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs']
+
+
 
 
 include_class_wise_f1 = True

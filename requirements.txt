@@ -5,11 +5,12 @@ numpy
 pandas
 plotly
 pytest
-ray
+ray[default]
 scikit_learn
 scipy
 seaborn
 tensorboard
+tensorboardx
 torch
 torchinfo
 torchmetrics

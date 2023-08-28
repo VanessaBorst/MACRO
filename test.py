@@ -406,6 +406,8 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
         import model.baseline_model_with_skips_and_norm_v2_pre_activation_design as module_arch
     elif config['arch']['type'] == 'FinalModel':
         import model.final_model as module_arch
+    elif config['arch']['type'] == 'FinalModelMultiBranch':
+        import  model.final_model_multibranch as module_arch
 
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric
@@ -524,7 +526,8 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
             idx_list=list(range(len(data_loader.sampler))), mode='test'),
         "class_weights": data_loader.dataset.get_inverse_class_frequency(
             idx_list=list(range(len(data_loader.sampler))),
-            multi_label_training=multi_label_training, mode='test')
+            multi_label_training=multi_label_training, mode='test'),
+        "lambda_balance": config["loss"]["add_args"].get("lambda_balance", 1)
     }
 
     # Setup visualization writer instance
@@ -564,8 +567,21 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
             data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)
             output = model(data)
 
+            multi_lead_branch_active = False
             if type(output) is tuple:
-                output, attention_weights = output
+                if isinstance(output[1], list):
+                    # multi-branch network
+                    # first element is the overall network output, the second one a list of the single lead branches
+                    multi_lead_branch_active = True
+                    output, single_lead_outputs = output
+                    # detached_single_lead_outputs = torch.stack(single_lead_outputs).detach().cpu()
+                else:
+                    # single-branch network
+                    output, attention_weights = output
+                    if self.try_run and self.writer is not None:
+                        self._send_attention_weights_to_writer(
+                            attention_weights=attention_weights.detach().cpu().numpy()[:, :, 0],
+                            batch_idx=batch_idx, epoch=epoch, str_mode="training")
 
             # Detach tensors needed for further tracing and metrics calculation to remove them from the graph
             detached_output = output.detach().cpu()
@@ -583,10 +599,31 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
             # Output and target are needed for all metrics! Only consider other args WITHOUT default
             additional_args = [arg.name for arg in args
                                if arg.name not in ('output', 'target') and arg.default is arg.empty]
-            additional_kwargs = {
-                param_name: _param_dict[param_name] for param_name in additional_args
-            }
-            loss = loss_fn(output=output, target=target, **additional_kwargs)
+
+            if not multi_lead_branch_active:
+                additional_kwargs = {
+                    param_name: _param_dict[param_name] for param_name in additional_args
+                }
+                loss = loss_fn(output=output, target=target, **additional_kwargs)
+            else:
+                # Ensure that self.criterion is a function, namely multi_branch_BCE_with_logits
+                assert callable(loss_fn) and loss_fn.__name__ == "multi_branch_BCE_with_logits", \
+                    "For the multibranch network, the multibranch BCE with logits loss function has to be used!"
+
+                assert additional_args == ['single_lead_outputs', 'lambda_balance'], \
+                    "Something went wrong with the kwargs"
+
+                additional_kwargs = {
+                    "lambda_balance" : _param_dict["lambda_balance"]
+                }
+
+                # Calculate the joint loss of each single lead branch and the overall network
+                loss = loss_fn(target=target, output=output,
+                               single_lead_outputs=single_lead_outputs,
+                               **additional_kwargs)
+
+
+
             # batch_size = data.shape[0]
             # total_loss += loss.item() * batch_size
             metric_tracker.iter_update('loss', loss.item(), n=output.shape[0])
