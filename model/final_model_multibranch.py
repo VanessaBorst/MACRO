@@ -8,14 +8,20 @@ from base import BaseModel
 from layers.BasicBlock1dWithNorm import BasicBlock1dWithNorm
 from layers.BasicBlock1dWithNormPreActivationDesign import BasicBlock1dWithNormPreactivation
 from layers.ContextualAttention import MultiHeadContextualAttention
+from layers.LayerUtils import calc_same_padding_for_stride_one
 
 
 class FinalModelMultiBranch(BaseModel):
 
     def __init__(self,
-                 multi_branch_gru_units=32,
-                 multi_branch_heads=16,
+                 multi_branch_heads=2,
+                 first_conv_reduction_kernel_size=3,
+                 second_conv_reduction_kernel_size=3,
+                 third_conv_reduction_kernel_size=3,
                  vary_channels_lighter_version = True,
+                 discard_FC_before_MH=False,
+                 branchNet_gru_units=24,
+                 branchNet_heads=2,
                  multi_label_training=True,
                  num_classes=9):
         """
@@ -25,29 +31,70 @@ class FinalModelMultiBranch(BaseModel):
         super().__init__()
 
         final_model_single_leads = [FinalModelBranchNet(
-            gru_units=multi_branch_gru_units,
-            heads=multi_branch_heads,
+            gru_units=branchNet_gru_units,
+            heads=branchNet_heads,
             vary_channels_lighter_version=vary_channels_lighter_version,
+            discard_FC_before_MH=discard_FC_before_MH,
             multi_label_training=multi_label_training,
             input_channel=1) for _ in range(12)]
 
         self._final_model_single_leads = nn.Sequential(*final_model_single_leads)
 
-        # d_model = 2 * multi_branch_gru_units * 12
-        self._multi_head_contextual_attention = MultiHeadContextualAttention(gru_dimension=multi_branch_gru_units,
+        # branchNet_gru_units -> in_channels -> channel_reduction_per_conv -> channel_seq
+        # 12 -> in_channels = 288 -> 92 -> 288, 196, 104, 12
+        # 24 -> in_channels = 576 -> 188 -> 576, 388, 200, 12
+        # 32 -> in_channels = 768 -> 252 -> 768, 516, 264, 12
+        in_channels = branchNet_gru_units * 2 * 12
+        # The out_channels should be reduced to 12 in three steps
+        first_out_channels= in_channels - (in_channels - 12) // 3
+        second_out_channels = in_channels - 2 * (in_channels - 12) // 3
+        third_out_channels = 12
+
+        # # Define the function to calculate same padding (with stride 1 and dilation 1 !!!)
+        # def calculate_same_padding(kernel_size):
+        #     if kernel_size % 2 == 0:
+        #         # If stride is 1 and the kernel_size even, the additional one-sided 0 is used to keep/half dimension
+        #         return kernel_size // 2
+        #     else:
+        #         # If the kernel size is odd, the padding is the same on both sides, no one-sided padding is needed
+        #         return (kernel_size - 1) // 2
+        #
+        # # Apply padding to ensure that the sequence length stays the same
+        # # If stride is 1 and the kernel_size is even, an additional one-sided 0 is needed to keep dimensions
+        # self._one_sided_padding = nn.ConstantPad1d((0, 1), 0)
+        #
+        # self._half_padding_first_kernel = nn.ConstantPad1d((calculate_same_padding(first_conv_reduction_kernel_size), calculate_same_padding(first_conv_reduction_kernel_size)), 0)
+        # self._half_padding_second_kernel = nn.ConstantPad1d((calculate_same_padding(second_conv_reduction_kernel_size), calculate_same_padding(second_conv_reduction_kernel_size)), 0)
+        # self._half_padding_third_kernel = nn.ConstantPad1d((calculate_same_padding(third_conv_reduction_kernel_size), calculate_same_padding(third_conv_reduction_kernel_size)),0)
+
+        self._convolutional_reduction_block = nn.Sequential(
+            nn.Conv1d(in_channels=in_channels, out_channels=first_out_channels,
+                      kernel_size=first_conv_reduction_kernel_size, padding="same"),
+            nn.BatchNorm1d(first_out_channels),
+            nn.LeakyReLU(0.3),
+            nn.Conv1d(in_channels=first_out_channels, out_channels=second_out_channels,
+                      kernel_size=second_conv_reduction_kernel_size, padding="same"),
+            nn.BatchNorm1d(second_out_channels),
+            nn.LeakyReLU(0.3),
+            nn.Conv1d(in_channels=second_out_channels, out_channels=third_out_channels,
+                      kernel_size=third_conv_reduction_kernel_size, padding="same"),
+            nn.LeakyReLU(0.3)
+        )
+
+        # d_model is 12 in this case, before it was 2 * gru_units
+        self._multi_head_contextual_attention = MultiHeadContextualAttention(d_model=12,
                                                                              dropout=0.3,
                                                                              heads=multi_branch_heads,
-                                                                             discard_FC_before_MH=False,
-                                                                             multi_branch=True)
+                                                                             discard_FC_before_MH=discard_FC_before_MH)
 
         self._batchNorm = nn.Sequential(
-            nn.BatchNorm1d(multi_branch_gru_units * 2 * 12),
+            nn.BatchNorm1d(12),
             nn.LeakyReLU(0.3),
             nn.Dropout(0.2)
         )
 
-        # Input: bidirectional GRU, twelve times -> multi_branch_gru_units * 2 * 12
-        self._fcn = nn.Linear(in_features=multi_branch_gru_units * 2 * 12, out_features=num_classes)
+        # Input: d_model of the MH mechanism
+        self._fcn = nn.Linear(in_features= 12, out_features=num_classes)
         # apply final activation is false by default
 
     def forward(self, x):
@@ -59,25 +106,37 @@ class FinalModelMultiBranch(BaseModel):
         # Format will be a list of length 12 containing of tuples of the following format
         # (final_output, biGRU_output) with
         # final_output: batch_size x 9
-        # biGRU_output: batch_size x (seq_len/(2^5)) x (multi_branch_gru_units * 2)
+        # biGRU_output: batch_size x (seq_len/(2^5)) x (branchNet_gru_units * 2)
         single_lead_results = [
             self._final_model_single_leads[i](x[:, i, None, :]) for i in range(12)
         ]
         # Concatenate the results of the single lead branches in channel dimension
         # Cat (BiGRU_1, ..., BiGRU_12)
-        # BiGRU output has shape batch_size x (seq_len/(2^5)) x (multi_branch_gru_units * 2)
-        # Hence, after concat, the shape is: batch_size x (seq_len/(2^5)) x (multi_branch_gru_units * 2 * 12)
+        # BiGRU output has shape batch_size x (seq_len/(2^5)) x (branchNet_gru_units * 2)
+        # Hence, after concat, the shape is: batch_size x (seq_len/(2^5)) x (branchNet_gru_units * 2 * 12)
         x = torch.cat([single_lead_results[i][1] for i in range(12)], dim=2)
 
-        # x -> batch_size x 2250 x (multi_branch_gru_units * 2 * 12)
-        # (multi_branch_gru_units * 2 * 12) is 288, 576 or 768
-        # Conv1 ->
-        # Conv2 ->
-        # Conv3 ->
+        # x has shape [batch_size, seq_len, 12 * 2 * branchNet_gru_units]
+        # switch seq_length and feature_size after the BiGRUs again for further convolutional processing
+        x = x.permute(0, 2, 1)
 
+        # x -> batch_size  x (branchNet_gru_units * 2 * 12) x 2250
+        # (branchNet_gru_units * 2 * 12) is 288, 576 or 768
+        # Conv1 -> Reduction to 196, 388, or 516 channels
+        # Conv2 -> Reduction to 104, 200, or 264 channels
+        # Conv3 -> Reduction to 12 channels
+        x = self._convolutional_reduction_block(x)
+
+        # x has shape [bs, 12, len*], len* = 2250
+        # switch seq_length and feature_size again for getting a weighted sum over the features of all time steps
+        x = x.permute(0, 2, 1)
+        # x has shape [bs, len*, 12]
         x = self._multi_head_contextual_attention(x)
+
+        # x has shape [bs, 12]
         x = self._batchNorm(x)
         x = self._fcn(x)
+        # x has shape [bs, num_classes]
 
         return x, [single_lead_results[i][0] for i in range(12)]
 
@@ -330,7 +389,7 @@ class FinalModelBranchNet(BaseModel):
             nn.Dropout(drop_out_gru)
         )
 
-        self._multi_head_contextual_attention = MultiHeadContextualAttention(gru_dimension=gru_units,
+        self._multi_head_contextual_attention = MultiHeadContextualAttention(d_model=2 * gru_units,
                                                                              dropout=dropout_attention,
                                                                              heads=heads,
                                                                              discard_FC_before_MH=discard_FC_before_MH)
@@ -389,8 +448,8 @@ class FinalModelBranchNet(BaseModel):
 
 if __name__ == "__main__":
     model = FinalModelMultiBranch(
-        multi_branch_gru_units=32,
-        multi_branch_heads=16, )
+        multi_branch_gru_units=24,
+        multi_branch_heads=2, )
     summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "kernel_size", "num_params"], depth=5)
 
     model_part = FinalModelBranchNet(apply_final_activation=False,

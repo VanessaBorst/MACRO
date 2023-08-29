@@ -4,6 +4,7 @@ matplotlib
 numpy
 pandas
 plotly
+pyarrow
 pytest
 ray[default]
 scikit_learn

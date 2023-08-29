@@ -296,11 +296,14 @@ def tuning_params(name):
 
     elif name == "FinalModelMultiBranch":
         return {
-            # TODO Rework
-            # "lr": tune.grid_search([0.001, 0.0001]),  # maybe also try 0.00001
-            "multi_branch_gru_units": tune.grid_search([12, 24, 32]),
-            "multi_branch_heads": tune.grid_search([1, 4, 8, 16]),
-            "vary_channels_lighter_version": tune.grid_search([True, False])
+            "multi_branch_heads": tune.grid_search([1, 2, 3, 8]),
+            "first_conv_reduction_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
+            "second_conv_reduction_kernel_size": tune.grid_search([3, 16]), # add 24 later if time left
+            "third_conv_reduction_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
+            "vary_channels_lighter_version": tune.grid_search([True, False]),
+            "discard_FC_before_MH": False,
+            "branchNet_gru_units": 24,
+            "branchNet_heads": 2
         }
     else:
         return None
@@ -648,10 +651,11 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
     elif main_config["arch"]["type"] == "FinalModelMultiBranch":
         reporter = CLIReporter(
             parameter_columns={
-                # "lr": "LR",
-                "multi_branch_gru_units": "GRU",
                 "multi_branch_heads": "H",
-                "vary_channels_lighter_version": "Vary Channels Light",
+                "first_conv_reduction_kernel_size": "1st k",
+                "second_conv_reduction_kernel_size": "2nd k",
+                "third_conv_reduction_kernel_size": "3rd k",
+                "vary_channels_lighter_version": "Vary Channels Light"
             },
             metric_columns=["loss", "val_loss",
                             "val_weighted_sk_f1",
@@ -824,8 +828,10 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
     df = analysis.dataframe(metric=mnt_metric, mode=mnt_mode)
     with open(os.path.join(main_config.save_dir, "best_per_trial.p"), "wb") as file:
         pickle.dump(df, file)
-    with open(os.path.join(main_config.save_dir, "analysis.p"), "wb") as file:
-        pickle.dump(analysis, file)
+
+    # Does not work after Lib updates ->   Can't pickle local object 'hyper_study.<locals>.name_trial'
+    # with open(os.path.join(main_config.save_dir, "analysis.p"), "wb") as file:
+    #     pickle.dump(analysis, file)
 
 
 def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoint_dir=None, use_tune=False,
@@ -874,7 +880,7 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
     elif config['arch']['type'] == 'FinalModel':
         import model.final_model as module_arch
     elif config['arch']['type'] == 'FinalModelMultiBranch':
-        import model.final_model_multibranch_old as module_arch
+        import model.final_model_multibranch as module_arch
 
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric

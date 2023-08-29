@@ -34,11 +34,10 @@ class FinalModelMultiBranch(BaseModel):
         self._test = nn.Sequential(*self._final_model_single_leads)
 
         # d_model = 2 * multi_branch_gru_units * 12
-        self._multi_head_contextual_attention = MultiHeadContextualAttention(gru_dimension=multi_branch_gru_units,
+        self._multi_head_contextual_attention = MultiHeadContextualAttention(d_model=2 * multi_branch_gru_units * 12,
                                                                              dropout=0.3,
                                                                              heads=multi_branch_heads,
-                                                                             discard_FC_before_MH=False,
-                                                                             multi_branch=True)
+                                                                             discard_FC_before_MH=False)
 
         self._batchNorm = nn.Sequential(
             nn.BatchNorm1d(multi_branch_gru_units * 2 * 12),
@@ -324,7 +323,7 @@ class FinalModelBranchNet(BaseModel):
             nn.Dropout(drop_out_gru)
         )
 
-        self._multi_head_contextual_attention = MultiHeadContextualAttention(gru_dimension=gru_units,
+        self._multi_head_contextual_attention = MultiHeadContextualAttention(d_model=2 * gru_units,
                                                                              dropout=dropout_attention,
                                                                              heads=heads,
                                                                              discard_FC_before_MH=discard_FC_before_MH)

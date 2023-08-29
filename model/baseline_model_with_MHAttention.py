@@ -77,7 +77,7 @@ class BaselineModelWithMHAttention(BaseModel):
             nn.Dropout(0.2)
         )
 
-        self._multi_head_contextual_attention = MultiHeadContextualAttention(gru_dimension=gru_units,
+        self._multi_head_contextual_attention = MultiHeadContextualAttention(d_model=2 * gru_units,
                                                                              dropout=dropout_attention,
                                                                              heads=heads,
                                                                              discard_FC_before_MH=discard_FC_before_MH)

@@ -16,8 +16,8 @@ class ContextualAttention(nn.Module):
 
     Parameters
     ----------
-    gru_dimension:
-        Number of units contained per GRU
+    d_model:
+        Length of the input and output vector
     attention_dimension:
         Dimension of the output of the layer (default: 2xgru_dimension)
     use_bias:
@@ -47,7 +47,7 @@ class ContextualAttention(nn.Module):
         self._W = nn.Parameter(torch.Tensor(in_shape[-1], in_shape[-1]))
         if self._bias:
             self._b = nn.Parameter(toself._hidden_rep = nn.Sequential(
-            nn.Linear(in_features=2 * gru_dimension, out_features=attention_dimension, bias=self._use_bias),
+            nn.Linear(in_features=2 * d_model, out_features=attention_dimension, bias=self._use_bias),
             nn.Tanh()
         )
 
@@ -111,18 +111,16 @@ class MultiHeadContextualAttention(nn.Module):
 
     Parameters
     ----------
-    gru_dimension:
-        Number of units contained per GRU -> is transferred to d_model by 2*gru_dimension
+    d_model:
+        Length of the input and output vector
     use_bias:
         Bool specifying whether an bias should be used to retrieve the hidden representation for
         the hidden states of the BiGRU (which serve as values)
     """
-    def __init__(self, gru_dimension, heads, dropout=None, use_bias=True, discard_FC_before_MH=False,
-                 multi_branch=False):
+    def __init__(self, d_model, heads, dropout=None, use_bias=True, discard_FC_before_MH=False):
         super().__init__()
         self._use_bias = use_bias
         self._discard_FC_before_MH = discard_FC_before_MH
-        d_model = 2 * gru_dimension if not multi_branch else 2 * gru_dimension * 12
 
         if not self._discard_FC_before_MH:
             # The input dimension will be twice the number of units of a single GRU (since it is a BiGRU)
@@ -139,9 +137,15 @@ class MultiHeadContextualAttention(nn.Module):
         u = nn.init.xavier_uniform_(u)
         self._query = nn.Parameter(u, requires_grad=True)
 
+        # Previous version:
         # To avoid to large matrices, reduce the dimensions of the keys, queries, and values
         # Based on the paper "Attention is all you need" d_k = d_v =d_model/h is chosen
-        d_k = d_q = d_v = d_model // heads if multi_branch else d_model
+        # -> d_model // heads if multi_branch else d_model
+
+        # Current version (=thesis version):
+        # The matrices are not that large anymore, since a convolutional reduction block is introduced
+        # after the concatenation of the single lead branch feature maps
+        d_k = d_q = d_v = d_model
 
         self._multihead_attention = MultiHeadAttention(d_model=d_model, k=d_k,
                                                        q=d_q, v=d_v, h=heads,
@@ -163,11 +167,11 @@ class MultiHeadContextualAttention(nn.Module):
 
         attention_output = self._multihead_attention(query=querys, key=keys, value=values)
 
-        # Shape bs x 24
+        # Shape bs x d_model
         return attention_output
 
 
 if __name__ == "__main__":
-    model = MultiHeadContextualAttention(gru_dimension=12, heads=8, discard_FC_before_MH=False)
+    model = MultiHeadContextualAttention(d_model=12 * 2, heads=8, discard_FC_before_MH=False)
     summary(model, input_size=(64, 2250, 24), col_names=["input_size", "output_size", "num_params"])
 
