@@ -1,7 +1,6 @@
 import argparse
 import collections
 from datetime import datetime
-import os
 import pickle
 import random
 from pathlib import Path
@@ -23,10 +22,10 @@ from utils import prepare_device, get_project_root
 
 # Needed for working with SSH Interpreter...
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "MIG-11c29e81-e611-50b5-b5ef-609c0a0fe58b"
 import torch
 
-
+CUDA_VISIBLE_DEVICES = "MIG-a1208c4e-caad-5519-9d69-6b0998c74b9f" #"MIG-11c29e81-e611-50b5-b5ef-609c0a0fe58b"
+os.environ["CUDA_VISIBLE_DEVICES"]  = CUDA_VISIBLE_DEVICES
 
 def _set_seed(SEED):
     # OLD VERSION MA
@@ -300,8 +299,8 @@ def tuning_params(name):
             "first_conv_reduction_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
             "second_conv_reduction_kernel_size": tune.grid_search([3, 16]), # add 24 later if time left
             "third_conv_reduction_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
-            "vary_channels_lighter_version": tune.grid_search([True, False]),
-            "discard_FC_before_MH": False,
+            "vary_channels_lighter_version": False,  # tune.grid_search([True, False]),
+            "discard_FC_before_MH": True,
             "branchNet_gru_units": 24,
             "branchNet_heads": 2
         }
@@ -531,6 +530,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                 "down_sample": "Downsampling"
             },
             metric_columns=["loss", "val_loss",
+                            "val_macro_sk_f1",
                             "val_weighted_sk_f1",
                             "val_cpsc_F1",
                             "val_cpsc_Faf",
@@ -546,6 +546,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                 "gru_units": "Num Units GRU"
             },
             metric_columns=["loss", "val_loss",
+                            "val_macro_sk_f1",
                             "val_weighted_sk_f1",
                             "val_cpsc_F1",
                             "val_cpsc_Faf",
@@ -561,6 +562,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                 "norm_before_act": "Before L-ReLU"
             },
             metric_columns=["loss", "val_loss",
+                            "val_macro_sk_f1",
                             "val_weighted_sk_f1",
                             "val_cpsc_F1",
                             "val_cpsc_Faf",
@@ -576,6 +578,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                 "pos_skip": "Skip Pos"
             },
             metric_columns=["loss", "val_loss",
+                            "val_macro_sk_f1",
                             "val_weighted_sk_f1",
                             "val_cpsc_F1",
                             "val_cpsc_Faf",
@@ -594,6 +597,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                 "pre_conv_kernel": "1st Conv Kernel"
             },
             metric_columns=["loss", "val_loss",
+                            "val_macro_sk_f1",
                             "val_weighted_sk_f1",
                             "val_cpsc_F1",
                             "val_cpsc_Faf",
@@ -612,6 +616,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                 "norm_before_act": "NormBefAct"
             },
             metric_columns=["loss", "val_loss",
+                            "val_macro_sk_f1",
                             "val_weighted_sk_f1",
                             "val_cpsc_F1",
                             "val_cpsc_Faf",
@@ -641,6 +646,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                 "discard_FC_before_MH": "WithoutFC"
             },
             metric_columns=["loss", "val_loss",
+                            "val_macro_sk_f1",
                             "val_weighted_sk_f1",
                             "val_cpsc_F1",
                             "val_cpsc_Faf",
@@ -658,6 +664,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                 "vary_channels_lighter_version": "Vary Channels Light"
             },
             metric_columns=["loss", "val_loss",
+                            "val_macro_sk_f1",
                             "val_weighted_sk_f1",
                             "val_cpsc_F1",
                             "val_cpsc_Faf",
@@ -781,8 +788,8 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
     # TODO check if 0.5 is also needed for the multi-branch model
     num_gpu = 0.5 if not main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsV2" and not \
         main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2" and not \
-        main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2PreActivation" else 1
-        # and not main_config["arch"]["type"] == "FinalModel" else 1
+        main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2PreActivation" and not \
+        main_config["arch"]["type"] == "FinalModelMultiBranch" else 1
 
 
     analysis = tune.run(
@@ -856,7 +863,7 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-        os.environ["CUDA_VISIBLE_DEVICES"] = "MIG-11c29e81-e611-50b5-b5ef-609c0a0fe58b"
+        os.environ["CUDA_VISIBLE_DEVICES"] = CUDA_VISIBLE_DEVICES
 
     # Conditional inputs depending on the config
     if config['arch']['type'] == 'BaselineModelWoRnnWoAttention':
@@ -870,15 +877,17 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
     elif config['arch']['type'] == "BaselineModelWithSkipConnectionsAndNorm":
         import model.old.baseline_model_with_skips_and_norm as module_arch
     elif config['arch']['type'] == "BaselineModelWithSkipConnectionsV2":
-        import model.baseline_model_with_skips_v2 as module_arch
+        import model.old.baseline_model_with_skips_v2 as module_arch
     elif config['arch']['type'] == "BaselineModelWithSkipConnectionsAndNormV2":
-        import model.baseline_model_with_skips_and_norm_v2 as module_arch
+        import model.old.baseline_model_with_skips_and_norm_v2 as module_arch
     elif config['arch']['type'] == 'BaselineModelWithMHAttention':
         import model.baseline_model_with_MHAttention as module_arch
     elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndNormV2PreActivation':
         import model.baseline_model_with_skips_and_norm_v2_pre_activation_design as module_arch
     elif config['arch']['type'] == 'FinalModel':
         import model.final_model as module_arch
+    elif config['arch']['type'] == 'FinalModelMultiBranchOld':
+        import model.final_model_multibranch_old as module_arch
     elif config['arch']['type'] == 'FinalModelMultiBranch':
         import model.final_model_multibranch as module_arch
 
@@ -999,7 +1008,7 @@ if __name__ == '__main__':
     config = ConfigParser.from_args(args=args, options=options)
     if config.use_tune:
         tuning_params = tuning_params(name=config["arch"]["type"])
-        # With grid search, only 1 times !
+        # With grid search, only 1 times ! -> # Set num_samples to 1, as grid search generates all combination
         hyper_study(main_config=config, tune_config=tuning_params, num_tune_samples=1)
     else:
         train_model(config)

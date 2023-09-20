@@ -1,6 +1,6 @@
 {
   "name": "FinalModel_MACRO_ParamStudy",
-  "run_details": "",
+  "run_details": "_macroF1",
   "n_gpu": 1,
   "arch": {
     "type": "FinalModel",
@@ -88,7 +88,7 @@
     "save_dir": "savedVM/",
     "save_period": 1,
     "verbosity": 2,
-    "monitor": "max val_weighted_sk_f1",
+    "monitor": "max val_macro_sk_f1",
     "early_stop": 20,
     "minimum_diff_for_improvement": 0.001,
     "tensorboard": true,

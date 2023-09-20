@@ -2,7 +2,6 @@ import argparse
 import collections
 import inspect
 import json
-import os
 import pickle
 import time
 from pathlib import Path
@@ -17,7 +16,6 @@ import torch
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
-from sklearn.metrics import confusion_matrix
 from tqdm import tqdm
 
 import data_loader.data_loaders as module_data
@@ -26,8 +24,6 @@ from evaluation import multi_label_metrics, single_label_metrics, multi_label_me
 from evaluation.multi_label_metrics import class_wise_confusion_matrices_multi_label_sk, THRESHOLD
 from evaluation.single_label_metrics import overall_confusion_matrix_sk, class_wise_confusion_matrices_single_label_sk
 from parse_config import ConfigParser
-
-import numpy as np
 
 # fix random seeds for reproducibility
 from train import _set_seed
@@ -397,15 +393,17 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
     elif config['arch']['type'] == "BaselineModelWithSkipConnectionsAndNorm":
         import model.old.baseline_model_with_skips_and_norm as module_arch
     elif config['arch']['type'] == "BaselineModelWithSkipConnectionsV2":
-        import model.baseline_model_with_skips_v2 as module_arch
+        import model.old.baseline_model_with_skips_v2 as module_arch
     elif config['arch']['type'] == "BaselineModelWithSkipConnectionsAndNormV2":
-        import model.baseline_model_with_skips_and_norm_v2 as module_arch
+        import model.old.baseline_model_with_skips_and_norm_v2 as module_arch
     elif config['arch']['type'] == 'BaselineModelWithMHAttention':
         import model.baseline_model_with_MHAttention as module_arch
     elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndNormV2PreActivation':
         import model.baseline_model_with_skips_and_norm_v2_pre_activation_design as module_arch
     elif config['arch']['type'] == 'FinalModel':
         import model.final_model as module_arch
+    elif config['arch']['type'] == 'FinalModelMultiBranchOld':
+        import model.final_model_multibranch_old as module_arch
     elif config['arch']['type'] == 'FinalModelMultiBranch':
         import  model.final_model_multibranch as module_arch
 
@@ -578,10 +576,6 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
                 else:
                     # single-branch network
                     output, attention_weights = output
-                    if self.try_run and self.writer is not None:
-                        self._send_attention_weights_to_writer(
-                            attention_weights=attention_weights.detach().cpu().numpy()[:, :, 0],
-                            batch_idx=batch_idx, epoch=epoch, str_mode="training")
 
             # Detach tensors needed for further tracing and metrics calculation to remove them from the graph
             detached_output = output.detach().cpu()

@@ -3,7 +3,7 @@
   "run_details": "_WIP_run_withFC_0.3_12_3_BS32_larger_CNN_channels",
   "n_gpu": 1,
   "arch": {
-    "type": "FinalModelMultiBranch",
+    "type": "FinalModelMultiBranchOld",
     "args": {
       "multi_branch_gru_units": 12,
       "multi_branch_heads": 3,

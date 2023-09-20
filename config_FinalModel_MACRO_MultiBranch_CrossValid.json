@@ -1,25 +1,19 @@
 {
-    "name": "FinalModel_MACRO_CV",
-    "run_details": "_cross_validation_MACRO_withFC_0.3_12_3_macroES_BS32",
+    "name": "FinalModel_MACRO_Multibranch_CV",
+    "run_details": "_cross_validation_MACRO_noFC_MultiBranch_macroES_BS16",
     "n_gpu": 1,
     "arch": {
-        "type": "FinalModel",
+        "type": "FinalModelMultiBranch",
         "args": {
-            "apply_final_activation": false,
             "multi_label_training": true,
-            "down_sample": "conv",
-            "vary_channels": true,
-            "pos_skip": "all",
-            "norm_before_act": true,
-            "norm_pos": "all",
-            "norm_type": "BN",
-            "use_pre_activation_design": true,
-            "use_pre_conv": true,
-            "pre_conv_kernel": 16,
-            "discard_FC_before_MH": false,
-            "dropout_attention": 0.3,
-            "gru_units": 12,
-            "heads": 3
+            "multi_branch_heads": 1,
+            "first_conv_reduction_kernel_size": 3,
+            "second_conv_reduction_kernel_size": 3,
+            "third_conv_reduction_kernel_size": 16,
+            "vary_channels_lighter_version": false,
+            "discard_FC_before_MH": true,
+            "branchNet_gru_units": 24,
+            "branchNet_heads": 2
         }
     },
     "data_loader": {
@@ -31,7 +25,7 @@
         },
         "args": {
             "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000",
-            "batch_size": 32,
+            "batch_size": 16,
             "shuffle": true,
             "validation_split": 0.25,
             "num_workers": 4,
@@ -49,8 +43,10 @@
         }
     },
     "loss": {
-        "type": "BCE_with_logits",
-        "add_args": {}
+        "type": "multi_branch_BCE_with_logits",
+        "add_args": {
+          "lambda_balance": 1
+        }
     },
     "metrics": {
         "sl": {

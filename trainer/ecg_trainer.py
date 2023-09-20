@@ -303,8 +303,11 @@ class ECGTrainer(BaseTrainer):
             # log.update(**{'val_' + k: v for k, v in val_log.items()})  # Extends the dict by the val loss and metrics
 
         if self.lr_scheduler is not None:
+            # TODO adapt later
+            assert self.lr_scheduler is None, "LR Scheduler support not yet finished"
+            pass
             # self.lr_scheduler.step()
-            self.lr_scheduler.step(valid_log['mean']["val_weighted_sk_f1"])
+            # self.lr_scheduler.step(valid_log['mean']["val_weighted_sk_f1"])
 
         log = pd.concat([train_log, valid_log]) if self.do_validation else train_log
         summary = "Training summary:\n" + summary_str + "\nValidation summary:\n" + valid_summary_str \
@@ -457,6 +460,7 @@ class ECGTrainer(BaseTrainer):
             # Ray Tune. Ray Tune can then use these metrics to decide which hyperparameter configuration lead to the
             # best results. These metrics can also be used to stop bad performing trials early
             tune.report(val_loss=valid_log['mean']["loss"],
+                        val_macro_sk_f1=valid_log['mean']["macro_sk_f1"],
                         val_weighted_sk_f1=valid_log['mean']["weighted_sk_f1"],
                         val_cpsc_F1=valid_log['mean']["cpsc_F1"],
                         val_cpsc_Faf=valid_log['mean']["cpsc_Faf"],

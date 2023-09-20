@@ -19,7 +19,7 @@ class FinalModelMultiBranch(BaseModel):
                  second_conv_reduction_kernel_size=3,
                  third_conv_reduction_kernel_size=3,
                  vary_channels_lighter_version = True,
-                 discard_FC_before_MH=False,
+                 discard_FC_before_MH=True,
                  branchNet_gru_units=24,
                  branchNet_heads=2,
                  multi_label_training=True,
@@ -41,14 +41,14 @@ class FinalModelMultiBranch(BaseModel):
         self._final_model_single_leads = nn.Sequential(*final_model_single_leads)
 
         # branchNet_gru_units -> in_channels -> channel_reduction_per_conv -> channel_seq
-        # 12 -> in_channels = 288 -> 92 -> 288, 196, 104, 12
-        # 24 -> in_channels = 576 -> 188 -> 576, 388, 200, 12
-        # 32 -> in_channels = 768 -> 252 -> 768, 516, 264, 12
+        # 12 -> in_channels = 288 -> 92 -> 288, 200, 112, 24
+        # 24 -> in_channels = 576 -> 188 -> 576, 392, 208, 24
+        # 32 -> in_channels = 768 -> 252 -> 768, 520, 272, 24
         in_channels = branchNet_gru_units * 2 * 12
         # The out_channels should be reduced to 12 in three steps
-        first_out_channels= in_channels - (in_channels - 12) // 3
-        second_out_channels = in_channels - 2 * (in_channels - 12) // 3
-        third_out_channels = 12
+        first_out_channels= in_channels - (in_channels - 24) // 3
+        second_out_channels = in_channels - 2 * (in_channels - 24) // 3
+        third_out_channels = 24
 
         # # Define the function to calculate same padding (with stride 1 and dilation 1 !!!)
         # def calculate_same_padding(kernel_size):
@@ -81,20 +81,20 @@ class FinalModelMultiBranch(BaseModel):
             nn.LeakyReLU(0.3)
         )
 
-        # d_model is 12 in this case, before it was 2 * gru_units
-        self._multi_head_contextual_attention = MultiHeadContextualAttention(d_model=12,
+        # d_model is 24 in this case, before it was 2 * gru_units
+        self._multi_head_contextual_attention = MultiHeadContextualAttention(d_model=third_out_channels,
                                                                              dropout=0.3,
                                                                              heads=multi_branch_heads,
                                                                              discard_FC_before_MH=discard_FC_before_MH)
 
         self._batchNorm = nn.Sequential(
-            nn.BatchNorm1d(12),
+            nn.BatchNorm1d(third_out_channels),
             nn.LeakyReLU(0.3),
             nn.Dropout(0.2)
         )
 
         # Input: d_model of the MH mechanism
-        self._fcn = nn.Linear(in_features= 12, out_features=num_classes)
+        self._fcn = nn.Linear(in_features= third_out_channels, out_features=num_classes)
         # apply final activation is false by default
 
     def forward(self, x):
@@ -447,9 +447,7 @@ class FinalModelBranchNet(BaseModel):
 
 
 if __name__ == "__main__":
-    model = FinalModelMultiBranch(
-        multi_branch_gru_units=24,
-        multi_branch_heads=2, )
+    model = FinalModelMultiBranch(multi_branch_heads=2)
     summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "kernel_size", "num_params"], depth=5)
 
     model_part = FinalModelBranchNet(apply_final_activation=False,
@@ -475,8 +473,8 @@ if __name__ == "__main__":
                                      use_pre_activation_design=True,
                                      use_pre_conv=True,
                                      pre_conv_kernel=16,
-                                     gru_units=32,
+                                     gru_units=24,
                                      dropout_attention=0.3,  # MA model: 0.2,
-                                     heads=16,
-                                     discard_FC_before_MH=False)
-    #summary(model_part, input_size=(2, 1, 72000), col_names=["input_size", "output_size", "kernel_size", "num_params"])
+                                     heads=2,
+                                     discard_FC_before_MH=True)
+    summary(model_part, input_size=(2, 1, 72000), col_names=["input_size", "output_size", "kernel_size", "num_params"])

@@ -1,25 +1,14 @@
 {
-    "name": "FinalModel_MACRO_CV",
-    "run_details": "_cross_validation_MACRO_withFC_0.3_12_3_macroES_BS32",
+    "name": "FinalModel_MACRO_Multibranch_Old_CV",
+    "run_details": "_cross_validation_MACRO_Multibranch_old_0.3_12_3_macroES",
     "n_gpu": 1,
     "arch": {
-        "type": "FinalModel",
+        "type": "FinalModelMultiBranchOld",
         "args": {
-            "apply_final_activation": false,
-            "multi_label_training": true,
-            "down_sample": "conv",
-            "vary_channels": true,
-            "pos_skip": "all",
-            "norm_before_act": true,
-            "norm_pos": "all",
-            "norm_type": "BN",
-            "use_pre_activation_design": true,
-            "use_pre_conv": true,
-            "pre_conv_kernel": 16,
-            "discard_FC_before_MH": false,
-            "dropout_attention": 0.3,
-            "gru_units": 12,
-            "heads": 3
+          "multi_branch_gru_units": 12,
+          "multi_branch_heads": 3,
+          "vary_channels_lighter_version": false,
+          "multi_label_training": true
         }
     },
     "data_loader": {
@@ -49,8 +38,10 @@
         }
     },
     "loss": {
-        "type": "BCE_with_logits",
-        "add_args": {}
+        "type": "multi_branch_BCE_with_logits",
+        "add_args": {
+          "lambda_balance": 1
+        }
     },
     "metrics": {
         "sl": {

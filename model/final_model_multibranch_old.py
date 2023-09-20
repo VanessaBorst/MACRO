@@ -10,7 +10,7 @@ from layers.BasicBlock1dWithNormPreActivationDesign import BasicBlock1dWithNormP
 from layers.ContextualAttention import MultiHeadContextualAttention
 
 
-class FinalModelMultiBranch(BaseModel):
+class FinalModelMultiBranchOld(BaseModel):
 
     def __init__(self,
                  multi_branch_gru_units=32,

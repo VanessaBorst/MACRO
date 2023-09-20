@@ -2,7 +2,7 @@
 
 source venv/bin/activate
 
-REL_PATH="savedVM/models/FinalModel_MACRO_ParamStudy/0824_175925_ml_bs16"
+REL_PATH="savedVM/models/FinalModel_MACRO_MultiBranch_ParamStudy/0905_153928_ml_bs16_varyChannelsLighter_False"
 
 for dir in $(find $REL_PATH -mindepth 1 -maxdepth 1 -type d )
 do

@@ -3,6 +3,7 @@ import os
 import pickle as pk
 from functools import partial
 
+import mmap
 import pandas as pd
 
 
@@ -107,37 +108,52 @@ def _bold_formatter(x, value, num_decimals=2):
 #                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs']
 
 
-path_to_tune = 'savedVM/models/FinalModel_MACRO_ParamStudy/0824_175925_ml_bs16'
-hyper_params = ["discard_FC_before_MH", "down_sample", "dropout_attention", "gru_units", "heads",
-                "norm_before_act", "norm_pos", "norm_type", "pos_skip", "pre_conv_kernel",
-                "use_pre_activation_design", "use_pre_conv", "vary_channels"]
-integer_vals = ['gru_units', 'heads', 'Epochs']
-single_precision = ['dropout_attention']
-desired_col_order = ["discard_FC_before_MH", "heads", "gru_units",
-                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-                     'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs']
+# path_to_tune = 'savedVM/models/FinalModel_MACRO_ParamStudy/0829_141413_ml_bs16_macroF1'
+# hyper_params = ["discard_FC_before_MH", "down_sample", "dropout_attention", "gru_units", "heads",
+#                 "norm_before_act", "norm_pos", "norm_type", "pos_skip", "pre_conv_kernel",
+#                 "use_pre_activation_design", "use_pre_conv", "vary_channels"]
+# integer_vals = ['gru_units', 'heads', 'Epochs', 'Params']
+# single_precision = ['dropout_attention']
+# desired_col_order = ["discard_FC_before_MH", "heads", "gru_units",
+#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE', 'm-F1', 'm-ROC-AUC', 'm-Acc',
+#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs', 'Params']
 
+
+path_to_tune = 'savedVM/models/FinalModel_MACRO_MultiBranch_ParamStudy/0831_110846_ml_bs16'
+hyper_params = [ "branchNet_gru_units", "branchNet_heads", "discard_FC_before_MH", "first_conv_reduction_kernel_size",
+                 "multi_branch_heads", "second_conv_reduction_kernel_size", "third_conv_reduction_kernel_size",
+                 "vary_channels_lighter_version"]
+integer_vals = ['branchNet_gru_units', 'branchNet_heads', "first_conv_reduction_kernel_size", "multi_branch_heads",
+                "second_conv_reduction_kernel_size", "third_conv_reduction_kernel_size", 'Epochs', 'Params']
+single_precision = []
+desired_col_order = ["multi_branch_heads", "first_conv_reduction_kernel_size", "second_conv_reduction_kernel_size",
+                     "third_conv_reduction_kernel_size",
+                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE', 'm-F1', 'm-ROC-AUC', 'm-Acc',
+                     'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs', 'Params']
 
 
 
 include_class_wise_f1 = True
-include_macro_avg = False
+include_weighted_avg = True
+include_macro_avg = True
 include_CPSC_scores = False
-include_epochs = True
+include_details = True      # epochs, params
 use_abbrevs = True
 
 cols_class_wise_f1 = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE']
+cols_weighted_avg = ['W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc']
 cols_macro_avg = ['m-F1', 'm-ROC-AUC', 'm-Acc']
 cols_CPSC_scores = ['cpsc_F1', 'cpsc_Faf', 'cpsc_Fblock', 'cpsc_Fpc', 'cpsc_Fst']
-col_epoch = ['Epochs']
+col_details = ['Epochs', 'Params']
 
 max_columns = []
 df_columns = hyper_params
 if include_class_wise_f1:
     max_columns = max_columns + cols_class_wise_f1
     df_columns = df_columns + cols_class_wise_f1
-df_columns = df_columns + ['W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc']
-max_columns = max_columns + ['W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc']
+if include_weighted_avg:
+    df_columns = df_columns + cols_weighted_avg
+    max_columns = max_columns + cols_weighted_avg
 if include_macro_avg:
     max_columns = max_columns + cols_macro_avg
     df_columns = df_columns + cols_macro_avg
@@ -148,10 +164,12 @@ if include_CPSC_scores:
     df_columns = df_columns + cols_CPSC_scores
 
 
-if include_epochs:
-    df_summary_valid = pd.DataFrame(columns=df_columns+col_epoch)
+if include_details:
+    df_summary_valid = pd.DataFrame(columns=df_columns + col_details)
 else:
     df_summary_valid = pd.DataFrame(columns=df_columns)
+
+# For the test set, we do not need the details since they are identical
 df_summary_test = pd.DataFrame(columns=df_columns)
 
 
@@ -195,7 +213,7 @@ def _rename_param_value(value):
         return value
 
 
-def _append_to_summary(path, df_summary, tune_dict, best_epoch=None):
+def _append_to_summary(path, df_summary, tune_dict, best_epoch=None, num_params=None):
     with open(os.path.join(path, "eval_class_wise.p"), "rb") as file:
         df_class_wise = pk.load(file)
     with open(os.path.join(path, "eval_single_metrics.p"), "rb") as file:
@@ -209,15 +227,16 @@ def _append_to_summary(path, df_summary, tune_dict, best_epoch=None):
         f1_metrics = df_class_wise.loc['f1-score'][cols_class_wise_f1].values.tolist()
         row_values = row_values + f1_metrics
 
-    # Append the weighted AVG for F1
-    row_values.append(df_class_wise.loc['f1-score']['weighted avg'])
-    # Append the weighted AVG for ROC-AUC
-    row_values.append(df_class_wise.loc['torch_roc_auc']['weighted avg'])
-    # Append the weighted AVG for Acc
-    row_values.append(df_class_wise.loc['torch_accuracy']['weighted avg'])
+    if include_weighted_avg:
+        # Append the weighted AVG for F1
+        row_values.append(df_class_wise.loc['f1-score']['weighted avg'])
+        # Append the weighted AVG for ROC-AUC
+        row_values.append(df_class_wise.loc['torch_roc_auc']['weighted avg'])
+        # Append the weighted AVG for Acc
+        row_values.append(df_class_wise.loc['torch_accuracy']['weighted avg'])
 
     if include_macro_avg:
-        # Append the weighted AVG for F1
+        # Append the macro AVG for F1
         row_values.append(df_class_wise.loc['f1-score']['macro avg'])
         # Append the macro ROC-AUC
         row_values.append(df_class_wise.loc['torch_roc_auc']['macro avg'])
@@ -231,19 +250,42 @@ def _append_to_summary(path, df_summary, tune_dict, best_epoch=None):
         # Append single metrics
         row_values = row_values + df_single_metrics[cols_CPSC_scores].values.tolist()[0]
 
-    if include_epochs:
+    if include_details:
         # Append the number of epochs
         if best_epoch is not None:
             row_values = row_values + [best_epoch]
+        if num_params is not None:
+            row_values = row_values + [num_params]
 
     # Add the row to the summary dataframe
     df_summary.loc[len(df_summary)] = row_values
 
 
 # Loop through the runs and append the tuning parameters as well as the resulting metrics to the summary df
+def _extract_num_params(tune_path):
+    with open(os.path.join(tune_path.replace("/models", "/log"), "debug.log"), "r") as file:
+        with mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ) as mmapped_file:
+            search_position = mmapped_file.find(b"Trainable parameters:")
+
+            if search_position != -1:
+                # Find the start and end positions of the line containing the search_text
+                line_start = mmapped_file.rfind(b'\n', 0, search_position) + 1
+                line_end = mmapped_file.find(b'\n', search_position) + 1
+
+                # Read the line from the mmap
+                mmapped_file.seek(line_start)
+                line = mmapped_file.read(line_end - line_start).decode()
+                return line.replace("Trainable parameters: ", "").replace("\n", "")
+            else:
+                return "N/A"
+
+
+
 for tune_run in os.listdir(path_to_tune):
     tune_path = os.path.join(path_to_tune, tune_run)
     if os.path.isdir(tune_path):
+        num_params = _extract_num_params(tune_path)
+
         with open(os.path.join(tune_path, "progress.csv"), "r") as file:
             # Not improved for 20 epochs -> best was 21 epochs earlier
             # First line is header, so subtract 22
@@ -253,7 +295,7 @@ for tune_run in os.listdir(path_to_tune):
             tune_dict = json.load(file)
         # Validation
         path = os.path.join(tune_path, "valid_output")
-        _append_to_summary(path, df_summary_valid, tune_dict, best_epoch)
+        _append_to_summary(path, df_summary_valid, tune_dict, best_epoch, num_params)
 
         # Test
         path = os.path.join(tune_path, "test_output")
@@ -262,7 +304,7 @@ for tune_run in os.listdir(path_to_tune):
 # Parse integer values as ints
 for col in integer_vals:
     df_summary_valid[col] = df_summary_valid[col].apply(int)
-    if col != 'Epochs':
+    if col != 'Epochs' and col != "Params":
         df_summary_test[col] = df_summary_test[col].apply(int)
 
 # Format single-precision floats
@@ -275,16 +317,18 @@ for col in single_precision:
 # Reorder the columns of the dataframe to match the one used in the thesis
 if desired_col_order is not None:
     df_summary_valid_reordered = df_summary_valid[desired_col_order]
-    if desired_col_order[-1] == "Epochs":
-        df_summary_test_reordered = df_summary_test[desired_col_order[:-1]]  # omit epochs
-    else:
-        df_summary_test_reordered = df_summary_test[desired_col_order]
+    # omit epochs and params for test set
+    if "Epochs" in desired_col_order:
+        desired_col_order.remove("Epochs")
+    if "Params" in desired_col_order:
+        desired_col_order.remove("Params")
+    df_summary_test_reordered = df_summary_test[desired_col_order]
 else:
-    df_summary_valid_reordered = df_summary_valid #[desired_col_order]
-    df_summary_test_reordered = df_summary_test #[desired_col_order[:-1]]  # omit epochs
+    df_summary_valid_reordered = df_summary_valid
+    df_summary_test_reordered = df_summary_test
 
 # Sort the rows by the main metrics
-order_by_cols = ['W-AVG_F1', 'W-AVG_ROC', 'MR', 'W-AVG_Acc']  # ['m-F1', 'CPCS_F1', 'W-AVG_F1']
+order_by_cols =   ['m-F1', 'MR', 'W-AVG_F1']      # MA ['W-AVG_F1', 'W-AVG_ROC', 'MR', 'W-AVG_Acc']  # ['m-F1', 'CPCS_F1', 'W-AVG_F1']
 # Round before sorting
 df_summary_valid_reordered = df_summary_valid_reordered.round(3)
 df_summary_test_reordered = df_summary_test_reordered.round(3)
