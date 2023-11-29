@@ -109,6 +109,10 @@ class ConfigParser:
             # update new config for fine-tuning
             config.update(read_json(args.config))
 
+        if args.config and args.seed:
+            # Append the manual set seed to the config
+            config['SEED'] = args.seed
+
         # parse custom cli options into dictionary
         modification = {opt.target: getattr(args, _get_opt_name(opt.flags)) for opt in options}
         return cls(config, resume, modification, mode, args.tune)

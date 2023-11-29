@@ -20,16 +20,10 @@ from parse_config import ConfigParser
 from test import test_model_with_threshold
 
 
-import torch
+import global_config
 
 from train import _set_seed
 from utils import ensure_dir
-
-
-
-# fix random seeds for reproducibility
-SEED = 123
-_set_seed(SEED)
 
 
 def test_fold_with_thresholds(config, data_dir, test_idx, k_fold, thresholds):
@@ -226,4 +220,8 @@ if __name__ == '__main__':
     ]
     config = ConfigParser.from_args(args=args, options=options)
     assert config["data_loader"]["cross_valid"]["enabled"], "Cross-valid should be enabled when running this script"
+
+    # fix random seeds for reproducibility
+    _set_seed(global_config.SEED)
+
     fine_tune_thresholds_cross_validation(config)

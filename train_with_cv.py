@@ -11,24 +11,19 @@ from pathlib import Path
 
 import numpy as np
 
+import global_config
 from data_loader.ecg_data_set import ECGDataset
 from logger import update_logging_setup_for_tune_or_cross_valid
 
 from parse_config import ConfigParser
 from test import test_model
 from train import train_model, _set_seed
-
+from utils import ensure_dir
 # Needed for working with SSH Interpreter...
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] =  "MIG-11c29e81-e611-50b5-b5ef-609c0a0fe58b"
-import torch
 
-from utils import ensure_dir
+os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
 
-
-# fix random seeds for reproducibility
-SEED = 123
-_set_seed(SEED)
 
 def test_fold(config, data_dir, test_idx, k_fold):
     df_class_wise_results, df_single_metric_results = test_model(config, tune_config=None, cv_active=True,
@@ -45,6 +40,7 @@ def train_fold(config, train_idx, valid_idx, k_fold):
 def run_cross_validation(config):
     k_fold = config["data_loader"]["cross_valid"]["k_fold"]
     data_dir = config["data_loader"]["cross_valid"]["data_dir"]
+
     # Update data dir in Dataloader ARGs!
     config["data_loader"]["args"]["data_dir"] = data_dir
     dataset = ECGDataset(data_dir)
@@ -193,7 +189,7 @@ def run_cross_validation(config):
 
 
 if __name__ == '__main__':
-    args = argparse.ArgumentParser(description='MA Vanessa')
+    args = argparse.ArgumentParser(description='MACRO Paper: Cross-Validation')
     args.add_argument('-c', '--config', default=None, type=str,
                       help='config file path (default: None)')
     args.add_argument('-r', '--resume', default=None, type=str,
@@ -201,6 +197,7 @@ if __name__ == '__main__':
     args.add_argument('-d', '--device', default=None, type=str,
                       help='indices of GPUs to enable (default: all)')
     args.add_argument('-t', '--tune', action='store_true', help='Use to enable tuning')
+    args.add_argument('--seed', type=int, default=123, help='Random seed')
 
     # custom cli options to modify configuration from default values given in json file.
     CustomArgs = collections.namedtuple('CustomArgs', 'flags type target')
@@ -211,4 +208,9 @@ if __name__ == '__main__':
     ]
     config = ConfigParser.from_args(args=args, options=options)
     assert config["data_loader"]["cross_valid"]["enabled"], "Cross-valid should be enabled when running this script"
+
+    # fix random seeds for reproducibility
+    global_config.SEED = config.config.get("SEED", global_config.SEED)
+    _set_seed(global_config.SEED)
+
     run_cross_validation(config)

@@ -17,7 +17,17 @@ from sklearn.preprocessing import MinMaxScaler
 from utils import plot_record_from_df
 
 
-def _parse_and_downsample_record(src_path, file, target_path, sampling):
+def _get_seq_len(hz,desired_seconds):
+    """
+    Returns the number of samples that are needed to represent the given number of seconds
+    @param hz: Sampling rate in Hz
+    @param desired_seconds: Desired length of the record in seconds
+    @return: Number of samples needed to represent the given number of seconds
+    """
+    return hz * desired_seconds
+
+
+def _parse_and_downsample_record(src_path, file, target_path, sampling, orig_Hz=500):
     """
     The method is called for each record separately
     It preprocess the record and stores the result as pickle dump
@@ -41,7 +51,9 @@ def _parse_and_downsample_record(src_path, file, target_path, sampling):
         # A timedelta object represents a duration, the difference between two dates or times
         # ==> An list of timedeltas is passed to the TimedeltaIndex method which uses this to construct the index with
         # After this step, the row labels are the TimedeltaIndices
-        df.index = pd.TimedeltaIndex([timedelta(seconds=i / 500) for i in df.index], unit="ms")
+        ms_per_timedelta = 1000 / orig_Hz
+        df.index = pd.TimedeltaIndex([timedelta(milliseconds=i * ms_per_timedelta) for i in df.index], unit="ms")
+        # Alternative: df.index = pd.TimedeltaIndex([timedelta(seconds=i / orig_Hz) for i in df.index], unit="ms")
 
         # Downsampling
         # resample() is a time-based groupby, followed by a reduction method on each of its groups.
@@ -52,14 +64,14 @@ def _parse_and_downsample_record(src_path, file, target_path, sampling):
         # delta_t between two timestamps: 2ms for 500 Hz
         # For sampling="20ms" + 500Hz:  20/2=10 values are merged   -> 6000/10= 600 Samples for 12 sec   -> 50 Hz
         # For sampling="4ms" + 500Hz:   4/2=2 values are merged     -> 600/2= 3000 Samples for 12 sec    -> 250 Hz
-        df = df.resample(sampling).mean()
+        df = df.resample(sampling).mean()           # Robert: df = df.resample(f"{sampling}ms").mean()
         df.index = np.arange(0, df.shape[0])  # return to numbers as row index (0-#samples)
 
     pk.dump((df, meta), open(f"{target_path}/{file}.pk", "wb"))
 
 
 def _read_records(src_path, target_path, sampling):  # 4ms = 250Hz
-    with Pool(6) as pool:
+    with Pool(12) as pool:
         for file in [f.split(".")[0] for f in os.listdir(src_path) if f.endswith("mat")]:
             pool.apply_async(_parse_and_downsample_record, (src_path, file, target_path, sampling),
                              error_callback=lambda x: print(x))
@@ -291,14 +303,15 @@ def normalize(path):
         pk.dump((df, meta), open(os.path.join(path, "normalized", file), "wb"))
 
 
-def pad_or_truncate(path, seq_len):
+def pad_or_truncate(path, seq_len, seconds=None, pad_halfs=False):
     """
         The method applies zero padding/truncation to each record under the given path:
         - pads records with a smaller amount of samples with zeros
         - cuts records that exceed seq_len from both sides and only uses values in the middle
     """
 
-    folder_name = "eq_len_" + str(seq_len)
+    folder_name = f"eq_len_{seq_len}" if seconds is None else f"eq_len_{desired_len_in_seconds}s"
+    folder_name = folder_name + "_pad_halfs" if pad_halfs else folder_name
     if not os.path.exists(os.path.join(path, folder_name)):
         os.makedirs(os.path.join(path, folder_name))
 
@@ -315,9 +328,19 @@ def pad_or_truncate(path, seq_len):
         # plot_record_from_df(record_name=str(file), df_record=df_record, preprocesed=False)
 
         if diff > 0:
-            # Pad the record to the maximum length of the batch
-            df_zeros = pd.DataFrame([[0] * df_record.shape[1]] * diff, columns=df_record.columns)
-            df_record = pd.concat([df_zeros, df_record], axis=0, ignore_index=True)
+            if not pad_halfs:
+                # Pad the record to the maximum length of the batch
+                df_zeros = pd.DataFrame([[0] * df_record.shape[1]] * diff, columns=df_record.columns)
+                df_record = pd.concat([df_zeros, df_record], axis=0, ignore_index=True)
+            else:
+                # Pad the record to the maximum length of the batch but append half of the values to the beginning
+                # and half to the end
+                df_zeros = pd.DataFrame([[0] * df_record.shape[1]] * math.ceil(diff / 2), columns=df_record.columns)
+                # If the diff is uneven, omit the last column in df_zeros  before concatenation
+                if diff % 2 == 0:
+                    df_record = pd.concat([df_zeros, df_record, df_zeros], axis=0, ignore_index=True)
+                else:
+                    df_record = pd.concat([df_zeros, df_record, df_zeros.iloc[:-1]], axis=0, ignore_index=True)
         elif diff < 0:
             # Cut the record to have length seq_len (if possible, cut the equal amount of values from both sides)
             # If the diff is not even, cut one value more from the beginning
@@ -339,6 +362,8 @@ def show(path):
         if file.endswith(".pk"):
             df, meta = pk.load(open(os.path.join(path, file), "rb"))
             df.loc[:, "I"].plot()
+            # Plot certain range of lead I
+            # df.loc[6250:8750, "I"].plot()
             plt.show()
             pass
 
@@ -348,23 +373,23 @@ if __name__ == "__main__":
     # dest_path = "data/CinC_CPSC/"
     # split_train_test(src_path,dest_path, test_ratio=0.2)
 
-    # # Uncomment for applying basic preprocessing
-    # # Reads the .mat files, possibly downsamples the data, extracts meta data and writes everything to pickle dumps
-    # src_path = "data/CinC_CPSC/train"
+    # Uncomment for applying basic preprocessing
+    # Reads the .mat files, possibly downsamples the data, extracts meta data and writes everything to pickle dumps
+    # src_path = "data/CinC_CPSC/train/raw"
     # target_path = "data/CinC_CPSC/train/preprocessed/"
-    # run_basic_preprocessing(src_path, target_path, sampling=None)
-    # src_path = "data/CinC_CPSC/test"
+    # run_basic_preprocessing(src_path, target_path, sampling="4ms")
+    # src_path = "data/CinC_CPSC/test/raw"
     # target_path = "data/CinC_CPSC/test/preprocessed/"
-    # run_basic_preprocessing(src_path, target_path, sampling=None)
-
+    # run_basic_preprocessing(src_path, target_path, sampling="4ms")
+    #
     # # Uncomment to extend the meta information by encoded classes
     # # More importantly, deal with multi-label-case to fix the order of labels to match the one of the original CPSC
-    # src_path = "data/CinC_CPSC/train/preprocessed/no_sampling/"
+    # src_path = "data/CinC_CPSC/train/preprocessed/4ms/"
     # clean_meta(src_path)
-    # src_path = "data/CinC_CPSC/test/preprocessed/no_sampling/"
+    # src_path = "data/CinC_CPSC/test/preprocessed/4ms/"
     # clean_meta(src_path)
 
-    # Uncomment for applying further preprocessing like normalization
+    # #  Uncomment for applying further preprocessing like normalization
     # src_path = "data/CinC_CPSC/train/preprocessed/no_sampling/"
     # #normalize(src_path)
     # #show(src_path + "normalized")
@@ -376,9 +401,28 @@ if __name__ == "__main__":
     # min_max_scaling(path=src_path)
     # show(src_path + "minmax")
 
-    # Uncomment for applying further preprocessing like padding
-    src_path = "data/CinC_CPSC/train/preprocessed/no_sampling/"
-    pad_or_truncate(path=src_path, seq_len=72000)
-    src_path = "data/CinC_CPSC/test/preprocessed/no_sampling/"
-    pad_or_truncate(path=src_path, seq_len=72000)
+    # # Uncomment for applying further preprocessing like padding
+    # src_path = "data/CinC_CPSC/train/preprocessed/no_sampling/"
+    # for desired_len_in_seconds in [10, 15, 30, 60]:
+    #     seq_len = _get_seq_len(hz=500, desired_seconds=desired_len_in_seconds)
+    #     pad_or_truncate(path=src_path, seq_len=seq_len, seconds=desired_len_in_seconds)
+    #
+    # src_path = "data/CinC_CPSC/test/preprocessed/no_sampling/"
+    # for desired_len_in_seconds in [10, 15, 30, 60]:
+    #     seq_len = _get_seq_len(hz=500, desired_seconds=desired_len_in_seconds)
+    #     pad_or_truncate(path=src_path, seq_len=seq_len, seconds=desired_len_in_seconds)
+
+    # 4ms = 250Hz
+    # src_path = "data/CinC_CPSC/train/preprocessed/4ms/"
+    # for desired_len_in_seconds in [60]:     # [10,15,30,60]:
+    #     seq_len = _get_seq_len(hz=250, desired_seconds=desired_len_in_seconds)
+    #     pad_or_truncate(path=src_path, seq_len=seq_len, seconds=desired_len_in_seconds, pad_halfs=True)
+    #
+    # src_path = "data/CinC_CPSC/test/preprocessed/4ms/"
+    # for desired_len_in_seconds in [60]:     # [10,15,30,60]:
+    #     seq_len = _get_seq_len(hz=250, desired_seconds=desired_len_in_seconds)
+    #     pad_or_truncate(path=src_path, seq_len=seq_len, seconds=desired_len_in_seconds, pad_halfs=True)
+
+    show("/home/vab30xh/projects/2023-macro-paper-3.10/data/CinC_CPSC/cross_valid/250Hz/60s_pad_halfs")
+
     print("Finished")

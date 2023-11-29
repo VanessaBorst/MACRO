@@ -7,19 +7,15 @@ import numpy as np
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 from torch.utils.data.sampler import SubsetRandomSampler
+
+import global_config
 from utils import get_project_root
 
 
-SEED = 123
-
 def seed_worker(worker_id):
-    worker_seed = torch.initial_seed() % 2**32
+    worker_seed = torch.initial_seed() % 2 ** 32
     np.random.seed(worker_seed)
     random.seed(worker_seed)
-
-
-g = torch.Generator()
-g.manual_seed(SEED)
 
 
 class BaseDataLoader(DataLoader):
@@ -31,12 +27,14 @@ class BaseDataLoader(DataLoader):
     def __init__(self, dataset, batch_size, shuffle, validation_split=None, num_workers=1, pin_memory=False,
                  cross_valid=False, train_idx=None, valid_idx=None, test_idx=None, cv_train_mode=True, fold_id=None,
                  collate_fn=default_collate,
-                 single_batch=False, worker_init_fn=seed_worker, generator=g):
+                 single_batch=False, worker_init_fn=seed_worker, generator=torch.Generator()):
         """
         single_batch: If set to True, this reduces the training set to a single batch and turns off the validation set.
         Training on a single batch should quickly overfit and reach accuracy 1.0.
         This is a recommended step for debugging networks, see https://twitter.com/karpathy/status/1013244313327681536
         """
+
+        generator.manual_seed(global_config.SEED)
 
         if not cross_valid:
             self.validation_split = validation_split
@@ -46,7 +44,8 @@ class BaseDataLoader(DataLoader):
             self.batch_size = batch_size
             self.n_samples = len(dataset)
 
-            np.random.seed(0)
+            # Update 10.11.23; before: np.random.seed(0)
+            # np.random.seed(global_config.SEED)
 
             if not single_batch:
                 self.sampler, self.valid_sampler = self._split_sampler(self.validation_split)
@@ -66,13 +65,14 @@ class BaseDataLoader(DataLoader):
             if cv_train_mode:
                 self.batch_size = batch_size
 
-                np.random.seed(0)
+                # Update 10.11.23; before: np.random.seed(0)
+                # np.random.seed(global_config.SEED)
 
                 train_sampler = SubsetRandomSampler(train_idx)
                 valid_sampler = SubsetRandomSampler(valid_idx)
                 # Write it to file for reproducibility
                 path = os.path.join(get_project_root(), "cross_fold_log",
-                                    "cross_validation_valid_" + str(fold_id+1) + ".txt")
+                                    "cross_validation_valid_" + str(fold_id + 1) + ".txt")
                 with open(path, "w+") as file:
                     np.savetxt(file, valid_idx.astype(int), fmt='%i', delimiter=",")
 
@@ -88,7 +88,7 @@ class BaseDataLoader(DataLoader):
                 test_sampler = SubsetRandomSampler(test_idx)
                 # Write it to file for reproducibility
                 path = os.path.join(get_project_root(), "cross_fold_log",
-                                    "cross_validation_test_" + str(fold_id+1) + ".txt")
+                                    "cross_validation_test_" + str(fold_id + 1) + ".txt")
                 with open(path, "w") as file:
                     np.savetxt(file, test_idx.astype(int), fmt='%i', delimiter=",")
 

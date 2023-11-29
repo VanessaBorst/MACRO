@@ -3,19 +3,17 @@ import torch
 from tqdm import tqdm
 
 import data_loader.data_loaders as module_data
-
+import global_config
 
 # fix random seeds for reproducibility
 from train import _set_seed
 from utils.optimize_thresholds import optimize_ts
 
-SEED = 123
-_set_seed(SEED)
-
-
 def fine_tune_thresholds(config, cv_data_dir=None, valid_idx=None, k_fold=None):
 
     import model.final_model as module_arch
+
+    _set_seed(global_config.SEED)
 
     logger = config.get_logger('fine_tune_threshold_fold_' + str(k_fold))
 

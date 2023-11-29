@@ -1,6 +1,6 @@
 {
   "name": "BaselineWithMultiHeadAttention_CV",
-  "run_details": "_withFC_macroES_16heads",
+  "run_details": "_withFC_macroES_8heads_do0.2_torchMHA",
   "n_gpu": 1,
   "arch": {
     "type": "BaselineModelWithMHAttention",
@@ -8,9 +8,10 @@
       "apply_final_activation": false,
       "multi_label_training": true,
       "dropout_attention": 0.2,
-      "heads": 16,
+      "heads": 8,
       "gru_units": 12,
-      "discard_FC_before_MH": false
+      "discard_FC_before_MH": false,
+      "use_torch_MHA": true
     }
   },
   "data_loader": {
@@ -18,7 +19,7 @@
       "cross_valid": {
           "enabled": true,
           "k_fold": 10,
-          "data_dir": "data/CinC_CPSC/cross_valid/"
+          "data_dir": "data/CinC_CPSC/cross_valid/500Hz/no_crop"
       },
       "args": {
           "data_dir": "data/CinC_CPSC/train/preprocessed/no_sampling/eq_len_72000",

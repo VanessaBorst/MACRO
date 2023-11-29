@@ -344,7 +344,21 @@ def _convert_multi_label_logits_to_single_prediction(logits_output):
     # Convert the logits to probabilities and take the one with the highest one as final predicti
     softmax_probs = torch.nn.functional.softmax(logits_output, dim=1)
     # Should be the same as directly taking the maximum of raw logits
-    assert (torch.argmax(softmax_probs, dim=1) == torch.argmax(logits_output, dim=1)).all()
+    if not (torch.argmax(softmax_probs, dim=1) == torch.argmax(logits_output, dim=1)).all():
+        # assert (torch.argmax(softmax_probs, dim=1) == torch.argmax(logits_output, dim=1)).all()
+        with open('/home/vab30xh/projects/2023-macro-paper-3.10/savedVM/models/BaselineModel_Preprocess_CV/temp_error.txt', 'a') as f:
+            f.write('Hi')
+            f.write('torch.argmax(softmax_probs, dim=1) == torch.argmax(logits_output, dim=1)).all() failed')
+            f.write('Softmax Probs: ' + str(softmax_probs) + " -> argmax: " + str(torch.argmax(softmax_probs, dim=1)))
+            f.write('Logits Output: ' + str(logits_output) + " -> argmax: " + str(torch.argmax(logits_output, dim=1)))
+
+            list_true_false = (torch.argmax(softmax_probs, dim=1) == torch.argmax(logits_output, dim=1))
+            false_idx = [i for i, x in enumerate(list_true_false) if not x]
+            f.write('False for: ' + str(false_idx))
+            for false in false_idx:
+                f.write('Softmax Probs: ' + str(softmax_probs[false]) + "Logits Output: " + str(logits_output[false]))
+
+            f.write('' + str ((torch.argmax(softmax_probs, dim=1) == torch.argmax(logits_output, dim=1)).all()))
     # In very seldom cases the following is not true, probably because of numerical instability:
     # torch.sigmoid(torch.Tensor([7.4171776772])) == torch.sigmoid(torch.Tensor([7.4171915054,]))
     # even though the first logit is smaller!

@@ -10,7 +10,8 @@ import pandas as pd
 
 # Needed for working with SSH Interpreter...
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "MIG-11c29e81-e611-50b5-b5ef-609c0a0fe58b"
+
+import global_config
 import torch
 
 from matplotlib import pyplot as plt
@@ -25,12 +26,10 @@ from evaluation.multi_label_metrics import class_wise_confusion_matrices_multi_l
 from evaluation.single_label_metrics import overall_confusion_matrix_sk, class_wise_confusion_matrices_single_label_sk
 from parse_config import ConfigParser
 
-# fix random seeds for reproducibility
 from train import _set_seed
 from utils.tracker import ConfusionMatrixTracker, MetricTracker
 
-SEED = 123
-_set_seed(SEED)
+os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
 
 
 def test_model_with_threshold(config, cv_data_dir=None, test_idx=None, k_fold=None, thresholds=None):
@@ -132,7 +131,7 @@ def test_model_with_threshold(config, cv_data_dir=None, test_idx=None, k_fold=No
             else:
                 # target contains the first GT label, target_all_labels contains all labels in 1-hot-encoding
                 data, target, target_all_labels = padded_records.to(device), first_labels.to(device), \
-                                                  labels_one_hot.to(device)
+                    labels_one_hot.to(device)
 
             data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)
             output = model(data)
@@ -405,12 +404,12 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
     elif config['arch']['type'] == 'FinalModelMultiBranchOld':
         import model.final_model_multibranch_old as module_arch
     elif config['arch']['type'] == 'FinalModelMultiBranch':
-        import  model.final_model_multibranch as module_arch
+        import model.final_model_multibranch as module_arch
 
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric
     else:
-        raise NotImplementedError("Single label metrics haven't been checked after the Python update! Do not use them!")
+        # raise NotImplementedError("Single label metrics haven't been checked after the Python update! Do not use them!")
         import evaluation.single_label_metrics as module_metric
 
     if not cv_active:
@@ -560,7 +559,7 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
             else:
                 # target contains the first GT label, target_all_labels contains all labels in 1-hot-encoding
                 data, target, target_all_labels = padded_records.to(device), first_labels.to(device), \
-                                                  labels_one_hot.to(device)
+                    labels_one_hot.to(device)
 
             data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)
             output = model(data)
@@ -608,15 +607,13 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
                     "Something went wrong with the kwargs"
 
                 additional_kwargs = {
-                    "lambda_balance" : _param_dict["lambda_balance"]
+                    "lambda_balance": _param_dict["lambda_balance"]
                 }
 
                 # Calculate the joint loss of each single lead branch and the overall network
                 loss = loss_fn(target=target, output=output,
                                single_lead_outputs=single_lead_outputs,
                                **additional_kwargs)
-
-
 
             # batch_size = data.shape[0]
             # total_loss += loss.item() * batch_size
@@ -963,6 +960,10 @@ if __name__ == '__main__':
     ]
 
     config = ConfigParser.from_args(args=args, options=options, mode='test')
+
+    # fix random seeds for reproducibility
+    _set_seed(global_config.SEED)
+
     if config.use_tune:
         tune_config_path = os.path.join(config.test_output_dir, "../params.json")
         with open(tune_config_path, 'r') as file:

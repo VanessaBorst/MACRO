@@ -4,6 +4,7 @@ matplotlib
 numpy
 pandas
 plotly
+prettytable
 pyarrow
 pytest
 ray[default]

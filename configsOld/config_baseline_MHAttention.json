@@ -1,18 +1,24 @@
 {
-  "name": "BaselineModel_CV",
-  "run_details": "_macroES",
+  "name": "BaselineWithMultiHeadAttention",
+  "run_details": "_withFC_weightedES_8heads_ownMHA_ReducedHeadDim",
   "n_gpu": 1,
   "arch": {
-    "type": "BaselineModel",
+    "type": "BaselineModelWithMHAttention",
     "args": {
       "apply_final_activation": false,
-      "multi_label_training": true
+      "multi_label_training": true,
+      "dropout_attention": 0.2,
+      "heads": 8,
+      "gru_units": 12,
+      "discard_FC_before_MH": false,
+      "use_torch_MHA": true,
+      "use_reduced_head_dims": true
     }
   },
   "data_loader": {
       "type": "ECGDataLoader",
       "cross_valid": {
-          "enabled": true,
+          "enabled": false,
           "k_fold": 10,
           "data_dir": "data/CinC_CPSC/cross_valid/"
       },
@@ -28,16 +34,16 @@
       "test_dir": "data/CinC_CPSC/test/preprocessed/no_sampling/eq_len_72000"
   },
   "optimizer": {
-      "type": "Adam",
-      "args": {
-          "lr": 0.001,
-          "weight_decay": 0,
-          "amsgrad": false
-      }
+    "type": "Adam",
+    "args": {
+      "lr": 0.001,
+      "weight_decay": 0,
+      "amsgrad": false
+    }
   },
   "loss": {
-      "type": "BCE_with_logits",
-      "add_args": {}
+    "type": "BCE_with_logits",
+    "add_args": {}
   },
   "metrics": {
       "sl": {
@@ -94,7 +100,7 @@
     "save_dir": "savedVM",
     "save_period": 1,
     "verbosity": 2,
-    "monitor": "max val_macro_sk_f1",
+    "monitor": "max val_weighted_sk_f1",
     "early_stop": 20,
     "tensorboard": true,
     "try_run": false,

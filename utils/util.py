@@ -6,6 +6,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from prettytable import PrettyTable
 
 
 def get_project_root() -> Path:
@@ -111,3 +112,20 @@ def plot_grad_flow_bars(named_parameters, ax):
 
         ax.bar(np.arange(len(max_grads)), max_grads, alpha=0.1, lw=1, color="c")
         ax.bar(np.arange(len(max_grads)), ave_grads, alpha=0.1, lw=1, color="b")
+
+
+
+def count_parameters(model):
+    table = PrettyTable(["Modules", "Parameters"])
+
+    total_params = 0
+    for name, parameter in model.named_parameters():
+        if not parameter.requires_grad:
+            continue
+        param = parameter.numel()
+        table.add_row([name, param])
+        total_params += param
+
+    print(table)
+    print(f"Total Trainable Params: {total_params}")
+    return total_params

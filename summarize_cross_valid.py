@@ -10,8 +10,7 @@ import pandas as pd
 # 'savedVM_v2/models/FinalModel/cross_vals_sqrtT/final_cross_validation_sqrtT'
 # 'savedVM_v2/models/FinalModel/cross_vals_sqrtT/cross_validation_withFC_0.4_24_32_finetune_BO'
 # path = 'savedVM_v2/models/FinalModel/cross_vals/cross_validation_rerun_withFC_0.3_32_16_finetune_bayesian'
-
-path = 'savedVM/models/BaselineWithMultiHeadAttention_CV/0919_194041_ml_bs64_withFC_macroES_16heads'
+path = 'savedVM/models/BaselineWithMultiHeadAttention_CV/1114_164332_ml_bs64_withFC_macroES_8heads_do0.2_torchMHA'
 thresholds_active=False
 include_weighted_avg=False
 include_at_least_weighted_F1 = True

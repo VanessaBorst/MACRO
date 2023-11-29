@@ -14,7 +14,7 @@ from sklearn.metrics import confusion_matrix, multilabel_confusion_matrix, \
 #       => Biases the classes towards the most populated class
 #       => Micro-Average Precision and Recall are the same values, therefore the MicroAverage F1-Score is also the same
 #           (and corresponds to the accuracy when all classes are considered)
-from torchmetrics import Precision, Accuracy, Recall, ROC
+from torchmetrics import Precision, Accuracy, Recall, ROC, F1Score
 from torchmetrics.classification.auroc import AUROC
 
 # TODO: This file has not yet been checked for API updates, since single label metrics are not used for the Macro paper
@@ -383,7 +383,7 @@ def cpsc_score(output, target, log_probs, logits):
 
         assert len(answers) == len(reference), "Answers and References should have equal length"
 
-        A = np.zeros((9, 9), dtype=np.float)
+        A = np.zeros((9, 9), dtype=float)
 
         for sample_idx in range(0, len(answers)):
             pred_class = answers[sample_idx]
@@ -442,7 +442,7 @@ def _torch_precision(output, target, log_probs, logits, labels, average):
             pred = _convert_logits_to_prediction(output)
 
         assert pred.shape[0] == len(target)
-        precision = Precision(num_classes=len(labels), average=average)
+        precision = Precision(task='multiclass', num_classes=len(labels), average=average)
         return precision(pred, target)
 
 
@@ -456,7 +456,7 @@ def _torch_recall(output, target, log_probs, logits, labels, average):
             pred = _convert_logits_to_prediction(output)
 
         assert pred.shape[0] == len(target)
-        recall = Recall(num_classes=len(labels), average=average)
+        recall = Recall(task='multiclass', num_classes=len(labels), average=average)
         return recall(pred, target)
 
 
@@ -489,7 +489,7 @@ def _torch_roc_auc(output, target, log_probs, logits, labels, average):
             probs = torch.exp(output)
 
         assert probs.shape[0] == len(target)
-        auroc = AUROC(num_classes=len(labels), average=average)
+        auroc = AUROC(task='multiclass', num_classes=len(labels), average=average)
         return auroc(probs, target)
 
 
@@ -516,7 +516,7 @@ def torch_roc(output, target, log_probs, logits, labels):
 
         assert probs.shape[0] == len(target)
         # returns a tuple (fpr, tpr, thresholds)
-        auroc = ROC(num_classes=len(labels))
+        auroc = ROC(task='multiclass', num_classes=len(labels))
         return auroc(probs, target)
 
 
@@ -542,7 +542,7 @@ def _torch_f1(output, target, log_probs, logits, labels, average):
 
         assert pred.shape[0] == len(target)
 
-        f1 = F1(num_classes=len(labels), average=average)
+        f1 = F1Score(task='multiclass', num_classes=len(labels), average=average)
         return f1(pred, target)
 
 
@@ -566,7 +566,7 @@ def _torch_accuracy(output, target, log_probs, logits, labels, average):
 
         assert pred.shape[0] == len(target)
 
-        accuracy = Accuracy(num_classes=len(labels), average=average)
+        accuracy = Accuracy(task='multiclass', num_classes=len(labels), average=average)
         return accuracy(pred, target)
 
 

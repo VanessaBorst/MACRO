@@ -7,7 +7,7 @@ from utils import plot_record_from_np_array
 
 
 class BaselineModel(BaseModel):
-    def __init__(self, apply_final_activation, multi_label_training, num_classes=9):
+    def __init__(self, apply_final_activation, multi_label_training, num_classes=9, in_channels=12):
         """
         :param apply_final_activation: whether the Sigmoid(sl) or the LogSoftmax(ml) should be applied at the end
         :param multi_label_training: if true, Sigmoid is used as final activation, else the LogSoftmax
@@ -19,7 +19,7 @@ class BaselineModel(BaseModel):
         self._conv_block1 = nn.Sequential(
             # Keras Code -> Input shape (7200, 12) -> in_channel = 12
             # x = Convolution1D(12, 3, padding='same')(main_input) -> Stride 1 as default
-            nn.Conv1d(in_channels=12, out_channels=12, kernel_size=3, padding=1),
+            nn.Conv1d(in_channels=in_channels, out_channels=12, kernel_size=3, padding=1),
             nn.LeakyReLU(0.3),
             nn.Conv1d(in_channels=12, out_channels=12, kernel_size=3, padding=1),
             nn.LeakyReLU(0.3),
@@ -119,5 +119,5 @@ class BaselineModel(BaseModel):
 
 
 if __name__ == "__main__":
-    model = BaselineModel(apply_final_activation=True, multi_label_training=True)
+    model = BaselineModel(apply_final_activation=True, multi_label_training=True, in_channels=12)
     summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "num_params"])

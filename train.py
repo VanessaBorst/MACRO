@@ -12,8 +12,8 @@ from ray.tune.web_server import TuneClient
 from ray import tune
 from ray.tune import CLIReporter, Callback
 
-
 import data_loader.data_loaders as module_data_loader
+import global_config
 import model.loss as module_loss
 from logger import update_logging_setup_for_tune_or_cross_valid
 from parse_config import ConfigParser
@@ -24,8 +24,8 @@ from utils import prepare_device, get_project_root
 import os
 import torch
 
-CUDA_VISIBLE_DEVICES = "MIG-a1208c4e-caad-5519-9d69-6b0998c74b9f" #"MIG-11c29e81-e611-50b5-b5ef-609c0a0fe58b"
-os.environ["CUDA_VISIBLE_DEVICES"]  = CUDA_VISIBLE_DEVICES
+os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
+
 
 def _set_seed(SEED):
     # OLD VERSION MA
@@ -52,11 +52,6 @@ def _set_seed(SEED):
     torch.use_deterministic_algorithms(True)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-
-
-# fix random seeds for reproducibility
-SEED = 123
-_set_seed(SEED)
 
 
 # Define custom functions for conditional Tune Search Spaces
@@ -174,11 +169,11 @@ def tuning_params(name):
         }
     elif name == "BaselineModelWithSkipConnectionsAndNormV2":
         return {
-            "down_sample": "conv", #tune.grid_search(["conv", "max_pool"]),
+            "down_sample": "conv",  # tune.grid_search(["conv", "max_pool"]),
             "vary_channels": True,
-            "pos_skip": "not_first",  #tune.grid_search(["all", "not_last", "not_first"]),
-            "norm_type": "BN", #tune.grid_search(["BN", "IN", "LN"]),
-            "norm_pos": "all" # tune.grid_search(["all", "last"])
+            "pos_skip": "not_first",  # tune.grid_search(["all", "not_last", "not_first"]),
+            "norm_type": "BN",  # tune.grid_search(["BN", "IN", "LN"]),
+            "norm_pos": "all"  # tune.grid_search(["all", "last"])
             # Tested TOP3 from first experiment, i.e., the following:
             # Conv + True + not_last,
             # MaxPool + True + all,
@@ -198,7 +193,6 @@ def tuning_params(name):
         #     # Conv + True + all + BN + all
         #     # Pool + True + all + BN + all
         # }
-
 
         # Run 2: Only best one of run 1, but this time for different kernel sizes
         return {
@@ -244,7 +238,7 @@ def tuning_params(name):
         #     "discard_FC_before_MH": True
         # }
 
-        #Rerun without FC
+        # Rerun without FC
         # return {
         #     "down_sample": "conv",
         #     "vary_channels": True,
@@ -288,16 +282,16 @@ def tuning_params(name):
             "use_pre_conv": True,
             "pre_conv_kernel": 16,
             "dropout_attention": 0.3,
-            "heads":  tune.grid_search([1, 2, 3, 8]),
+            "heads": tune.grid_search([1, 2, 3, 8]),
             "gru_units": tune.grid_search([12, 24, 32]),
-            "discard_FC_before_MH":  tune.grid_search([True, False])
+            "discard_FC_before_MH": tune.grid_search([True, False])
         }
 
     elif name == "FinalModelMultiBranch":
         return {
             "multi_branch_heads": tune.grid_search([1, 2, 3, 8]),
             "first_conv_reduction_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
-            "second_conv_reduction_kernel_size": tune.grid_search([3, 16]), # add 24 later if time left
+            "second_conv_reduction_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
             "third_conv_reduction_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
             "vary_channels_lighter_version": False,  # tune.grid_search([True, False]),
             "discard_FC_before_MH": True,
@@ -465,7 +459,7 @@ class MyTuneCallback(Callback):
         # Pool + True + all + BN + all
         # unwanted_combination = (trial.config["down_sample"] == "max_pool" and trial.config["pos_skip"] == "not_last")
 
-        if str(trial.config) in self.already_seen: # or unwanted_combination:
+        if str(trial.config) in self.already_seen:  # or unwanted_combination:
             print("Stop trial with id " + str(trial.trial_id))
             self.manager.stop_trial(trial.trial_id)
         else:
@@ -485,6 +479,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
 
     data_dir = main_config['data_loader']['args']['data_dir']
     full_data_dir = os.path.join(str(get_project_root()), data_dir)
+
     # data_loader = main_config.init_obj('data_loader', module_data_loader, data_dir=full_data_dir,
     #                                    single_batch=config['data_loader'].get('overfit_single_batch', False))
     # valid_data_loader = data_loader.split_validation()
@@ -497,7 +492,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
         train_model(config=main_config, tune_config=config, train_dl=data_loader, valid_dl=valid_data_loader,
                     checkpoint_dir=checkpoint_dir, use_tune=True)
 
-    ray.init(_temp_dir=os.path.join('/home/vab30xh/','ray_tmp'))   # get_project_root(), 'ray_tmp'))
+    ray.init(_temp_dir=os.path.join('/home/vab30xh/', 'ray_tmp'))  # get_project_root(), 'ray_tmp'))
 
     trainer = main_config['trainer']
     early_stop = trainer.get('monitor', 'off')
@@ -673,7 +668,6 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                             "val_cpsc_Fst",
                             "training_iteration"])
 
-
     # experiment_stopper = ExperimentPlateauStopper(
     #     metric=mnt_metric,
     #     mode=mnt_mode,
@@ -788,9 +782,8 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
     # TODO check if 0.5 is also needed for the multi-branch model
     num_gpu = 0.5 if not main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsV2" and not \
         main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2" and not \
-        main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2PreActivation" and not \
-        main_config["arch"]["type"] == "FinalModelMultiBranch" else 1
-
+                         main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2PreActivation" and not \
+                         main_config["arch"]["type"] == "FinalModelMultiBranch" else 1
 
     analysis = tune.run(
         run_or_experiment=train_fn,
@@ -853,17 +846,17 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
     if use_tune:
         # When using Ray Tune, this is distributed among worker processes, which requires seeding within the function
         # Otherwise the same config may to different results -> not reproducible
-        np.random.seed(SEED)
-        torch.manual_seed(SEED)
-        random.seed(SEED)
-        torch.cuda.manual_seed_all(SEED)
+        np.random.seed(global_config.SEED)
+        torch.manual_seed(global_config.SEED)
+        random.seed(global_config.SEED)
+        torch.cuda.manual_seed_all(global_config.SEED)
         os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
         os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
         torch.use_deterministic_algorithms(True)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-        os.environ["CUDA_VISIBLE_DEVICES"] = CUDA_VISIBLE_DEVICES
+        os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
 
     # Conditional inputs depending on the config
     if config['arch']['type'] == 'BaselineModelWoRnnWoAttention':
@@ -894,7 +887,7 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric
     else:
-        raise NotImplementedError("Single label metrics haven't been checked after the Python update! Do not use them!")
+        # raise NotImplementedError("Single label metrics haven't been checked after the Python update! Do not use them!")
         import evaluation.single_label_metrics as module_metric
 
     if use_tune:
@@ -989,7 +982,7 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
 
 
 if __name__ == '__main__':
-    args = argparse.ArgumentParser(description='MA Vanessa')
+    args = argparse.ArgumentParser(description='MACRO Paper: Single Training Run')
     args.add_argument('-c', '--config', default=None, type=str,
                       help='config file path (default: None)')
     args.add_argument('-r', '--resume', default=None, type=str,
@@ -997,6 +990,7 @@ if __name__ == '__main__':
     args.add_argument('-d', '--device', default=None, type=str,
                       help='indices of GPUs to enable (default: all)')
     args.add_argument('-t', '--tune', action='store_true', help='Use to enable tuning')
+    args.add_argument('--seed', type=int, default=123, help='Random seed')
 
     # custom cli options to modify configuration from default values given in json file.
     CustomArgs = collections.namedtuple('CustomArgs', 'flags type target')
@@ -1006,6 +1000,11 @@ if __name__ == '__main__':
         # options added here can be modified by command line flags.
     ]
     config = ConfigParser.from_args(args=args, options=options)
+
+    # fix random seeds for reproducibility
+    global_config.SEED = config.config.get("SEED", global_config.SEED)
+    _set_seed(global_config.SEED)
+
     if config.use_tune:
         tuning_params = tuning_params(name=config["arch"]["type"])
         # With grid search, only 1 times ! -> # Set num_samples to 1, as grid search generates all combination
