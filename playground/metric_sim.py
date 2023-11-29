@@ -1,7 +1,7 @@
 import os
 import pickle as pk
 import numpy as np
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, precision_score, recall_score
 
 from evaluation.multi_label_metrics import _sk_f1
 from utils import get_project_root
@@ -27,8 +27,14 @@ f1_scores = f1_score(y_true=labels, y_pred=preds, labels=label_list, average=Non
 macro_avg_f1 = f1_score(y_true=labels, y_pred=preds, labels=label_list, average='macro')
 weighted_avg_f1 = f1_score(y_true=labels, y_pred=preds, labels=label_list, average='weighted')
 
+precision_scores = precision_score(y_true=labels, y_pred=preds, labels=label_list, average=None)
+recall_scores = recall_score(y_true=labels, y_pred=preds, labels=label_list, average=None)
+
 print("Summary (for prediction of majority class at index 4):")
 print("-------")
 print("Macro avg. F1: ", macro_avg_f1)
 print("Weighted avg. F1: ", weighted_avg_f1)
 print("F1 scores per class: ", f1_scores)
+print("-------")
+print("Precision per class: ", precision_scores)
+print("Recall per class: ", recall_scores)
