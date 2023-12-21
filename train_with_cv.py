@@ -79,8 +79,7 @@ def run_cross_validation(config):
     test_results_class_wise = pd.DataFrame(columns=['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
                                                     'macro avg', 'weighted avg'], index=multi_index)
 
-    test_results_single_metrics = pd.DataFrame(columns=['loss', 'sk_subset_accuracy', 'cpsc_F1', 'cpsc_Faf',
-                                                        'cpsc_Fblock', 'cpsc_Fpc', 'cpsc_Fst'])
+    test_results_single_metrics = pd.DataFrame(columns=['loss', 'sk_subset_accuracy'])
 
     print("Starting with " + str(k_fold) + "-fold cross validation")
     start = time.time()

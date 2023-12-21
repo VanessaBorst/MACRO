@@ -1,0 +1,87 @@
+{
+  "name": "BaselineModelWithSkipConnectionsAndNormV2PreActivation_CV",
+  "run_details": "_250Hz_60s",
+  "n_gpu": 1,
+  "arch": {
+    "type": "BaselineModelWithSkipConnectionsAndNormV2PreActivation",
+    "args": {
+      "apply_final_activation": false,
+      "multi_label_training": true,
+      "down_sample": "conv",
+      "vary_channels": true,
+      "pos_skip": "all",
+      "norm_type": "BN",
+      "norm_pos": "all",
+      "norm_before_act": true,
+      "use_pre_conv": true,
+      "pre_conv_kernel": 16
+    }
+  },
+   "data_loader": {
+      "type": "ECGDataLoader",
+      "cross_valid": {
+          "enabled": true,
+          "k_fold": 10,
+          "data_dir": "data/CinC_CPSC/cross_valid/250Hz/60s"
+      },
+      "args": {
+          "data_dir": "",
+          "batch_size": 64,
+          "shuffle": true,
+          "validation_split": 0.25,
+          "num_workers": 4,
+          "pin_memory": false
+      },
+      "overfit_single_batch": false,
+      "test_dir": ""
+  },
+  "optimizer": {
+    "type": "Adam",
+    "args": {
+      "lr": 0.001,
+      "weight_decay": 0,
+      "amsgrad": false
+    }
+  },
+  "loss": {
+    "type": "BCE_with_logits",
+    "add_args": {}
+  },
+  "metrics": {
+      "ml": {
+          "per_iteration": {
+              "sk_subset_accuracy": [
+                  "sigmoid_probs",
+                  "logits"
+              ]
+          },
+          "per_epoch": [
+              "cpsc_score",
+              "weighted_sk_f1",
+              "macro_sk_f1"
+          ],
+          "per_epoch_class_wise": [
+              "class_wise_sk_f1"
+          ]
+      },
+      "additional_metrics_args": {
+          "sigmoid_probs": false,
+          "log_probs": false,
+          "logits": true
+      }
+  },
+  "lr_scheduler": {
+      "active": false
+  },
+  "trainer": {
+    "epochs": 300,
+    "save_dir": "savedVM",
+    "save_period": 1,
+    "verbosity": 2,
+    "monitor": "max val_macro_sk_f1",
+    "early_stop": 20,
+    "tensorboard": true,
+    "try_run": false,
+    "profiler_active": false
+  }
+}

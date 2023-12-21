@@ -8,7 +8,8 @@ from utils import plot_record_from_np_array
 
 class BaselineModelWithMHAttention(BaseModel):
     def __init__(self, apply_final_activation, multi_label_training, gru_units=12, dropout_attention=0.2, heads=3,
-                 discard_FC_before_MH=False, num_classes=9, use_torch_MHA=False, use_reduced_head_dims=False):
+                 discard_FC_before_MH=False, num_classes=9, use_torch_MHA=False, use_reduced_head_dims=False,
+                 use_mean_query=False):
         """
         :param apply_final_activation: whether the Sigmoid(sl) or the LogSoftmax(ml) should be applied at the end
         :param multi_label_training: if true, Sigmoid is used as final activation, else the LogSoftmax
@@ -18,14 +19,12 @@ class BaselineModelWithMHAttention(BaseModel):
         super().__init__()
 
         assert not (use_torch_MHA and use_reduced_head_dims), \
-            "use_torch_MHA and use_reduced_head_dims cannot be used together!"
+            "use_torch_MHA and _use_reduced_head_dims cannot be used together!"
         if use_reduced_head_dims:
             assert (2*gru_units) % heads == 0, "Twice the number of GRU cells (d_model) must be divisible by num_heads!"
 
         self._apply_final_activation = apply_final_activation
         self._conv_block1 = nn.Sequential(
-            # Keras Code -> Input shape (7200, 12) -> in_channel = 12
-            # x = Convolution1D(12, 3, padding='same')(main_input) -> Stride 1 as default
             nn.Conv1d(in_channels=12, out_channels=12, kernel_size=3, padding=1),
             nn.LeakyReLU(0.3),
             nn.Conv1d(in_channels=12, out_channels=12, kernel_size=3, padding=1),
@@ -88,12 +87,14 @@ class BaselineModelWithMHAttention(BaseModel):
                                                                                  dropout=dropout_attention,
                                                                                  heads=heads,
                                                                                  discard_FC_before_MH=discard_FC_before_MH,
-                                                                                 use_reduced_head_dims=use_reduced_head_dims)
+                                                                                 use_reduced_head_dims=use_reduced_head_dims,
+                                                                                 use_self_attention=use_mean_query)
         else:
             self._multi_head_contextual_attention = MultiHeadContextualAttentionV2(d_model=2 * gru_units,
                                                                                    dropout=dropout_attention,
                                                                                    heads=heads,
-                                                                                   discard_FC_before_MH=discard_FC_before_MH)
+                                                                                   discard_FC_before_MH=discard_FC_before_MH,
+                                                                                   use_mean_query=use_mean_query)
 
         self._batchNorm = nn.Sequential(
             # The batch normalization layer has 24*2=48 trainable and 24*2=48 non-trainable parameters
@@ -137,4 +138,4 @@ class BaselineModelWithMHAttention(BaseModel):
 
 if __name__ == "__main__":
     model = BaselineModelWithMHAttention(apply_final_activation=True, multi_label_training=True, gru_units=12)
-    summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "num_params"])
+    summary(model, input_size=(2, 12, 15000), col_names=["input_size", "output_size", "num_params"])

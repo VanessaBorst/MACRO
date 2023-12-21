@@ -122,11 +122,12 @@ class MultiHeadContextualAttention(nn.Module):
     """
 
     def __init__(self, d_model, heads, dropout=None, use_bias=True, discard_FC_before_MH=False,
-                 use_reduced_head_dims=False):
+                 use_reduced_head_dims=False, use_self_attention=False):
         super().__init__()
         self._use_bias = use_bias
         self._discard_FC_before_MH = discard_FC_before_MH
-        self.use_reduced_head_dims = use_reduced_head_dims
+        self._use_reduced_head_dims = use_reduced_head_dims
+        self._use_self_attention = use_self_attention
 
         if not self._discard_FC_before_MH:
             # The input dimension will be twice the number of units of a single GRU (since it is a BiGRU)
@@ -138,12 +139,14 @@ class MultiHeadContextualAttention(nn.Module):
             )
 
         # Apply the attention scoring function (dot-product) between the values and the query vector u
-        # Here u is represented as trainable tensor, which has shape (attention_dimension x 1)
-        u = torch.empty(d_model, 1)
-        u = nn.init.xavier_uniform_(u)
-        self._query = nn.Parameter(u, requires_grad=True)
+        if not use_self_attention:
+            # The query needs to be learned
+            # Hence, u is represented as trainable tensor, which has shape (attention_dimension x 1)
+            u = torch.empty(d_model, 1)
+            u = nn.init.xavier_uniform_(u)
+            self._query = nn.Parameter(u, requires_grad=True)
 
-        if self.use_reduced_head_dims:
+        if self._use_reduced_head_dims:
             # Previous version:
             # To avoid to large matrices, reduce the dimensions of the keys, queries, and values
             # Based on the paper "Attention is all you need" d_k = d_v =d_model/h is chosen
@@ -166,12 +169,13 @@ class MultiHeadContextualAttention(nn.Module):
 
         keys = self._hidden_rep(biGRU_outputs) if not self._discard_FC_before_MH else biGRU_outputs
         values = biGRU_outputs
-
-        bs = biGRU_outputs.shape[0]
-        # seq_len = biGRU_outputs.shape[1]
-        # querys = self._query.repeat(seq_len, 1, 1).repeat(bs, 1, 1, 1).squeeze()
-        querys = self._query.permute(1, 0)
-        querys = querys.repeat(bs, 1, 1)
+        if not self._use_self_attention:
+            bs = biGRU_outputs.shape[0]
+            # seq_len = biGRU_outputs.shape[1]
+            querys = self._query.permute(1, 0)
+            querys = querys.repeat(bs, 1, 1)
+        else:
+            querys = biGRU_outputs    # Self-attention
 
         attention_output = self._multihead_attention(query=querys, key=keys, value=values)
 
@@ -180,7 +184,7 @@ class MultiHeadContextualAttention(nn.Module):
 
 
 class MultiHeadContextualAttentionV2(nn.Module):
-    """Multihead Contextual Attention (based on offical Torch MHA)
+    """Multihead Contextual Attention (based on official Torch MHA)
 
     Given an input of shape [batch_size, seq_len, 2*num_units]
     attention weights are determined for each of the seq_len hidden states.
@@ -188,10 +192,12 @@ class MultiHeadContextualAttentionV2(nn.Module):
     The weighted sum of the hidden states of shape [batch_size, 2*num_units] is returned
     """
 
-    def __init__(self, d_model, heads, dropout=None, use_bias=True, discard_FC_before_MH=False):
+    def __init__(self, d_model, heads, dropout=None, use_bias=True, discard_FC_before_MH=False,
+                 use_mean_query=False):
         super().__init__()
         self._use_bias = use_bias
         self._discard_FC_before_MH = discard_FC_before_MH
+        self._use_mean_query = use_mean_query
 
         if not self._discard_FC_before_MH:
             # The input dimension will be twice the number of units of a single GRU (since it is a BiGRU)
@@ -203,20 +209,13 @@ class MultiHeadContextualAttentionV2(nn.Module):
             )
 
         # Apply the attention scoring function (dot-product) between the values and the query vector u
-        # Here u is represented as trainable tensor, which has shape (attention_dimension x 1)
-        u = torch.empty(d_model, 1)
-        u = nn.init.xavier_uniform_(u)
-        self._query = nn.Parameter(u, requires_grad=True)
+        if not use_mean_query:
+            # The query needs to be learned
+            # Hence, u is represented as trainable tensor, which has shape (attention_dimension x 1)
+            u = torch.empty(d_model, 1)
+            u = nn.init.xavier_uniform_(u)
+            self._query = nn.Parameter(u, requires_grad=True)
 
-        # Previous version:
-        # To avoid to large matrices, reduce the dimensions of the keys, queries, and values
-        # Based on the paper "Attention is all you need" d_k = d_v =d_model/h is chosen
-        # In this paper: queries and keys have dimension d_k, i.e., d_q = d_k = d_model/h
-        # -> d_model // heads if multi_branch else d_model
-
-        # Current version (=thesis version):
-        # The matrices are not that large anymore, since a convolutional reduction block is introduced
-        # after the concatenation of the single lead branch feature maps
         d_k = d_v = d_model  # Infers: d_q = d_k = d_model (see Transformer paper)
 
         self._multihead_attention = MultiheadAttention_torch(embed_dim=d_model, num_heads=heads, dropout=dropout,
@@ -226,13 +225,18 @@ class MultiHeadContextualAttentionV2(nn.Module):
         # biGRU_outputs is of shape [batch_size, seq_len, 2*num_units], e.g., bs*2250*24
         # Wanted: Seq_len number of attention weights for each element in the batch and weighted sum in the end
 
-        # The query needs to be learned
-        bs = biGRU_outputs.shape[0]
-        query = self._query.permute(1, 0)
-        query = query.repeat(bs, 1, 1)
-
         key = self._hidden_rep(biGRU_outputs) if not self._discard_FC_before_MH else biGRU_outputs
         value = biGRU_outputs
+        if not self._use_mean_query:
+            # The query needs to be learned
+            bs = biGRU_outputs.shape[0]
+            query = self._query.permute(1, 0)
+            query = query.repeat(bs, 1, 1)
+        else:
+            # Use mean of the BiGRU states as initialization for the query
+            query = torch.mean(biGRU_outputs, dim=1)
+            query = nn.Parameter(query, requires_grad=True)
+            query = query.unsqueeze(1)
 
         attn_output, attn_output_weights = self._multihead_attention(query, key, value)
 
@@ -242,6 +246,8 @@ class MultiHeadContextualAttentionV2(nn.Module):
 
 
 if __name__ == "__main__":
-    model = MultiHeadContextualAttentionV2(d_model=12 * 2, heads=1, discard_FC_before_MH=False)
+    model = MultiHeadContextualAttentionV2(d_model=12 * 2, heads=3, discard_FC_before_MH=False,
+                                           use_mean_query=True)
     summary(model, input_size=(64, 2250, 24), col_names=["input_size", "output_size", "num_params"])
     count_parameters(model)
+

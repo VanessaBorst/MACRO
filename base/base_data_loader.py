@@ -9,7 +9,7 @@ from torch.utils.data.dataloader import default_collate
 from torch.utils.data.sampler import SubsetRandomSampler
 
 import global_config
-from utils import get_project_root
+from utils import get_project_root, ensure_dir
 
 
 def seed_worker(worker_id):
@@ -73,6 +73,7 @@ class BaseDataLoader(DataLoader):
                 # Write it to file for reproducibility
                 path = os.path.join(get_project_root(), "cross_fold_log",
                                     "cross_validation_valid_" + str(fold_id + 1) + ".txt")
+                ensure_dir(os.path.join(get_project_root(), "cross_fold_log"))
                 with open(path, "w+") as file:
                     np.savetxt(file, valid_idx.astype(int), fmt='%i', delimiter=",")
 

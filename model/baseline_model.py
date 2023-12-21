@@ -120,4 +120,4 @@ class BaselineModel(BaseModel):
 
 if __name__ == "__main__":
     model = BaselineModel(apply_final_activation=True, multi_label_training=True, in_channels=12)
-    summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "num_params"])
+    summary(model, input_size=(2, 12, 15000), col_names=["input_size", "output_size", "num_params"])

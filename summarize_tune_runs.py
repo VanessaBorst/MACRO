@@ -67,15 +67,18 @@ def _bold_formatter(x, value, num_decimals=2):
 #                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
 #                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs']
 
-# # 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/0810_215444_ml_bs64_rerun_100821_withFC'
-# path_to_tune = 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/0810_215735_ml_bs64_rerun_100821_noFC'
-# # Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
-# hyper_params = ['discard_FC_before_MH', 'dropout_attention', 'gru_units', 'heads']
-# integer_vals = ['gru_units', 'heads', 'Epochs']
-# single_precision = ['dropout_attention']
-# desired_col_order = ['dropout_attention', 'heads', 'gru_units',
-#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs']
+# 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/0810_215444_ml_bs64_rerun_100821_withFC'
+path_to_tune = 'savedVM/models/BaselineWithMultiHeadAttention_ParamStudy/1208_095532_ml_bs64_macroF1'
+# 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/0810_215735_ml_bs64_rerun_100821_noFC'
+# Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
+hyper_params = ['discard_FC_before_MH', 'dropout_attention', 'gru_units', 'heads']
+integer_vals = ['gru_units', 'heads', 'Epochs']
+single_precision = ['dropout_attention']
+desired_col_order = ['discard_FC_before_MH', 'dropout_attention', 'heads', 'gru_units',
+                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+                     'm-F1', 'm-ROC-AUC', 'm-Acc',
+                     'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc',
+                     'MR', 'Epochs', 'Params']
 
 # # Old runs (no discard_FC param)
 # # 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/tune_run_1'
@@ -119,25 +122,24 @@ def _bold_formatter(x, value, num_decimals=2):
 #                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs', 'Params']
 
 
-path_to_tune = 'savedVM/models/FinalModel_MACRO_MultiBranch_ParamStudy/0831_110846_ml_bs16'
-hyper_params = [ "branchNet_gru_units", "branchNet_heads", "discard_FC_before_MH", "first_conv_reduction_kernel_size",
-                 "multi_branch_heads", "second_conv_reduction_kernel_size", "third_conv_reduction_kernel_size",
-                 "vary_channels_lighter_version"]
-integer_vals = ['branchNet_gru_units', 'branchNet_heads', "first_conv_reduction_kernel_size", "multi_branch_heads",
-                "second_conv_reduction_kernel_size", "third_conv_reduction_kernel_size", 'Epochs', 'Params']
-single_precision = []
-desired_col_order = ["multi_branch_heads", "first_conv_reduction_kernel_size", "second_conv_reduction_kernel_size",
-                     "third_conv_reduction_kernel_size",
-                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE', 'm-F1', 'm-ROC-AUC', 'm-Acc',
-                     'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs', 'Params']
-
+# path_to_tune = 'savedVM/models/FinalModel_MACRO_MultiBranch_ParamStudy/0831_110846_ml_bs16'
+# hyper_params = [ "branchNet_gru_units", "branchNet_heads", "discard_FC_before_MH", "first_conv_reduction_kernel_size",
+#                  "multi_branch_heads", "second_conv_reduction_kernel_size", "third_conv_reduction_kernel_size",
+#                  "vary_channels_lighter_version"]
+# integer_vals = ['branchNet_gru_units', 'branchNet_heads', "first_conv_reduction_kernel_size", "multi_branch_heads",
+#                 "second_conv_reduction_kernel_size", "third_conv_reduction_kernel_size", 'Epochs', 'Params']
+# single_precision = []
+# desired_col_order = ["multi_branch_heads", "first_conv_reduction_kernel_size", "second_conv_reduction_kernel_size",
+#                      "third_conv_reduction_kernel_size",
+#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE', 'm-F1', 'm-ROC-AUC', 'm-Acc',
+#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs', 'Params']
 
 
 include_class_wise_f1 = True
 include_weighted_avg = True
 include_macro_avg = True
 include_CPSC_scores = False
-include_details = True      # epochs, params
+include_details = True  # epochs, params
 use_abbrevs = True
 
 cols_class_wise_f1 = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE']
@@ -162,7 +164,6 @@ max_columns = max_columns + ['MR']
 if include_CPSC_scores:
     max_columns = max_columns + cols_CPSC_scores
     df_columns = df_columns + cols_CPSC_scores
-
 
 if include_details:
     df_summary_valid = pd.DataFrame(columns=df_columns + col_details)
@@ -280,7 +281,6 @@ def _extract_num_params(tune_path):
                 return "N/A"
 
 
-
 for tune_run in os.listdir(path_to_tune):
     tune_path = os.path.join(path_to_tune, tune_run)
     if os.path.isdir(tune_path):
@@ -328,7 +328,8 @@ else:
     df_summary_test_reordered = df_summary_test
 
 # Sort the rows by the main metrics
-order_by_cols =   ['m-F1', 'MR', 'W-AVG_F1']      # MA ['W-AVG_F1', 'W-AVG_ROC', 'MR', 'W-AVG_Acc']  # ['m-F1', 'CPCS_F1', 'W-AVG_F1']
+order_by_cols = ['m-F1', 'MR',
+                 'W-AVG_F1']  # MA ['W-AVG_F1', 'W-AVG_ROC', 'MR', 'W-AVG_Acc']  # ['m-F1', 'CPCS_F1', 'W-AVG_F1']
 # Round before sorting
 df_summary_valid_reordered = df_summary_valid_reordered.round(3)
 df_summary_test_reordered = df_summary_test_reordered.round(3)

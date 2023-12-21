@@ -10,7 +10,7 @@ parallel_executions=5
 python_script="train_with_cv.py"
 
 # Path to your config file
-config_file="config_baseline_MHAttention_CV.json"
+config_file="configs/config_baseline_MHAttention_CV.json"
 
 # Outer loop for the total number of runs
 for ((run=1; run<=$total_runs; run++)); do

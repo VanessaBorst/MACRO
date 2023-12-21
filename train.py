@@ -145,8 +145,12 @@ def tuning_params(name):
         }
     elif name == "BaselineModelWithMHAttention":
         return {
+            # "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
+            # "heads": tune.grid_search([3, 5, 8, 16, 32]),
+            # "gru_units": tune.grid_search([12, 24, 32]),
+            # "discard_FC_before_MH": tune.grid_search([True, False])
             "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
-            "heads": tune.grid_search([3, 5, 8, 16, 32]),
+            "heads": tune.grid_search([4, 8, 12]),
             "gru_units": tune.grid_search([12, 24, 32]),
             "discard_FC_before_MH": tune.grid_search([True, False])
         }
@@ -538,7 +542,8 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
             parameter_columns={
                 "dropout_attention": "Droput MH Attention",
                 "heads": "Num Heads",
-                "gru_units": "Num Units GRU"
+                "gru_units": "Num Units GRU",
+                "discard_FC_before_MH": "Discard FC"
             },
             metric_columns=["loss", "val_loss",
                             "val_macro_sk_f1",
@@ -779,8 +784,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
     #                                               "out_channel_first_conv_blocks <= out_channel_second_conv_blocks"])
     # ax_searcher = ConcurrencyLimiter(ax_searcher, max_concurrent=2)
 
-    # TODO check if 0.5 is also needed for the multi-branch model
-    num_gpu = 0.5 if not main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsV2" and not \
+    num_gpu = 0.125 if not main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsV2" and not \
         main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2" and not \
                          main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2PreActivation" and not \
                          main_config["arch"]["type"] == "FinalModelMultiBranch" else 1

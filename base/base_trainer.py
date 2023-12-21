@@ -94,14 +94,14 @@ class BaseTrainer:
                     # check whether model performance improved or not, according to specified metric(mnt_metric)
                     if self.minimum_diff_for_improvement is None:
                         # Every improvement is considered as an improvement, no matter how small it is
-                        improved = (self.mnt_mode == 'min' and log_mean[self.mnt_metric] <= self.mnt_best) or \
-                                   (self.mnt_mode == 'max' and log_mean[self.mnt_metric] >= self.mnt_best)
+                        improved = (self.mnt_mode == 'min' and log_mean[self.mnt_metric] < self.mnt_best) or \
+                                   (self.mnt_mode == 'max' and log_mean[self.mnt_metric] > self.mnt_best)
                     else:
                         # Improvement is considered only if it is larger than a minimum difference
                         improved = (self.mnt_mode == 'min' and
-                                    log_mean[self.mnt_metric] <= self.mnt_best - self.minimum_diff_for_improvement) \
+                                    log_mean[self.mnt_metric] < self.mnt_best - self.minimum_diff_for_improvement) \
                                    or (self.mnt_mode == 'max' and
-                                       log_mean[self.mnt_metric] >= self.mnt_best + self.minimum_diff_for_improvement)
+                                       log_mean[self.mnt_metric] > self.mnt_best + self.minimum_diff_for_improvement)
                 except KeyError:
                     self.logger.warning("Warning: Metric '{}' is not found. "
                                         "Model performance monitoring is disabled.".format(self.mnt_metric))
