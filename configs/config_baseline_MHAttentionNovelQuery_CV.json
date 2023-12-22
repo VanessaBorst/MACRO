@@ -1,18 +1,16 @@
 {
-  "name": "BaselineWithMultiHeadAttention_CV",
-  "run_details": "_noFC_0.4_8_12_mean_query_v2",
+  "name": "BaselineWithMultiHeadAttentionNovelQuery_CV",
+  "run_details": "_noFC_0.4_8_12",
   "n_gpu": 1,
   "arch": {
-    "type": "BaselineModelWithMHAttention",
+    "type": "BaselineModelWithMHAttentionNovelQuery",
     "args": {
       "apply_final_activation": false,
       "multi_label_training": true,
       "dropout_attention": 0.4,
       "heads": 8,
       "gru_units": 12,
-      "discard_FC_before_MH": true,
-      "use_torch_MHA": true,
-      "use_mean_query": false
+      "discard_FC_before_MH": true
     }
   },
   "data_loader": {

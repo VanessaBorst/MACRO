@@ -397,6 +397,8 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
         import model.old.baseline_model_with_skips_and_norm_v2 as module_arch
     elif config['arch']['type'] == 'BaselineModelWithMHAttention':
         import model.baseline_model_with_MHAttention as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithMHAttentionNovelQuery':
+        import model.baseline_model_with_MHAttention_NovelQuery as module_arch
     elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndNormV2PreActivation':
         import model.baseline_model_with_skips_and_norm_v2_pre_activation_design as module_arch
     elif config['arch']['type'] == 'FinalModel':
