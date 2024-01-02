@@ -187,12 +187,10 @@ class MultiHeadContextualAttentionV2(nn.Module):
     The weighted sum of the hidden states of shape [batch_size, 2*num_units] is returned
     """
 
-    def __init__(self, d_model, heads, dropout=None, use_bias=True, discard_FC_before_MH=False,
-                 use_mean_query=False):
+    def __init__(self, d_model, heads, dropout=None, use_bias=True, discard_FC_before_MH=False):
         super().__init__()
         self._use_bias = use_bias
         self._discard_FC_before_MH = discard_FC_before_MH
-        self._use_mean_query = use_mean_query
 
         if not self._discard_FC_before_MH:
             # The input dimension will be twice the number of units of a single GRU (since it is a BiGRU)
@@ -204,12 +202,11 @@ class MultiHeadContextualAttentionV2(nn.Module):
             )
 
         # Apply the attention scoring function (dot-product) between the values and the query vector u
-        if not use_mean_query:
-            # The query needs to be learned
-            # Hence, u is represented as trainable tensor, which has shape (attention_dimension x 1)
-            u = torch.empty(d_model, 1)
-            u = nn.init.xavier_uniform_(u)
-            self._query = nn.Parameter(u, requires_grad=True)
+        # The query needs to be learned
+        # Hence, u is represented as trainable tensor, which has shape (attention_dimension x 1)
+        u = torch.empty(d_model, 1)
+        u = nn.init.xavier_uniform_(u)
+        self._query = nn.Parameter(u, requires_grad=True)
 
         d_k = d_v = d_model  # Infers: d_q = d_k = d_model (see Transformer paper)
 
@@ -222,16 +219,10 @@ class MultiHeadContextualAttentionV2(nn.Module):
 
         key = self._hidden_rep(biGRU_outputs) if not self._discard_FC_before_MH else biGRU_outputs
         value = biGRU_outputs
-        if not self._use_mean_query:
-            # The query needs to be learned
-            bs = biGRU_outputs.shape[0]
-            query = self._query.permute(1, 0)
-            query = query.repeat(bs, 1, 1)
-        else:
-            # Use mean of the BiGRU states as initialization for the query
-            query = torch.mean(biGRU_outputs, dim=1)
-            query = nn.Parameter(query, requires_grad=True)
-            query = query.unsqueeze(1)
+        # The query needs to be learned
+        bs = biGRU_outputs.shape[0]
+        query = self._query.permute(1, 0)
+        query = query.repeat(bs, 1, 1)
 
         attn_output, attn_output_weights = self._multihead_attention(query, key, value)
 
@@ -241,6 +232,56 @@ class MultiHeadContextualAttentionV2(nn.Module):
 
 
 class MultiHeadContextualAttentionV3(nn.Module):
+    """Multihead Contextual Attention (based on official Torch MHA, uses a learnable query vector based on a BUGGY (!)
+     initialization based on the mean of the BiGRU outputs)
+
+    Given an input of shape [batch_size, seq_len, 2*num_units]
+    attention weights are determined for each of the seq_len hidden states.
+
+    The weighted sum of the hidden states of shape [batch_size, 2*num_units] is returned
+    """
+    # Before: use_mean_query=True
+    def __init__(self, d_model, heads, dropout=None, use_bias=True, discard_FC_before_MH=False):
+        super().__init__()
+        self._use_bias = use_bias
+        self._discard_FC_before_MH = discard_FC_before_MH
+
+        if not self._discard_FC_before_MH:
+            # The input dimension will be twice the number of units of a single GRU (since it is a BiGRU)
+            # This layer calculates a hidden representation of the incoming values for which attention weights are needed
+            # It calculates the following: tanh(W h +b)
+            self._hidden_rep = nn.Sequential(
+                nn.Linear(in_features=d_model, out_features=d_model, bias=self._use_bias),
+                nn.Tanh()
+            )
+
+        d_k = d_v = d_model  # Infers: d_q = d_k = d_model (see Transformer paper)
+
+        self._multihead_attention = MultiheadAttention_torch(embed_dim=d_model, num_heads=heads, dropout=dropout,
+                                                             bias=use_bias, kdim=d_k, vdim=d_v, batch_first=True)
+
+    def forward(self, biGRU_outputs):
+        # biGRU_outputs is of shape [batch_size, seq_len, 2*num_units], e.g., bs*2250*24
+        # Wanted: Seq_len number of attention weights for each element in the batch and weighted sum in the end
+
+        key = self._hidden_rep(biGRU_outputs) if not self._discard_FC_before_MH else biGRU_outputs
+        value = biGRU_outputs
+
+        # TODO: BUGGY (new parameter is created each time!)
+        # The query needs to be learned
+        # Use mean of the BiGRU states as initialization for the query
+        query = torch.mean(biGRU_outputs, dim=1)
+        query = nn.Parameter(query, requires_grad=True)
+        query = query.unsqueeze(1)
+
+        attn_output, attn_output_weights = self._multihead_attention(query, key, value)
+
+        # Shape bs x d_model is required, not bs x 1 x d_model
+        attn_output = attn_output.squeeze(1)
+        return attn_output
+
+
+class MultiHeadContextualAttentionV4(nn.Module):
     """Multihead Contextual Attention (based on official Torch MHA, uses a learnable query vector based on a
      linear projection of the mean of the BiGRU outputs)
 
@@ -288,8 +329,9 @@ class MultiHeadContextualAttentionV3(nn.Module):
         return attn_output
 
 
-class MultiHeadContextualAttentionV4(nn.Module):
-    """Multihead Contextual Attention (based on official Torch MHA)
+class MultiHeadContextualAttentionV5(nn.Module):
+    """Multihead Contextual Attention (based on official Torch MHA, uses a learnable query vector,
+     initialization based on the mean of the BiGRU outputs)
 
     Given an input of shape [batch_size, seq_len, 2*num_units]
     attention weights are determined for each of the seq_len hidden states.
@@ -359,8 +401,8 @@ class MultiHeadContextualAttentionV4(nn.Module):
         return attn_output
 
 
-# TODO Not yet working
-class MultiHeadContextualAttentionV5(nn.Module):
+# TODO Not yet working, WIP
+class MultiHeadContextualAttentionV6(nn.Module):
     """Multihead Contextual Attention (based on official Torch MHA)
 
     Given an input of shape [batch_size, seq_len, 2*num_units]
