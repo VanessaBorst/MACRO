@@ -168,23 +168,39 @@ class ECGDataset(Dataset):
         :return:  Inverse class frequencies
         """
 
+        return self.get_class_frequency(idx_list, multi_label_training, mode,
+                                        inverse=True,
+                                        cross_valid_active=cross_valid_active)
+
+    def get_class_frequency(self, idx_list, multi_label_training, mode, inverse=False, cross_valid_active=False):
+        """
+        Can be used to determine the (inverse) class frequencies
+        Both the class freqs and the inverse class freqs are read from or written to the same dataframe
+        :param idx_list: list of ids, should contain all ids contained in the train, valid or test set
+        :param multi_label_training: If true, all labels are considered, otherwise only the first label is counted
+        :@param inverse: If true, inverse class freqs are returned
+        :param cross_valid_active: Set to True during cross validation to ensure weights are re-calculated each run
+        :return:  (Inverse) class frequencies
+        """
+
         if mode == "test" and "test" not in self._input_dir:
             # Catch the case where the model is tested on the validation set
             mode = "valid"
 
-        file_name = f"data_loader/log/inverse_class_freq_ml_{mode}.p" if multi_label_training \
-            else f"data_loader/log/inverse_class_freq_sl_{mode}.p"
+        file_name = f"data_loader/log/class_freqs_ml_{mode}.p" if multi_label_training \
+            else f"data_loader/log/class_freqs_sl_{mode}.p"
         file_name = os.path.join(get_project_root(), file_name)
 
         # For cross-validation, statistics change from run to run!
         if not cross_valid_active and os.path.isfile(file_name):
 
             # File has already been created. For safety, ensure that it fits to the given idx_list!
-            self._consistency_check_data_split(idx_list, mode, "inverse_class_freq")
+            self._consistency_check_data_split(idx_list, mode, "class_freqs")
 
             # If the file exists and the required indices match, just load the dataframe
             with open(file_name, "rb") as file:
                 df = pickle.load(file)
+            class_freqs = df['Class_freq']
             inverse_class_freqs = df['Inverse_class_freq']
         else:
             # File has not yet been created or cross validation is active
@@ -204,7 +220,7 @@ class ECGDataset(Dataset):
 
             if mode is not None and not cross_valid_active:
                 # Dump the record names to a txt file to ensure they are the same between VMs
-                _save_record_names_to_txt(mode, record_names, "inverse_class_freq")
+                _save_record_names_to_txt(mode, record_names, "class_freqs")
 
             # Get the class freqs as Pandas series
             class_freqs = pd.DataFrame(classes).sum()
@@ -221,12 +237,11 @@ class ECGDataset(Dataset):
             if mode is not None and not cross_valid_active:
                 # Save the class_freqs to a pickle file called inverse_class_freq_<sl or ml>_{mode}.p,
                 # the corresponding file names were already saved to Record_names_{mode}_class_freqs.txt
-                if not cross_valid_active:
-                    with open(Path(file_name), "wb") as file:
-                        pickle.dump(df, file)
+                with open(Path(file_name), "wb") as file:
+                    pickle.dump(df, file)
 
         # Return them as as ndarray
-        return inverse_class_freqs.values
+        return class_freqs.values if not inverse else inverse_class_freqs.values
 
     def _consistency_check_data_split(self, idx_list, mode, suffix):
         with open(os.path.join(get_project_root(), f"data_loader/Record_names_{mode}_{suffix}.txt"), "r") as file:
@@ -237,66 +252,66 @@ class ECGDataset(Dataset):
                 desired_records.append(record_name)
             assert sorted(desired_records) == sorted(records_for_mode), "Data Split Error! Check this again!"
 
-    def get_class_frequency(self, idx_list, multi_label_training, mode, cross_valid_active=False):
-        """
-        Can be used to determine the class frequencies
-        :param idx_list: list of ids, should contain all ids contained in the train, valid or test set
-        :param multi_label_training: If true, all labels are considered, otherwise only the first label is counted
-        :param cross_valid_active: Set to True during cross validation to ensure weights are re-calculated each run
-        :return:  Class frequencies
-        """
-
-        if mode == "test" and "test" not in self._input_dir:
-            # Catch the case where the model is tested on the validation set
-            mode = "valid"
-
-        file_name = f"data_loader/log/class_freq_ml_{mode}.p" if multi_label_training \
-            else f"data_loader/log/class_freq_sl_{mode}.p"
-        file_name = os.path.join(get_project_root(), file_name)
-
-        # For cross-validation, statistics change from run to run!
-        if not cross_valid_active and os.path.isfile(file_name):
-            # File has already been created. For safety, ensure that it fits to the given idx_list!
-            self._consistency_check_data_split(idx_list, mode, "class_freq")
-
-            # If the file exists and the required indices match, just load the dataframe
-            with open(file_name, "rb") as file:
-                df = pickle.load(file)
-            class_freqs = df['Class_freq']
-
-        else:
-            classes = []
-            record_names = []
-            for idx in idx_list:
-                _, _, first_class_encoded, classes_one_hot, record_name = self.__getitem__(idx)
-                record_names.append(record_name)
-                if multi_label_training:
-                    classes.append(classes_one_hot)
-                else:
-                    # Only consider the first label
-                    classes_one_hot[:] = 0
-                    classes_one_hot[first_class_encoded] = 1
-                    classes.append(classes_one_hot)
-
-            if mode is not None and not cross_valid_active:
-                # Dump the record names to a txt file to ensure they are the same between VMs
-                _save_record_names_to_txt(mode, record_names, "class_freq")
-
-            # Get the class freqs as Pandas series
-            class_freqs = pd.DataFrame(classes).sum()
-
-            # Each class should occur at least ones
-            assert not class_freqs.isin([0]).any(), "Each class should occur at least ones"
-
-            if mode is not None and not cross_valid_active:
-                # Save the class_freqs to a pickle file called inverse_class_freq_<sl or ml>_{mode}.p,
-                # the corresponding file names were already saved to Record_names_{mode}_class_freqs.txt
-                if not cross_valid_active:
-                    with open(Path(file_name), "wb") as file:
-                        pickle.dump(df, file)
-
-        # Return them as as ndarray
-        return class_freqs.values
+    # def get_class_frequency_old(self, idx_list, multi_label_training, mode, cross_valid_active=False):
+    #     """
+    #     Can be used to determine the class frequencies
+    #     :param idx_list: list of ids, should contain all ids contained in the train, valid or test set
+    #     :param multi_label_training: If true, all labels are considered, otherwise only the first label is counted
+    #     :param cross_valid_active: Set to True during cross validation to ensure weights are re-calculated each run
+    #     :return:  Class frequencies
+    #     """
+    #
+    #     if mode == "test" and "test" not in self._input_dir:
+    #         # Catch the case where the model is tested on the validation set
+    #         mode = "valid"
+    #
+    #     file_name = f"data_loader/log/class_freq_ml_{mode}.p" if multi_label_training \
+    #         else f"data_loader/log/class_freq_sl_{mode}.p"
+    #     file_name = os.path.join(get_project_root(), file_name)
+    #
+    #     # For cross-validation, statistics change from run to run!
+    #     if not cross_valid_active and os.path.isfile(file_name):
+    #         # File has already been created. For safety, ensure that it fits to the given idx_list!
+    #         self._consistency_check_data_split(idx_list, mode, "class_freq")
+    #
+    #         # If the file exists and the required indices match, just load the dataframe
+    #         with open(file_name, "rb") as file:
+    #             df = pickle.load(file)
+    #         class_freqs = df['Class_freq']
+    #
+    #     else:
+    #         classes = []
+    #         record_names = []
+    #         for idx in idx_list:
+    #             _, _, first_class_encoded, classes_one_hot, record_name = self.__getitem__(idx)
+    #             record_names.append(record_name)
+    #             if multi_label_training:
+    #                 classes.append(classes_one_hot)
+    #             else:
+    #                 # Only consider the first label
+    #                 classes_one_hot[:] = 0
+    #                 classes_one_hot[first_class_encoded] = 1
+    #                 classes.append(classes_one_hot)
+    #
+    #         if mode is not None and not cross_valid_active:
+    #             # Dump the record names to a txt file to ensure they are the same between VMs
+    #             _save_record_names_to_txt(mode, record_names, "class_freq")
+    #
+    #         # Get the class freqs as Pandas series
+    #         class_freqs = pd.DataFrame(classes).sum()
+    #
+    #         # Each class should occur at least ones
+    #         assert not class_freqs.isin([0]).any(), "Each class should occur at least ones"
+    #
+    #         if mode is not None and not cross_valid_active:
+    #             # Save the class_freqs to a pickle file called inverse_class_freq_<sl or ml>_{mode}.p,
+    #             # the corresponding file names were already saved to Record_names_{mode}_class_freqs.txt
+    #             if not cross_valid_active:
+    #                 with open(Path(file_name), "wb") as file:
+    #                     pickle.dump(df, file)
+    #
+    #     # Return them as as ndarray
+    #     return class_freqs.values
 
 
 if __name__ == '__main__':
