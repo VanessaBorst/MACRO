@@ -10,7 +10,8 @@ from utils import plot_record_from_np_array
 class BaselineModelWithMHAttentionV2(BaseModel):
     def __init__(self, apply_final_activation, multi_label_training, gru_units=12, dropout_attention=0.2, heads=3,
                  discard_FC_before_MH=False, num_classes=9,
-                 use_reduced_head_dims=False,
+                 use_reduced_head_dims=None,
+                 attention_activation_function=None,
                  attention_type="v2"):
         """
         :param apply_final_activation: whether the Sigmoid(sl) or the LogSoftmax(ml) should be applied at the end
@@ -20,8 +21,11 @@ class BaselineModelWithMHAttentionV2(BaseModel):
         """
         super().__init__()
 
-        assert not use_reduced_head_dims or attention_type == "v1", \
+        assert use_reduced_head_dims is None or attention_type == "v1", \
             "use_reduced_head_dims can only be used with attention_type=v1!"
+
+        assert attention_activation_function is None or attention_type == "v1", \
+            "attention_activation_function can only be used with attention_type=v1!"
 
         if use_reduced_head_dims:
             assert (2 * gru_units) % heads == 0, \
@@ -88,12 +92,15 @@ class BaselineModelWithMHAttentionV2(BaseModel):
 
         match attention_type:
             case "v1":
-                # Own MHA implementation
+                # Own MHA implementation with random query initialization
+                head_dims = use_reduced_head_dims if use_reduced_head_dims is not None else False
+                attention_activation = attention_activation_function if attention_activation_function is not None else "softmax"
                 self._multi_head_contextual_attention = MultiHeadContextualAttention(d_model=2 * gru_units,
                                                                                      dropout=dropout_attention,
                                                                                      heads=heads,
                                                                                      discard_FC_before_MH=discard_FC_before_MH,
-                                                                                     use_reduced_head_dims=use_reduced_head_dims)
+                                                                                     use_reduced_head_dims=head_dims,
+                                                                                     attention_activation_function=attention_activation)
             case "v2":
                 # Torch MHA implementation with random query initialization
                 self._multi_head_contextual_attention = MultiHeadContextualAttentionV2(d_model=2 * gru_units,
@@ -108,7 +115,7 @@ class BaselineModelWithMHAttentionV2(BaseModel):
                                                                                         discard_FC_before_MH=discard_FC_before_MH)
             case "v4":
                 # Torch MHA implementation +  Learnable query projection with Linear layer
-                self._multi_head_contextual_attention = MultiHeadContextualAttentionV3(d_model=2 * gru_units,
+                self._multi_head_contextual_attention = MultiHeadContextualAttentionV4(d_model=2 * gru_units,
                                                                                        dropout=dropout_attention,
                                                                                        heads=heads,
                                                                                        discard_FC_before_MH=discard_FC_before_MH)

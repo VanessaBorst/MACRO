@@ -1,12 +1,15 @@
 {
-  "name": "BaselineModel_SingleRun",
-  "run_details": "_250Hz_60s",
+  "name": "BaselineWithMultiHeadAttention_ParamStudy",
+  "run_details": "_attention_type_v1_reduced_dim_entmax",
   "n_gpu": 1,
   "arch": {
-    "type": "BaselineModel",
+    "type": "BaselineModelWithMHAttentionV2",
     "args": {
       "apply_final_activation": false,
-      "multi_label_training": true
+      "multi_label_training": true,
+      "attention_type": "v1",
+      "use_reduced_head_dims": true,
+      "attention_activation_function": "entmax15"
     }
   },
   "data_loader": {
@@ -21,7 +24,7 @@
       "batch_size": 64,
       "shuffle": true,
       "validation_split": 0.25,
-      "num_workers": 1,
+      "num_workers": 4,
       "pin_memory": false
     },
     "overfit_single_batch": false,
@@ -45,6 +48,7 @@
         "sk_subset_accuracy": ["sigmoid_probs", "logits"]
       },
       "per_epoch": [
+        "cpsc_score",
         "weighted_sk_f1",
         "macro_sk_f1"
       ],
@@ -68,6 +72,7 @@
     "verbosity": 2,
     "monitor": "max val_macro_sk_f1",
     "early_stop": 20,
+    "minimum_diff_for_improvement": 0.001,
     "tensorboard": true,
     "try_run": false,
     "profiler_active": false

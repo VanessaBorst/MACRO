@@ -1,18 +1,19 @@
 {
   "name": "BaselineWithMultiHeadAttention_V2_CV",
-  "run_details": "_noFC_0.4_8_12_attention_type_v1",
+  "run_details": "_withFC_0.3_8_24_attention_type_v1_reduced_dim_entmax15",
   "n_gpu": 1,
   "arch": {
     "type": "BaselineModelWithMHAttentionV2",
     "args": {
       "apply_final_activation": false,
       "multi_label_training": true,
-      "dropout_attention": 0.4,
+      "dropout_attention": 0.3,
       "heads": 8,
-      "gru_units": 12,
-      "discard_FC_before_MH": true,
+      "gru_units": 24,
+      "discard_FC_before_MH": false,
       "attention_type": "v1",
-      "use_reduced_head_dims": false
+      "use_reduced_head_dims": true,
+      "attention_activation_function": "entmax15"
     }
   },
   "data_loader": {

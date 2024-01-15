@@ -49,85 +49,11 @@ def _set_seed(SEED):
     torch.cuda.manual_seed_all(SEED)
     os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
-    torch.use_deterministic_algorithms(True)
+    # TODO: If sparse or entmax are not used at the end, warn only can be set to false again!
+    torch.use_deterministic_algorithms(True, warn_only=True)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-
-# Define custom functions for conditional Tune Search Spaces
-# Problem: Does not work with Optuna or Ax, only when not passing an search algo.
-# ==> Currently tune.sample_from() only works with random search (the default).
-# (https://github.com/ray-project/ray/issues/13614)
-
-# # 1) The total amount of conv blocks should not exceed 7
-# def _get_poss_num_second_conv_blocks(spec):
-#     poss_nums = [1, 2, 3, 4, 5, 6]
-#     poss_nums = [item for item in poss_nums if 8 >= item + spec.config.num_first_conv_blocks >= 4]
-#     return np.random.choice(poss_nums)
-#
-#
-# # 2) The depth/amount of channels should stay the same or increase, but it should not decrease
-# def _get_poss_second_conv_blocks_depth(spec):
-#     poss_depths = [12, 24, 32, 64]  # , 128]
-#     poss_depths = [item for item in poss_depths if item >= spec.config.out_channel_first_conv_blocks]
-#     return np.random.choice(poss_depths)
-#
-#
-# # 3) With different amounts of in and out channels in a block, pooling can not be used for aligning the residual tensor
-# def _get_poss_down_samples(spec):
-#     if spec.config.out_channel_first_conv_blocks != 12 or \
-#             spec.config.out_channel_first_conv_blocks != spec.config.out_channel_second_conv_blocks:
-#         return "conv"
-#     else:
-#         return np.random.choice(["conv", "max_pool", "avg_pool"])
-#
-#
-# # Sample from can not be used with SearchAlgo other than the default
-# def restricted_tuning_params(name):
-#     if name == "BaselineModelWithSkipConnections":
-#         return {
-#             "num_first_conv_blocks": tune.randint(2, 6),
-#             "num_second_conv_blocks": tune.sample_from(_get_poss_num_second_conv_blocks),
-#             "drop_out_first_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
-#             "drop_out_second_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
-#             "out_channel_first_conv_blocks": tune.choice([12, 24, 32, 64]),
-#             "out_channel_second_conv_blocks": tune.sample_from(_get_poss_second_conv_blocks_depth),
-#             "mid_kernel_size_first_conv_blocks": tune.choice([3, 5, 7]),
-#             "mid_kernel_size_second_conv_blocks": tune.choice([3, 5, 7]),
-#             "last_kernel_size_first_conv_blocks": tune.randint(10, 24),
-#             "last_kernel_size_second_conv_blocks": tune.randint(20, 50),
-#             "stride_first_conv_blocks": 2,  # tune.randint(1, 2),
-#             "stride_second_conv_blocks": 2,  # tune.randint(1, 2),
-#             "down_sample": tune.sample_from(_get_poss_down_samples)
-#         }
-#     else:
-#         return None
-#
-#
-# def axsearch_tuning_params(name):
-#     if name == "BaselineModelWithSkipConnections":
-#         return {
-#             "num_first_conv_blocks": tune.randint(1, 6),
-#             "num_second_conv_blocks": tune.randint(1, 6),
-#             "drop_out_first_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
-#             "drop_out_second_conv_blocks": tune.choice([0.2, 0.3, 0.4]),
-#             "out_channel_first_conv_blocks": tune.randint(12, 64),
-#             "out_channel_second_conv_blocks": tune.randint(12, 64),
-#             "mid_kernel_size_first_conv_blocks": tune.randint(3, 7),
-#             "mid_kernel_size_second_conv_blocks": tune.randint(3, 7),
-#             "last_kernel_size_first_conv_blocks": tune.randint(9, 39),
-#             "last_kernel_size_second_conv_blocks": tune.randint(33, 63),
-#             "stride_first_conv_blocks": tune.randint(1, 2),
-#             "stride_second_conv_blocks": tune.randint(1, 2),
-#             "down_sample": "conv",
-#             # "dilation_first_conv_blocks": tune.randint(1, 3),
-#             # "dilation_second_conv_blocks": tune.randint(1, 3),
-#             # "expansion_first_conv_blocks": tune.choice(["1", "mul 2", "add 32"]),
-#             # "expansion_second_conv_blocks": tune.choice(["1", "mul 2", "add 32"]),
-#         }
-#     else:
-#         return None
-#
 
 def _get_mid_kernel_size_second_conv_blocks(spec):
     # Choose the same size for the second block as well to reduce the amount of hyperparams
@@ -153,6 +79,13 @@ def tuning_params(name):
             "heads": tune.grid_search([4, 8, 12]),
             "gru_units": tune.grid_search([12, 24, 32]),
             "discard_FC_before_MH": tune.grid_search([True, False])
+        }
+    elif name == "BaselineModelWithMHAttentionV2":
+        return {
+            "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
+            "heads": tune.grid_search([6, 8, 12]),
+            "gru_units": tune.grid_search([12, 24, 36]),
+            "discard_FC_before_MH": True  # tune.grid_search([True, False])
         }
     elif name == "BaselineModelWithSkipConnectionsAndNorm":
         return {
@@ -290,7 +223,6 @@ def tuning_params(name):
             "gru_units": tune.grid_search([12, 24, 32]),
             "discard_FC_before_MH": tune.grid_search([True, False])
         }
-
     elif name == "FinalModelMultiBranch":
         return {
             "multi_branch_heads": tune.grid_search([1, 2, 3, 8]),
@@ -489,13 +421,39 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
     # valid_data_loader = data_loader.split_validation()
 
     def train_fn(config, checkpoint_dir=None):
-        # TODO check
+        # NEW Jan 2024: Without this, the valid split varies from worker to worker!!!!
+        np.random.seed(global_config.SEED)
+        torch.manual_seed(global_config.SEED)
+        random.seed(global_config.SEED)
+        torch.cuda.manual_seed_all(global_config.SEED)
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
+        # TODO: If sparse or entmax are not used at the end, warn only can be set to false again!
+        torch.use_deterministic_algorithms(True, warn_only=True)
+        # Each of the following two aspects would lead to a TypeError !!!
+        # FAIL serialization: cannot pickle 'CudnnModule' object
+        # torch.backends.cudnn.deterministic = True
+        # torch.backends.cudnn.benchmark = False
+
         data_loader = main_config.init_obj('data_loader', module_data_loader, data_dir=full_data_dir,
                                            single_batch=main_config['data_loader'].get('overfit_single_batch', False))
         valid_data_loader = data_loader.split_validation()
+
+        # NEW (Jan 2024) to check data splitting by record name
+        valid_records = []
+        for idx in valid_data_loader.sampler.indices:
+            valid_records.append(valid_data_loader.dataset[idx][4])
+        valid_records.sort()
+        time = datetime.now().strftime("%m_%d_%Y_%H_%M_%S_%f")
+        with open(f"/home/vab30xh/projects/2023-macro-paper-3.10/data_loader/tune_log/valid_records_tune_train_fn_{time}.txt",
+                  "w") as txt_file:
+            for line in valid_records:
+                txt_file.write("".join(line) + "\n")
+
         train_model(config=main_config, tune_config=config, train_dl=data_loader, valid_dl=valid_data_loader,
                     checkpoint_dir=checkpoint_dir, use_tune=True)
 
+    # os.environ["RAY_PICKLE_VERBOSE_DEBUG"] = "1"
     ray.init(_temp_dir=os.path.join('/home/vab30xh/', 'ray_tmp'))  # get_project_root(), 'ray_tmp'))
 
     trainer = main_config['trainer']
@@ -506,17 +464,6 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
         mnt_mode = "min"
         mnt_metric = "val_loss"
 
-    # The idea behind SHA (Algorithm 1) is simple: allocate a small budget to each configuration, evaluate all
-    # configurations and keep the top 1/reduction_factor, increase the budget per configuration by a factor of
-    # reduction_factor, and repeat until the maximum per-configuration budget of R is reached
-    # scheduler = ASHAScheduler(
-    #     time_attr='training_iteration',
-    #     metric=mnt_metric,  # The training result objective value attribute. Stopping procedures will use this.
-    #     mode=mnt_mode,
-    #     max_t=100,  # trainer.get('epochs', 120),  # Trials will be stopped after max_t time units (based on time_attr)
-    #     grace_period=1,  # Only stop trials at least this old in time.
-    #     reduction_factor=2)
-    # # Problem:  the ASHAScheduler will aggressively terminate low-performing trials
 
     if main_config["arch"]["type"] == "BaselineModelWithSkipConnections" \
             or main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndInstanceNorm":
@@ -537,7 +484,8 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                             "val_cpsc_Fpc",
                             "val_cpsc_Fst",
                             "training_iteration"])
-    elif main_config["arch"]["type"] == "BaselineModelWithMHAttention":
+    elif main_config["arch"]["type"] == "BaselineModelWithMHAttention" \
+            or main_config["arch"]["type"] == "BaselineModelWithMHAttentionV2":
         reporter = CLIReporter(
             parameter_columns={
                 "dropout_attention": "Droput MH Attention",
@@ -673,121 +621,11 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                             "val_cpsc_Fst",
                             "training_iteration"])
 
-    # experiment_stopper = ExperimentPlateauStopper(
-    #     metric=mnt_metric,
-    #     mode=mnt_mode,
-    #     patience=trainer.get('early_stop', 5),  # Number of epochs to wait for a change in the top models
-    #     top=10  # The number of best models to consider.
-    # )
-    #
-    # trial_stopper = TrialPlateauStopper(
-    #     metric=mnt_metric,
-    #     mode=mnt_mode,
-    #     std=0.01,  # Maximum metric standard deviation to decide if a trial plateaued.
-    #     num_results=20,  # trainer.get('early_stop', 5),  # Number of results to consider for stdev calculation.
-    #     grace_period=1,  # Minimum number of timesteps before a trial can be early stopped
-    # )
-
-    # initial_param_suggestions = [
-    #     # Original setting
-    #     {
-    #         "num_first_conv_blocks": 4,
-    #         "num_second_conv_blocks": 1,
-    #         "drop_out_first_conv_blocks": 0.2,
-    #         "drop_out_second_conv_blocks": 0.2,
-    #         "out_channel_first_conv_blocks": 12,
-    #         "out_channel_second_conv_blocks": 12,
-    #         "mid_kernel_size_first_conv_blocks": 3,
-    #         "mid_kernel_size_second_conv_blocks": 3,
-    #         "last_kernel_size_first_conv_blocks": 24,
-    #         "last_kernel_size_second_conv_blocks": 48,
-    #         "stride_first_conv_blocks": 2,
-    #         "stride_second_conv_blocks": 2,
-    #         "down_sample": "conv"
-    #     },
-    #     # Good configurations found by first manual runs
-    #     {
-    #         "num_first_conv_blocks": 3,
-    #         "num_second_conv_blocks": 1,
-    #         "drop_out_first_conv_blocks": 0.2,
-    #         "drop_out_second_conv_blocks": 0.2,
-    #         "out_channel_first_conv_blocks": 12,
-    #         "out_channel_second_conv_blocks": 12,
-    #         "mid_kernel_size_first_conv_blocks": 3,
-    #         "mid_kernel_size_second_conv_blocks": 3,
-    #         "last_kernel_size_first_conv_blocks": 24,
-    #         "last_kernel_size_second_conv_blocks": 48,
-    #         "stride_first_conv_blocks": 2,
-    #         "stride_second_conv_blocks": 2,
-    #         "down_sample": "conv"
-    #     },
-    #     # Good configurations found by first RandomSearch
-    #     {
-    #         "num_first_conv_blocks": 3,
-    #         "num_second_conv_blocks": 3,
-    #         "drop_out_first_conv_blocks": 0.3,
-    #         "drop_out_second_conv_blocks": 0.2,
-    #         "out_channel_first_conv_blocks": 32,
-    #         "out_channel_second_conv_blocks": 32,
-    #         "mid_kernel_size_first_conv_blocks": 3,
-    #         "mid_kernel_size_second_conv_blocks": 3,
-    #         "last_kernel_size_first_conv_blocks": 13,
-    #         "last_kernel_size_second_conv_blocks": 48,
-    #         "stride_first_conv_blocks": 2,
-    #         "stride_second_conv_blocks": 2,
-    #         "down_sample": "conv"
-    #     },
-    #     {
-    #         "num_first_conv_blocks": 4,
-    #         "num_second_conv_blocks": 2,
-    #         "drop_out_first_conv_blocks": 0.2,
-    #         "drop_out_second_conv_blocks": 0.2,
-    #         "out_channel_first_conv_blocks": 24,
-    #         "out_channel_second_conv_blocks": 24,
-    #         "mid_kernel_size_first_conv_blocks": 5,
-    #         "mid_kernel_size_second_conv_blocks": 5,
-    #         "last_kernel_size_first_conv_blocks": 11,
-    #         "last_kernel_size_second_conv_blocks": 38,
-    #         "stride_first_conv_blocks": 2,
-    #         "stride_second_conv_blocks": 2,
-    #         "down_sample": "conv"
-    #     },
-    #     {
-    #         "num_first_conv_blocks": 2,
-    #         "num_second_conv_blocks": 3,
-    #         "drop_out_first_conv_blocks": 0.2,
-    #         "drop_out_second_conv_blocks": 0.2,
-    #         "out_channel_first_conv_blocks": 12,
-    #         "out_channel_second_conv_blocks": 24,
-    #         "mid_kernel_size_first_conv_blocks": 7,
-    #         "mid_kernel_size_second_conv_blocks": 3,
-    #         "last_kernel_size_first_conv_blocks": 22,
-    #         "last_kernel_size_second_conv_blocks": 37,
-    #         "stride_first_conv_blocks": 2,
-    #         "stride_second_conv_blocks": 2,
-    #         "down_sample": "conv"
-    #     },
-    # ]
-
-    # optuna_searcher = OptunaSearch(metric=mnt_metric, mode=mnt_mode,
-    #                                points_to_evaluate=initial_param_suggestions,
-    #                                sampler=TPESampler(seed=SEED))
-    #
-    # # ax = AxClient(enforce_sequential_optimization=False)  # (https://ax.dev/tutorials/raytune_pytorch_cnn.html)
-    # # ax = AxClient(random_seed=SEED)
-    # ax_searcher = AxSearch(metric=mnt_metric, mode=mnt_mode,
-    #                        points_to_evaluate=initial_param_suggestions,
-    #                        parameter_constraints=["num_first_conv_blocks + num_second_conv_blocks <= 8",
-    #                                               "num_first_conv_blocks + num_second_conv_blocks >= 4",
-    #                                               # at least in one block size reduction
-    #                                               "stride_first_conv_blocks + stride_second_conv_blocks >= 3",
-    #                                               "out_channel_first_conv_blocks <= out_channel_second_conv_blocks"])
-    # ax_searcher = ConcurrencyLimiter(ax_searcher, max_concurrent=2)
-
-    num_gpu = 0.125 if not main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsV2" and not \
+    num_gpu = 0.25 if not main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsV2" and not \
         main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2" and not \
-                         main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2PreActivation" and not \
-                         main_config["arch"]["type"] == "FinalModelMultiBranch" else 1
+                          main_config["arch"][
+                              "type"] == "BaselineModelWithSkipConnectionsAndNormV2PreActivation" and not \
+                          main_config["arch"]["type"] == "FinalModelMultiBranch" else 1
 
     analysis = tune.run(
         run_or_experiment=train_fn,
@@ -811,7 +649,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
 
         # search_alg=ax_searcher,           # Just use Random Grid Search instead of an advanced search algo
         search_alg=BasicVariantGenerator(),  # points_to_evaluate=initial_param_suggestions, max_concurrent=3),
-        config={**tune_config},
+        config={**tune_config}, # .update({'seed':}),
         resources_per_trial={"cpu": 5 if torch.cuda.is_available() else 1,
                              "gpu": num_gpu if torch.cuda.is_available() else 0},
 
@@ -856,7 +694,8 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
         torch.cuda.manual_seed_all(global_config.SEED)
         os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
         os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
-        torch.use_deterministic_algorithms(True)
+        # TODO: If sparse or entmax are not used at the end, warn only can be set to false again!
+        torch.use_deterministic_algorithms(True, warn_only=True)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
@@ -878,9 +717,11 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
     elif config['arch']['type'] == "BaselineModelWithSkipConnectionsAndNormV2":
         import model.old.baseline_model_with_skips_and_norm_v2 as module_arch
     elif config['arch']['type'] == 'BaselineModelWithMHAttention':
-        import model.baseline_model_with_MHAttention as module_arch
+        import model.old.baseline_model_with_MHAttention as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithMHAttentionV2':
+        import model.baseline_model_with_MHAttention_v2 as module_arch
     elif config['arch']['type'] == 'BaselineModelWithMHAttentionNovelQuery':
-        import model.baseline_model_with_MHAttention_NovelQuery as module_arch
+        import model.old.baseline_model_with_MHAttention_NovelQuery as module_arch
     elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndNormV2PreActivation':
         import model.baseline_model_with_skips_and_norm_v2_pre_activation_design as module_arch
     elif config['arch']['type'] == 'FinalModel':

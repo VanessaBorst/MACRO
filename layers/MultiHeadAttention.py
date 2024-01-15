@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from entmax import sparsemax, entmax15, entmax_bisect
 
 
 class MultiHeadAttention(nn.Module):
@@ -42,6 +43,7 @@ class MultiHeadAttention(nn.Module):
                  h: int,
                  dropout: float,
                  discard_FC_before_MH: bool,
+                 attention_activation_function: str = 'softmax',
                  **kwargs):
         """Initialize the Multi Head Block."""
         super().__init__()
@@ -49,6 +51,7 @@ class MultiHeadAttention(nn.Module):
         self._h = h
         self._k = k  # Needed for the scaled dot product attention
         self._discard_FC_before_MH = discard_FC_before_MH
+        self._attention_activation_function = attention_activation_function
 
         # Query, keys and value matrices
         self._W_q = nn.Linear(d_model, q*self._h)
@@ -111,8 +114,18 @@ class MultiHeadAttention(nn.Module):
         # Scaled Dot Product
         self._scores = torch.bmm(queries, keys.transpose(1, 2)) / np.sqrt(self._k)
 
-        # Apply sotfmax
-        self._scores = F.softmax(self._scores, dim=-1)
+        # Apply attention scoring function
+        match self._attention_activation_function:
+            case 'softmax':
+                self._scores = F.softmax(self._scores, dim=-1)
+            case 'sparsemax':
+                self._scores = sparsemax(self._scores, dim=-1)
+            case 'entmax15':
+                self._scores = entmax15(self._scores, dim=-1)
+            case 'entmax_bisect':
+                self._scores = entmax_bisect(self._scores, dim=-1)
+            case _:
+                raise ValueError(f'Attention scoring function {self._attention_activation_function} not supported.')
 
         if self._dropout is not None:
             self._scores = self._dropout(self._scores)

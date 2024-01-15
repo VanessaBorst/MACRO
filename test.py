@@ -33,6 +33,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
 
 
 def test_model_with_threshold(config, cv_data_dir=None, test_idx=None, k_fold=None, thresholds=None):
+    # TODO WIP, adapt later!
     import model.final_model as module_arch
     import evaluation.multi_label_metrics_variedThreshold as module_metric
 
@@ -396,9 +397,11 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
     elif config['arch']['type'] == "BaselineModelWithSkipConnectionsAndNormV2":
         import model.old.baseline_model_with_skips_and_norm_v2 as module_arch
     elif config['arch']['type'] == 'BaselineModelWithMHAttention':
-        import model.baseline_model_with_MHAttention as module_arch
+        import model.old.baseline_model_with_MHAttention as module_arch
     elif config['arch']['type'] == 'BaselineModelWithMHAttentionNovelQuery':
-        import model.baseline_model_with_MHAttention_NovelQuery as module_arch
+        import model.old.baseline_model_with_MHAttention_NovelQuery as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithMHAttentionV2':
+        import model.baseline_model_with_MHAttention_v2 as module_arch
     elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndNormV2PreActivation':
         import model.baseline_model_with_skips_and_norm_v2_pre_activation_design as module_arch
     elif config['arch']['type'] == 'FinalModel':

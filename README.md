@@ -40,3 +40,14 @@ cp -a test/preprocessed/no_sampling/eq_len_60s/* cross_valid/500Hz/60s/
 cd projects/2023-macro-paper-3.10/
 source venv/bin/activate
 python train_with_cv.py -c config_baseline_crossValid.json
+
+
+## Stuck GPU usage
+`ssh -L 16006:127.0.0.1:6006 SE-GPUs-admin`
+Dann dort folgende Befehle ausführen
+````
+ 1851  ps -u vab30xh
+ 1852  pkill -9 -u vab30xh python
+ 1853  ps -u vab30xh
+ 1854  nvidia-smi
+````

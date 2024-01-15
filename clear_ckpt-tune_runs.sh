@@ -2,7 +2,7 @@
 
 source venv/bin/activate
 
-REL_PATH="savedVM_old/models/FinalModel_MACRO_MultiBranch_ParamStudy"
+REL_PATH="savedVM/models/BaselineWithMultiHeadAttention_ParamStudy"
 
 # See https://www.cyberciti.biz/faq/how-to-find-and-delete-directory-recursively-on-linux-or-unix-like-system/
 # -exec rm -rf {} + : Execute rm command.

@@ -122,7 +122,7 @@ class MultiHeadContextualAttention(nn.Module):
     """
 
     def __init__(self, d_model, heads, dropout=None, use_bias=True, discard_FC_before_MH=False,
-                 use_reduced_head_dims=False):
+                 use_reduced_head_dims=False, attention_activation_function="softmax"):
         super().__init__()
         self._use_bias = use_bias
         self._discard_FC_before_MH = discard_FC_before_MH
@@ -159,7 +159,8 @@ class MultiHeadContextualAttention(nn.Module):
         self._multihead_attention = MultiHeadAttention(d_model=d_model, k=d_k,
                                                        q=d_q, v=d_v, h=heads,
                                                        dropout=dropout,
-                                                       discard_FC_before_MH=self._discard_FC_before_MH)
+                                                       discard_FC_before_MH=self._discard_FC_before_MH,
+                                                       attention_activation_function=attention_activation_function)
 
     def forward(self, biGRU_outputs):
         # biGRU_outputs is of shape [batch_size, seq_len, 2*num_units], e.g., bs*2250*24
@@ -217,6 +218,8 @@ class MultiHeadContextualAttentionV2(nn.Module):
         # biGRU_outputs is of shape [batch_size, seq_len, 2*num_units], e.g., bs*2250*24
         # Wanted: Seq_len number of attention weights for each element in the batch and weighted sum in the end
 
+        # TODO: Bug found at 08-01-2024
+        #  -> Without FC, no scaled values for torch MHA (tanh not applied within MHA module)
         key = self._hidden_rep(biGRU_outputs) if not self._discard_FC_before_MH else biGRU_outputs
         value = biGRU_outputs
         # The query needs to be learned
