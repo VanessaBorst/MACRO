@@ -85,7 +85,7 @@ def tuning_params(name):
             "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
             "heads": tune.grid_search([6, 8, 12]),
             "gru_units": tune.grid_search([12, 24, 36]),
-            "discard_FC_before_MH": True  # tune.grid_search([True, False])
+            "discard_FC_before_MH": False  # tune.grid_search([True, False])
         }
     elif name == "BaselineModelWithSkipConnectionsAndNorm":
         return {
@@ -621,11 +621,17 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                             "val_cpsc_Fst",
                             "training_iteration"])
 
-    num_gpu = 0.25 if not main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsV2" and not \
-        main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2" and not \
-                          main_config["arch"][
-                              "type"] == "BaselineModelWithSkipConnectionsAndNormV2PreActivation" and not \
-                          main_config["arch"]["type"] == "FinalModelMultiBranch" else 1
+    match main_config["arch"]["type"]:
+        case "BaselineModelWithMHAttentionV2":
+            # Six trials in parallel
+            num_gpu = 0.16
+        case "BaselineModelWithSkipConnectionsV2" | "BaselineModelWithSkipConnectionsAndNormV2" | \
+             "BaselineModelWithSkipConnectionsAndNormV2PreActivation" | "FinalModelMultiBranch":
+            # One trial at a time
+            num_gpu = 1
+        case _:
+            # Default: Four trials in parallel
+            num_gpu = 0.25
 
     analysis = tune.run(
         run_or_experiment=train_fn,
@@ -677,7 +683,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
 
 
 def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoint_dir=None, use_tune=False,
-                train_idx=None, valid_idx=None, k_fold=None, cv_active=False):
+                train_idx=None, valid_idx=None, k_fold=None, total_num_folds=None, cv_active=False):
     # config: type: ConfigParser -> can be used as usual
     # tune_config: type: Dict -> contains the tune params with the samples values,
     #               e.g. {'num_first_conv_blocks': 8, 'num_second_conv_blocks': 9, ...}
@@ -760,7 +766,7 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
         # Setup data_loader instances for current the cross validation run
         data_loader = config.init_obj('data_loader', module_data_loader,
                                       cross_valid=True, train_idx=train_idx, valid_idx=valid_idx, cv_train_mode=True,
-                                      fold_id=k_fold,
+                                      fold_id=k_fold, total_num_folds=total_num_folds,
                                       single_batch=False)
         valid_data_loader = data_loader.split_validation()
     else:

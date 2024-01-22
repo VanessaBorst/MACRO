@@ -18,8 +18,7 @@ from utils import get_project_root
 
 def _save_record_names_to_txt(mode, record_names, suffix):
     project_root = get_project_root()
-    with open(os.path.join(project_root, 'data_loader', f'Record_names_{mode}_{suffix}.txt'),
-              "w") as txt_file:
+    with open(os.path.join(project_root, 'data_loader', 'log', f'Record_names_{mode}_{suffix}.txt'),"w+") as txt_file:
         for line in sorted(record_names):
             txt_file.write("".join(line) + "\n")
 
@@ -244,7 +243,7 @@ class ECGDataset(Dataset):
         return class_freqs.values if not inverse else inverse_class_freqs.values
 
     def _consistency_check_data_split(self, idx_list, mode, suffix):
-        with open(os.path.join(get_project_root(), f"data_loader/Record_names_{mode}_{suffix}.txt"), "r") as file:
+        with open(os.path.join(get_project_root(), f"data_loader/log/Record_names_{mode}_{suffix}.txt"), "r") as file:
             records_for_mode = [line.rstrip() for line in file]
             desired_records = []
             for idx in idx_list:

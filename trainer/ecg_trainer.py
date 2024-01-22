@@ -85,11 +85,13 @@ class ECGTrainer(BaseTrainer):
             "log_probs": config["metrics"]["additional_metrics_args"].get("log_probs", False),
             "logits": config["metrics"]["additional_metrics_args"].get("logits", False),
             "train_pos_weights": self.data_loader.dataset.get_ml_pos_weights(
-                idx_list=self.data_loader.batch_sampler.sampler.indices, mode='train',
+                idx_list=self.data_loader.batch_sampler.sampler.indices,
+                mode='train',
                 cross_valid_active=cross_valid_active),
             "train_class_weights": self.data_loader.dataset.get_inverse_class_frequency(
                 idx_list=self.data_loader.batch_sampler.sampler.indices,
-                multi_label_training=self.multi_label_training, mode='train',
+                multi_label_training=self.multi_label_training,
+                mode='train',
                 cross_valid_active=cross_valid_active),
             "valid_pos_weights": val_pos_weights,
             "valid_class_weights": val_class_weights,

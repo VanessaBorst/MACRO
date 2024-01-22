@@ -378,7 +378,8 @@ def test_model_with_threshold(config, cv_data_dir=None, test_idx=None, k_fold=No
     return df_class_wise_results, df_single_metric_results
 
 
-def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test_idx=None, k_fold=None):
+def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test_idx=None, k_fold=None,
+               total_num_folds= None):
     assert not cv_active or tune_config is None, "For cross validation, please specifiy ALL params in the main config"
 
     # Conditional inputs depending on the config
@@ -445,7 +446,8 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
             cross_valid=True,
             test_idx=test_idx,
             cv_train_mode=False,
-            fold_id=k_fold
+            fold_id=k_fold,
+            total_num_folds=total_num_folds
         )
 
     # build model architecture
@@ -525,10 +527,14 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
         "log_probs": config["metrics"]["additional_metrics_args"].get("log_probs", False),
         "logits": config["metrics"]["additional_metrics_args"].get("logits", False),
         "pos_weights": data_loader.dataset.get_ml_pos_weights(
-            idx_list=list(range(len(data_loader.sampler))), mode='test'),
+            idx_list=list(range(len(data_loader.sampler))),
+            mode='test',
+            cross_valid_active=cv_active),
         "class_weights": data_loader.dataset.get_inverse_class_frequency(
             idx_list=list(range(len(data_loader.sampler))),
-            multi_label_training=multi_label_training, mode='test'),
+            multi_label_training=multi_label_training,
+            mode='test',
+            cross_valid_active=cv_active),
         "lambda_balance": config["loss"]["add_args"].get("lambda_balance", 1)
     }
 

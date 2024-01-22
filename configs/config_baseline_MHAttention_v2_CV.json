@@ -1,16 +1,16 @@
 {
   "name": "BaselineWithMultiHeadAttention_V2_CV",
-  "run_details": "_withFC_0.3_8_24_attention_type_v1_reduced_dim_entmax15",
+  "run_details": "_noFC_0.4_8_12_attention_type_v1_reduced_dim_entmax15_5_FOLD",
   "n_gpu": 1,
   "arch": {
     "type": "BaselineModelWithMHAttentionV2",
     "args": {
       "apply_final_activation": false,
       "multi_label_training": true,
-      "dropout_attention": 0.3,
+      "dropout_attention": 0.4,
       "heads": 8,
-      "gru_units": 24,
-      "discard_FC_before_MH": false,
+      "gru_units": 12,
+      "discard_FC_before_MH": true,
       "attention_type": "v1",
       "use_reduced_head_dims": true,
       "attention_activation_function": "entmax15"
@@ -20,7 +20,7 @@
       "type": "ECGDataLoader",
       "cross_valid": {
           "enabled": true,
-          "k_fold": 10,
+          "k_fold": 5,
           "data_dir": "data/CinC_CPSC/cross_valid/250Hz/60s"
       },
       "args": {

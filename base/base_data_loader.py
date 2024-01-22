@@ -18,6 +18,19 @@ def seed_worker(worker_id):
     random.seed(worker_seed)
 
 
+def _consistency_check_data_split_cv(file_name, desired_ids):
+    if os.path.isfile(file_name):
+        # Existing -> Check for consistency
+        with open(file_name, "r") as file:
+            saved_ids_for_fold = np.loadtxt(file, dtype=int)
+            assert sorted(saved_ids_for_fold) == sorted(desired_ids), \
+                "Data Split Error during cross-fold-validation! Check this again!"
+    else:
+        # Not existing -> Create
+        with open(file_name, "w+") as file:
+            np.savetxt(file, sorted(desired_ids.astype(int)), fmt='%i', delimiter=",")
+
+
 class BaseDataLoader(DataLoader):
     """
     Base class for all data loaders:
@@ -25,7 +38,8 @@ class BaseDataLoader(DataLoader):
     """
 
     def __init__(self, dataset, batch_size, shuffle, validation_split=None, num_workers=1, pin_memory=False,
-                 cross_valid=False, train_idx=None, valid_idx=None, test_idx=None, cv_train_mode=True, fold_id=None,
+                 cross_valid=False, train_idx=None, valid_idx=None, test_idx=None, cv_train_mode=True,
+                 fold_id=None, total_num_folds=None,
                  collate_fn=default_collate,
                  single_batch=False, worker_init_fn=seed_worker, generator=torch.Generator()):
         """
@@ -70,12 +84,14 @@ class BaseDataLoader(DataLoader):
 
                 train_sampler = SubsetRandomSampler(train_idx)
                 valid_sampler = SubsetRandomSampler(valid_idx)
-                # Write it to file for reproducibility
-                path = os.path.join(get_project_root(), "cross_fold_log",
-                                    "cross_validation_valid_" + str(fold_id + 1) + ".txt")
-                ensure_dir(os.path.join(get_project_root(), "cross_fold_log"))
-                with open(path, "w+") as file:
-                    np.savetxt(file, valid_idx.astype(int), fmt='%i', delimiter=",")
+
+                # Write it to file for reproducibility, if not yet existing
+                # If existing, check that the split is always the same (for fixed SEED)
+                path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
+                                    f"seed_{global_config.SEED}")
+                file_name = os.path.join(path, "cv_valid_" + str(fold_id + 1) + ".txt")
+                ensure_dir(path)
+                _consistency_check_data_split_cv(file_name, desired_ids=valid_idx)
 
                 # turn off shuffle option which is mutually exclusive with sampler
                 self.shuffle = False
@@ -87,11 +103,14 @@ class BaseDataLoader(DataLoader):
                 self.batch_size = batch_size
 
                 test_sampler = SubsetRandomSampler(test_idx)
-                # Write it to file for reproducibility
-                path = os.path.join(get_project_root(), "cross_fold_log",
-                                    "cross_validation_test_" + str(fold_id + 1) + ".txt")
-                with open(path, "w") as file:
-                    np.savetxt(file, test_idx.astype(int), fmt='%i', delimiter=",")
+
+                # Write it to file for reproducibility, if not yet existing
+                # If existing, check that the split is always the same (for fixed SEED)
+                path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
+                                    f"seed_{global_config.SEED}")
+                file_name = os.path.join(path, "cv_test_" + str(fold_id + 1) + ".txt")
+                ensure_dir(path)
+                _consistency_check_data_split_cv(file_name, desired_ids=test_idx)
 
                 # turn off shuffle option which is mutually exclusive with sampler
                 self.shuffle = False

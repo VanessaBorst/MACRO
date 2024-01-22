@@ -23,20 +23,22 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
 
 
-def test_fold(config, data_dir, test_idx, k_fold):
+def test_fold(config, data_dir, test_idx, k_fold, total_num_folds):
     df_class_wise_results, df_single_metric_results = test_model(config, tune_config=None, cv_active=True,
-                                                                 cv_data_dir=data_dir, test_idx=test_idx, k_fold=k_fold)
+                                                                 cv_data_dir=data_dir, test_idx=test_idx,
+                                                                 k_fold=k_fold, total_num_folds=total_num_folds)
     return df_class_wise_results, df_single_metric_results
 
 
-def train_fold(config, train_idx, valid_idx, k_fold):
-    log_best = train_model(config, train_idx=train_idx, valid_idx=valid_idx, k_fold=k_fold, cv_active=True,
+def train_fold(config, train_idx, valid_idx, k_fold, total_num_folds):
+    log_best = train_model(config, train_idx=train_idx, valid_idx=valid_idx, k_fold=k_fold,
+                           total_num_folds=total_num_folds, cv_active=True,
                            tune_config=None, train_dl=None, valid_dl=None, checkpoint_dir=None, use_tune=False)
     return log_best
 
 
 def run_cross_validation(config):
-    k_fold = config["data_loader"]["cross_valid"]["k_fold"]
+    total_num_folds = config["data_loader"]["cross_valid"]["k_fold"]
     data_dir = config["data_loader"]["cross_valid"]["data_dir"]
 
     # Update data dir in Dataloader ARGs!
@@ -52,11 +54,11 @@ def run_cross_validation(config):
     base_save_dir = config.save_dir
 
     # Divide the samples into k distinct sets
-    fold_size = n_samples // k_fold
+    fold_size = n_samples // total_num_folds
     fold_data = []
     lower_limit = 0
-    for i in range(0, k_fold):
-        if i != k_fold - 1:
+    for i in range(0, total_num_folds):
+        if i != total_num_folds - 1:
             fold_data.append(idx_full[lower_limit:lower_limit + fold_size])
             lower_limit = lower_limit + fold_size
         else:
@@ -68,7 +70,7 @@ def run_cross_validation(config):
 
     # Save the results of each run
     class_wise_metrics = ["precision", "recall", "f1-score", "torch_roc_auc", "torch_accuracy", "support"]
-    folds = ['fold_' + str(i) for i in range(1, k_fold + 1)]
+    folds = ['fold_' + str(i) for i in range(1, total_num_folds + 1)]
 
     iterables = [folds, class_wise_metrics]
     multi_index = pd.MultiIndex.from_product(iterables, names=["fold", "metric"])
@@ -79,11 +81,11 @@ def run_cross_validation(config):
 
     test_results_single_metrics = pd.DataFrame(columns=['loss', 'sk_subset_accuracy'])
 
-    print("Starting with " + str(k_fold) + "-fold cross validation")
+    print("Starting with " + str(total_num_folds) + "-fold cross validation")
     start = time.time()
-    valid_fold_index = k_fold - 2
-    test_fold_index = k_fold - 1
-    for k in range(k_fold):
+    valid_fold_index = total_num_folds - 2
+    test_fold_index = total_num_folds - 1
+    for k in range(total_num_folds):
         # Get the idx for train, valid and test samples
         train_sets = [fold for id, fold in enumerate(fold_data)
                       if id != valid_fold_index and id != test_fold_index]
@@ -111,7 +113,8 @@ def run_cross_validation(config):
             pd.DataFrame.from_dict(data=dict, orient='index').to_csv(file, header=False)
 
         # Do the training and add the fold results to the df
-        fold_train_model_best = train_fold(config, train_idx=train_idx, valid_idx=valid_idx, k_fold=k)
+        fold_train_model_best = train_fold(config, train_idx=train_idx, valid_idx=valid_idx, k_fold=k,
+                                           total_num_folds=total_num_folds)
         valid_results[folds[k]] = fold_train_model_best
 
         # Do the testing and add the fold results to the dfs
@@ -119,7 +122,7 @@ def run_cross_validation(config):
         config.test_output_dir = Path(os.path.join(config.resume.parent, 'test_output_fold_' + str(k + 1)))
         ensure_dir(config.test_output_dir)
         fold_eval_class_wise, fold_eval_single_metrics = test_fold(config, data_dir=data_dir, test_idx=test_idx,
-                                                                   k_fold=k)
+                                                                   k_fold=k, total_num_folds=total_num_folds)
         # Class-Wise Metrics
         test_results_class_wise.loc[(folds[k], fold_eval_class_wise.index), fold_eval_class_wise.columns] = \
             fold_eval_class_wise.values
@@ -129,8 +132,8 @@ def run_cross_validation(config):
         test_results_single_metrics = test_results_single_metrics.append(pd_series)
 
         # Update the indices and reset the config (including resume!)
-        valid_fold_index = (valid_fold_index + 1) % (k_fold)
-        test_fold_index = (test_fold_index + 1) % (k_fold)
+        valid_fold_index = (valid_fold_index + 1) % (total_num_folds)
+        test_fold_index = (test_fold_index + 1) % (total_num_folds)
         config = copy.deepcopy(base_config)
 
     # Summarize the results of the cross validation and write everything to files

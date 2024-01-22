@@ -12,6 +12,7 @@ class BaselineModelWithMHAttentionV2(BaseModel):
                  discard_FC_before_MH=False, num_classes=9,
                  use_reduced_head_dims=None,
                  attention_activation_function=None,
+                 attention_special_init=None,
                  attention_type="v2"):
         """
         :param apply_final_activation: whether the Sigmoid(sl) or the LogSoftmax(ml) should be applied at the end
@@ -26,6 +27,9 @@ class BaselineModelWithMHAttentionV2(BaseModel):
 
         assert attention_activation_function is None or attention_type == "v1", \
             "attention_activation_function can only be used with attention_type=v1!"
+
+        assert attention_special_init is None or attention_type == "v1", \
+            "attention_special_init can only be used with attention_type=v1!"
 
         if use_reduced_head_dims:
             assert (2 * gru_units) % heads == 0, \
@@ -95,12 +99,14 @@ class BaselineModelWithMHAttentionV2(BaseModel):
                 # Own MHA implementation with random query initialization
                 head_dims = use_reduced_head_dims if use_reduced_head_dims is not None else False
                 attention_activation = attention_activation_function if attention_activation_function is not None else "softmax"
+                special_init = attention_special_init if attention_special_init is not None else False
                 self._multi_head_contextual_attention = MultiHeadContextualAttention(d_model=2 * gru_units,
                                                                                      dropout=dropout_attention,
                                                                                      heads=heads,
                                                                                      discard_FC_before_MH=discard_FC_before_MH,
                                                                                      use_reduced_head_dims=head_dims,
-                                                                                     attention_activation_function=attention_activation)
+                                                                                     attention_activation_function=attention_activation,
+                                                                                     special_init=special_init)
             case "v2":
                 # Torch MHA implementation with random query initialization
                 self._multi_head_contextual_attention = MultiHeadContextualAttentionV2(d_model=2 * gru_units,

@@ -122,11 +122,12 @@ class MultiHeadContextualAttention(nn.Module):
     """
 
     def __init__(self, d_model, heads, dropout=None, use_bias=True, discard_FC_before_MH=False,
-                 use_reduced_head_dims=False, attention_activation_function="softmax"):
+                 use_reduced_head_dims=False, attention_activation_function="softmax", special_init=False):
         super().__init__()
         self._use_bias = use_bias
         self._discard_FC_before_MH = discard_FC_before_MH
         self._use_reduced_head_dims = use_reduced_head_dims
+        self._special_init = special_init
 
         if not self._discard_FC_before_MH:
             # The input dimension will be twice the number of units of a single GRU (since it is a BiGRU)
@@ -141,7 +142,10 @@ class MultiHeadContextualAttention(nn.Module):
         # The query needs to be learned
         # Hence, u is represented as trainable tensor, which has shape (attention_dimension x 1)
         u = torch.empty(d_model, 1)
-        u = nn.init.xavier_uniform_(u)
+        if not self._special_init:
+            u = nn.init.xavier_uniform_(u)
+        else:
+            self._query_initialized = False
         self._query = nn.Parameter(u, requires_grad=True)
 
         if self._use_reduced_head_dims:
@@ -162,12 +166,33 @@ class MultiHeadContextualAttention(nn.Module):
                                                        discard_FC_before_MH=self._discard_FC_before_MH,
                                                        attention_activation_function=attention_activation_function)
 
+    def initialize_weights(self, biGRU_outputs):
+        with torch.no_grad():
+            # Perform initialization based on the BiGRU tensor
+            # Set weights of the query vector to the mean of the BiGRU
+            # Either take the first element of the 64x24 tensor or take another mean
+            # -> together with unsqueeze yields 24x1 shaped tensor
+            # query_init = torch.mean(biGRU_outputs, dim=1)[0].unsqueeze(1)
+            query_init = torch.mean(torch.mean(biGRU_outputs, dim=1), dim=0).unsqueeze(1)
+
+            # Direct usage of .data attribute not recommended
+            # (https://pytorch.org/docs/stable/notes/autograd.html#changing-parameters-using-param-data)
+            state_dict = self.state_dict()
+            state_dict['_query'] = query_init
+            self.load_state_dict(state_dict)
+
+        # Set the flag to indicate that weights are now initialized
+        self._query_initialized = True
+
     def forward(self, biGRU_outputs):
         # biGRU_outputs is of shape [batch_size, seq_len, 2*num_units], e.g., bs*2250*24
         # Wanted: Seq_len number of attention weights for each element in the batch
-
         keys = self._hidden_rep(biGRU_outputs) if not self._discard_FC_before_MH else biGRU_outputs
         values = biGRU_outputs
+
+        if self._special_init and not self._query_initialized:
+            self.initialize_weights(biGRU_outputs)
+
         bs = biGRU_outputs.shape[0]
         # seq_len = biGRU_outputs.shape[1]
         querys = self._query.permute(1, 0)

@@ -68,7 +68,7 @@ def _bold_formatter(x, value, num_decimals=2):
 #                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs']
 
 # 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/0810_215444_ml_bs64_rerun_100821_withFC'
-path_to_tune = 'savedVM/models/BaselineWithMultiHeadAttention_ParamStudy/0108_114757_ml_bs64_attention_type_v1_reduced_dim_entmax15'
+path_to_tune = 'savedVM/models/BaselineWithMultiHeadAttention_ParamStudy/0117_145626_ml_bs64_attention_type_v2_withFC'
 # 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/0810_215735_ml_bs64_rerun_100821_noFC'
 # Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
 hyper_params = ['discard_FC_before_MH', 'dropout_attention', 'gru_units', 'heads']
