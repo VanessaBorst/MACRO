@@ -11,7 +11,7 @@ class ECGDataLoader(BaseDataLoader):
     """
     def __init__(self, data_dir, batch_size, shuffle=True, validation_split=0.0, num_workers=1, pin_memory=False,
                  cross_valid=False, train_idx=None, valid_idx=None, test_idx=None, cv_train_mode=True, fold_id=None,
-                 total_num_folds=None,
+                 total_num_folds=None, stratified_k_fold=False,
                  single_batch=False):
         self.data_dir = data_dir
         self.dataset = ECGDataset(self.data_dir)
@@ -19,7 +19,7 @@ class ECGDataLoader(BaseDataLoader):
         super().__init__(self.dataset, batch_size, shuffle, validation_split, num_workers, pin_memory,
                          cross_valid=cross_valid, train_idx=train_idx, valid_idx=valid_idx,
                          test_idx=test_idx, cv_train_mode=cv_train_mode, fold_id=fold_id,
-                         total_num_folds=total_num_folds,
+                         total_num_folds=total_num_folds, stratified_k_fold=stratified_k_fold,
                          single_batch=single_batch)
 
 

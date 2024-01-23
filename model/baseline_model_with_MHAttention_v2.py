@@ -3,7 +3,8 @@ from torchinfo import summary
 
 from base import BaseModel
 from layers.ContextualAttention import ContextualAttention, MultiHeadContextualAttention, \
-    MultiHeadContextualAttentionV2, MultiHeadContextualAttentionV3, MultiHeadContextualAttentionV4
+    MultiHeadContextualAttentionV2, MultiHeadContextualAttentionV3, MultiHeadContextualAttentionV4, \
+    MultiHeadContextualAttentionV5
 from utils import plot_record_from_np_array
 
 
@@ -127,7 +128,7 @@ class BaselineModelWithMHAttentionV2(BaseModel):
                                                                                        discard_FC_before_MH=discard_FC_before_MH)
             case "v5":
                 # Torch MHA implementation +  Method "initialize_weights()" for query initialization
-                self._multi_head_contextual_attention = MultiHeadContextualAttentionV4(d_model=2 * gru_units,
+                self._multi_head_contextual_attention = MultiHeadContextualAttentionV5(d_model=2 * gru_units,
                                                                                        dropout=dropout_attention,
                                                                                        heads=heads,
                                                                                        discard_FC_before_MH=discard_FC_before_MH)

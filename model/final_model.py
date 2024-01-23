@@ -4,7 +4,8 @@ from torchinfo import summary
 from base import BaseModel
 from layers.BasicBlock1dWithNorm import BasicBlock1dWithNorm
 from layers.BasicBlock1dWithNormPreActivationDesign import BasicBlock1dWithNormPreactivation
-from layers.ContextualAttention import  MultiHeadContextualAttention
+from layers.ContextualAttention import MultiHeadContextualAttention, MultiHeadContextualAttentionV2, \
+    MultiHeadContextualAttentionV3, MultiHeadContextualAttentionV4, MultiHeadContextualAttentionV5
 
 
 class FinalModel(BaseModel):
@@ -19,7 +20,10 @@ class FinalModel(BaseModel):
                  use_pre_activation_design=True, use_pre_conv=True,
                  pre_conv_kernel=16,
                  gru_units=12, dropout_attention=0.2, heads=3,
-                 discard_FC_before_MH=False):
+                 discard_FC_before_MH=False,
+                 use_reduced_head_dims=None,
+                 attention_activation_function=None,
+                 attention_type="v2"):
         """
         :param apply_final_activation: whether the Sigmoid(sl) or the LogSoftmax(ml) should be applied at the end
         :param multi_label_training: if true, Sigmoid is used as final activation, else the LogSoftmax
@@ -31,6 +35,16 @@ class FinalModel(BaseModel):
 
         assert down_sample == "conv" or down_sample == "max_pool" or down_sample == "avg_pool", \
             "Downsampling should either be conv or max_pool or avg_pool"
+
+        assert use_reduced_head_dims is None or attention_type == "v1", \
+            "use_reduced_head_dims can only be used with attention_type=v1!"
+
+        assert attention_activation_function is None or attention_type == "v1", \
+            "attention_activation_function can only be used with attention_type=v1!"
+
+        if use_reduced_head_dims:
+            assert (2 * gru_units) % heads == 0, \
+                "Twice the number of GRU cells (d_model) must be divisible by num_heads!"
 
         if use_pre_activation_design:
             assert pos_skip == "all" or pos_skip == "not_last", "For the preactivation design, ''not first'' is no valid" \
@@ -222,10 +236,43 @@ class FinalModel(BaseModel):
             nn.Dropout(drop_out_gru)
         )
 
-        self._multi_head_contextual_attention = MultiHeadContextualAttention(d_model=2 * gru_units,
-                                                                             dropout=dropout_attention,
-                                                                             heads=heads,
-                                                                             discard_FC_before_MH=discard_FC_before_MH)
+        match attention_type:
+            case "v1":
+                # Own MHA implementation with random query initialization
+                head_dims = use_reduced_head_dims if use_reduced_head_dims is not None else False
+                attention_activation = attention_activation_function if attention_activation_function is not None else "softmax"
+                self._multi_head_contextual_attention = MultiHeadContextualAttention(d_model=2 * gru_units,
+                                                                                     dropout=dropout_attention,
+                                                                                     heads=heads,
+                                                                                     discard_FC_before_MH=discard_FC_before_MH,
+                                                                                     use_reduced_head_dims=head_dims,
+                                                                                     attention_activation_function=attention_activation)
+            case "v2":
+                # Torch MHA implementation with random query initialization
+                self._multi_head_contextual_attention = MultiHeadContextualAttentionV2(d_model=2 * gru_units,
+                                                                                       dropout=dropout_attention,
+                                                                                       heads=heads,
+                                                                                       discard_FC_before_MH=discard_FC_before_MH)
+            case "v3":
+                # Torch MHA implementation +  buggy query initialization based on the mean of the BiGRU output
+                self._multi_head_contextual_attention = MultiHeadContextualAttentionV3(d_model=2 * gru_units,
+                                                                                       dropout=dropout_attention,
+                                                                                       heads=heads,
+                                                                                       discard_FC_before_MH=discard_FC_before_MH)
+            case "v4":
+                # Torch MHA implementation +  Learnable query projection with Linear layer
+                self._multi_head_contextual_attention = MultiHeadContextualAttentionV4(d_model=2 * gru_units,
+                                                                                       dropout=dropout_attention,
+                                                                                       heads=heads,
+                                                                                       discard_FC_before_MH=discard_FC_before_MH)
+            case "v5":
+                # Torch MHA implementation +  Method "initialize_weights()" for query initialization
+                self._multi_head_contextual_attention = MultiHeadContextualAttentionV5(d_model=2 * gru_units,
+                                                                                       dropout=dropout_attention,
+                                                                                       heads=heads,
+                                                                                       discard_FC_before_MH=discard_FC_before_MH)
+            case _:
+                raise ValueError(f"Attention type {attention_type} not supported!")
 
         self._batchNorm = nn.Sequential(
             # The batch normalization layer has 24*2=48 trainable and 24*2=48 non-trainable parameters

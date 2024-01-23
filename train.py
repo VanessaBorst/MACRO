@@ -208,20 +208,25 @@ def tuning_params(name):
         # }
 
         # NEW MACRO PAPER, Batchsize is varied in Config
+        # return {
+        #     "down_sample": "conv",
+        #     "vary_channels": True,
+        #     "pos_skip": "all",
+        #     "norm_type": "BN",
+        #     "norm_pos": "all",
+        #     "norm_before_act": True,
+        #     "use_pre_activation_design": True,
+        #     "use_pre_conv": True,
+        #     "pre_conv_kernel": 16,
+        #     "dropout_attention": 0.3,
+        #     "heads": tune.grid_search([1, 2, 3, 8]),
+        #     "gru_units": tune.grid_search([12, 24, 32]),
+        #     "discard_FC_before_MH": tune.grid_search([True, False])
+        # }
         return {
-            "down_sample": "conv",
-            "vary_channels": True,
-            "pos_skip": "all",
-            "norm_type": "BN",
-            "norm_pos": "all",
-            "norm_before_act": True,
-            "use_pre_activation_design": True,
-            "use_pre_conv": True,
-            "pre_conv_kernel": 16,
-            "dropout_attention": 0.3,
-            "heads": tune.grid_search([1, 2, 3, 8]),
-            "gru_units": tune.grid_search([12, 24, 32]),
-            "discard_FC_before_MH": tune.grid_search([True, False])
+            "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
+            "heads": tune.grid_search([6, 8, 12]),
+            "gru_units": tune.grid_search([12, 24]),
         }
     elif name == "FinalModelMultiBranch":
         return {
@@ -764,9 +769,11 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
         valid_data_loader = valid_dl
     elif cv_active:
         # Setup data_loader instances for current the cross validation run
+        stratified_k_fold = config.config.get("data_loader", {}).get("cross_valid", {}).get("stratified_k_fold", False)
         data_loader = config.init_obj('data_loader', module_data_loader,
                                       cross_valid=True, train_idx=train_idx, valid_idx=valid_idx, cv_train_mode=True,
                                       fold_id=k_fold, total_num_folds=total_num_folds,
+                                      stratified_k_fold=stratified_k_fold,
                                       single_batch=False)
         valid_data_loader = data_loader.split_validation()
     else:

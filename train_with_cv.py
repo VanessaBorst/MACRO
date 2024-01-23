@@ -8,6 +8,9 @@ import pandas as pd
 from pathlib import Path
 
 import numpy as np
+from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold, StratifiedShuffleSplit, train_test_split
+from sklearn.preprocessing import LabelEncoder
+from collections import Counter
 
 import global_config
 from data_loader.ecg_data_set import ECGDataset
@@ -37,9 +40,17 @@ def train_fold(config, train_idx, valid_idx, k_fold, total_num_folds):
     return log_best
 
 
+def get_new_labels(y):
+    """ Convert each multilabel vector to a unique string """
+    yy = [''.join(str(l)) for l in y]
+    y_new = LabelEncoder().fit_transform(yy)
+    return y_new
+
+
 def run_cross_validation(config):
     total_num_folds = config["data_loader"]["cross_valid"]["k_fold"]
     data_dir = config["data_loader"]["cross_valid"]["data_dir"]
+    stratified_k_fold = config.config.get("data_loader", {}).get("cross_valid", {}).get("stratified_k_fold", False)
 
     # Update data dir in Dataloader ARGs!
     config["data_loader"]["args"]["data_dir"] = data_dir
@@ -53,17 +64,48 @@ def run_cross_validation(config):
     base_log_dir = config.log_dir
     base_save_dir = config.save_dir
 
-    # Divide the samples into k distinct sets
-    fold_size = n_samples // total_num_folds
-    fold_data = []
-    lower_limit = 0
-    for i in range(0, total_num_folds):
-        if i != total_num_folds - 1:
-            fold_data.append(idx_full[lower_limit:lower_limit + fold_size])
-            lower_limit = lower_limit + fold_size
-        else:
-            # Last fold may be a bit larger
-            fold_data.append(idx_full[lower_limit:n_samples])
+    if stratified_k_fold:
+        # NEW Jan 24: Use stratified splits
+        assert total_num_folds == 10, "Stratified k-fold only works with 10-fold CV at the moment"
+
+        # Retrieve all data and labels
+        records = []
+        first_annotation_labels = []
+        for i in range(n_samples):
+            record_values, classes_encoded, first_class_encoded, classes_one_hot, record_name = dataset[i]
+            records.append(record_values)
+            first_annotation_labels.append(first_class_encoded)
+
+        # Split ratio: 80 - 10 - 10 per run
+        # y_new = get_new_labels(labels)            # => Results in >= 35 distinct labels;
+        skf = StratifiedKFold(n_splits=total_num_folds, random_state=global_config.SEED, shuffle=True)
+        fold_data = []
+        for i, (train_index, test_index) in enumerate(skf.split(records, first_annotation_labels)):
+            # print(f"Fold {i}:")
+            # print(f"  Train: index={train_index}")
+            # print(f"  Test:  index={test_index}")
+            fold_data.append(test_index)
+
+        # Sanity check
+        test = []
+        for fold in fold_data:
+            for item in fold:
+                test.append(item)
+        duplicates = [k for k, v in Counter(test).items() if v > 1]
+        assert len(duplicates) == 0, "Assertion Error; data folds not unique"
+    else:
+        # Before JAN 24
+        # Divide the samples into k distinct sets
+        fold_size = n_samples // total_num_folds
+        fold_data = []
+        lower_limit = 0
+        for i in range(0, total_num_folds):
+            if i != total_num_folds - 1:
+                fold_data.append(idx_full[lower_limit:lower_limit + fold_size])
+                lower_limit = lower_limit + fold_size
+            else:
+                # Last fold may be a bit larger
+                fold_data.append(idx_full[lower_limit:n_samples])
 
     # Run k-fold-cross-validation
     # Each time, one of the subset functions as valid and another as test set

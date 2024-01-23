@@ -437,6 +437,7 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
             fold_id=None
         )
     else:
+        stratified_k_fold = config.config.get("data_loader", {}).get("cross_valid", {}).get("stratified_k_fold", False)
         data_loader = getattr(module_data, config['data_loader']['type'])(
             cv_data_dir,
             batch_size=64,
@@ -447,7 +448,8 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
             test_idx=test_idx,
             cv_train_mode=False,
             fold_id=k_fold,
-            total_num_folds=total_num_folds
+            total_num_folds=total_num_folds,
+            stratified_k_fold=stratified_k_fold
         )
 
     # build model architecture

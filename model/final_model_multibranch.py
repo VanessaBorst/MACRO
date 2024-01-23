@@ -8,7 +8,6 @@ from base import BaseModel
 from layers.BasicBlock1dWithNorm import BasicBlock1dWithNorm
 from layers.BasicBlock1dWithNormPreActivationDesign import BasicBlock1dWithNormPreactivation
 from layers.ContextualAttention import MultiHeadContextualAttention
-from layers.LayerUtils import calc_same_padding_for_stride_one
 
 
 class FinalModelMultiBranch(BaseModel):
@@ -18,7 +17,7 @@ class FinalModelMultiBranch(BaseModel):
                  first_conv_reduction_kernel_size=3,
                  second_conv_reduction_kernel_size=3,
                  third_conv_reduction_kernel_size=3,
-                 vary_channels_lighter_version = True,
+                 vary_channels_lighter_version=True,
                  discard_FC_before_MH=True,
                  branchNet_gru_units=24,
                  branchNet_heads=2,
@@ -46,7 +45,7 @@ class FinalModelMultiBranch(BaseModel):
         # 32 -> in_channels = 768 -> 252 -> 768, 520, 272, 24
         in_channels = branchNet_gru_units * 2 * 12
         # The out_channels should be reduced to 12 in three steps
-        first_out_channels= in_channels - (in_channels - 24) // 3
+        first_out_channels = in_channels - (in_channels - 24) // 3
         second_out_channels = in_channels - 2 * (in_channels - 24) // 3
         third_out_channels = 24
 
@@ -94,7 +93,7 @@ class FinalModelMultiBranch(BaseModel):
         )
 
         # Input: d_model of the MH mechanism
-        self._fcn = nn.Linear(in_features= third_out_channels, out_features=num_classes)
+        self._fcn = nn.Linear(in_features=third_out_channels, out_features=num_classes)
         # apply final activation is false by default
 
     def forward(self, x):
@@ -206,7 +205,7 @@ class FinalModelBranchNet(BaseModel):
             # out_channel_block_3 = 48
             # out_channel_block_4 = 24
             # out_channel_block_5 = 12
-            if  vary_channels_lighter_version:
+            if vary_channels_lighter_version:
                 out_channel_block_1 = 12
                 out_channel_block_2 = 24
                 out_channel_block_3 = 24
@@ -448,7 +447,8 @@ class FinalModelBranchNet(BaseModel):
 
 if __name__ == "__main__":
     model = FinalModelMultiBranch(multi_branch_heads=2)
-    summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "kernel_size", "num_params"], depth=5)
+    summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "kernel_size", "num_params"],
+            depth=5)
 
     model_part = FinalModelBranchNet(apply_final_activation=False,
                                      multi_label_training=True,

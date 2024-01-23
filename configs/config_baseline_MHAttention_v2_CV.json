@@ -1,26 +1,24 @@
 {
   "name": "BaselineWithMultiHeadAttention_V2_CV",
-  "run_details": "_noFC_0.4_8_12_attention_type_v1_reduced_dim_entmax15_5_FOLD",
+  "run_details": "_noFC_0.4_8_12_attention_type_v5",
   "n_gpu": 1,
   "arch": {
-    "type": "BaselineModelWithMHAttentionV2",
-    "args": {
-      "apply_final_activation": false,
-      "multi_label_training": true,
-      "dropout_attention": 0.4,
-      "heads": 8,
-      "gru_units": 12,
-      "discard_FC_before_MH": true,
-      "attention_type": "v1",
-      "use_reduced_head_dims": true,
-      "attention_activation_function": "entmax15"
-    }
+      "type": "BaselineModelWithMHAttentionV2",
+      "args": {
+          "apply_final_activation": false,
+          "multi_label_training": true,
+          "dropout_attention": 0.4,
+          "heads": 8,
+          "gru_units": 12,
+          "discard_FC_before_MH": true,
+          "attention_type": "v5"
+      }
   },
   "data_loader": {
       "type": "ECGDataLoader",
       "cross_valid": {
           "enabled": true,
-          "k_fold": 5,
+          "k_fold": 10,
           "data_dir": "data/CinC_CPSC/cross_valid/250Hz/60s"
       },
       "args": {

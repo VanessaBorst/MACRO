@@ -39,7 +39,7 @@ class BaseDataLoader(DataLoader):
 
     def __init__(self, dataset, batch_size, shuffle, validation_split=None, num_workers=1, pin_memory=False,
                  cross_valid=False, train_idx=None, valid_idx=None, test_idx=None, cv_train_mode=True,
-                 fold_id=None, total_num_folds=None,
+                 fold_id=None, total_num_folds=None, stratified_k_fold=False,
                  collate_fn=default_collate,
                  single_batch=False, worker_init_fn=seed_worker, generator=torch.Generator()):
         """
@@ -87,7 +87,11 @@ class BaseDataLoader(DataLoader):
 
                 # Write it to file for reproducibility, if not yet existing
                 # If existing, check that the split is always the same (for fixed SEED)
-                path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
+                if stratified_k_fold:
+                    path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
+                                        "stratified", f"seed_{global_config.SEED}")
+                else:
+                    path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
                                     f"seed_{global_config.SEED}")
                 file_name = os.path.join(path, "cv_valid_" + str(fold_id + 1) + ".txt")
                 ensure_dir(path)
@@ -106,8 +110,12 @@ class BaseDataLoader(DataLoader):
 
                 # Write it to file for reproducibility, if not yet existing
                 # If existing, check that the split is always the same (for fixed SEED)
-                path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
-                                    f"seed_{global_config.SEED}")
+                if stratified_k_fold:
+                    path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
+                                        "stratified", f"seed_{global_config.SEED}")
+                else:
+                    path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
+                                        f"seed_{global_config.SEED}")
                 file_name = os.path.join(path, "cv_test_" + str(fold_id + 1) + ".txt")
                 ensure_dir(path)
                 _consistency_check_data_split_cv(file_name, desired_ids=test_idx)
