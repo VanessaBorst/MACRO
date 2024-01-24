@@ -68,17 +68,27 @@ def _bold_formatter(x, value, num_decimals=2):
 #                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs']
 
 # 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/0810_215444_ml_bs64_rerun_100821_withFC'
-path_to_tune = 'savedVM/models/BaselineWithMultiHeadAttention_ParamStudy/0117_145626_ml_bs64_attention_type_v2_withFC'
-# 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/0810_215735_ml_bs64_rerun_100821_noFC'
-# Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
-hyper_params = ['discard_FC_before_MH', 'dropout_attention', 'gru_units', 'heads']
-integer_vals = ['gru_units', 'heads', 'Epochs']
+path_to_tune = 'savedVM/models/FinalModel_MACRO_ParamStudy/0123_131029_ml_bs64noFC-12gru-entmax15'
+hyper_params = ['dropout_attention', 'heads']
+integer_vals = ['heads', 'Epochs']
 single_precision = ['dropout_attention']
-desired_col_order = ['discard_FC_before_MH', 'dropout_attention', 'heads', 'gru_units',
+desired_col_order = ['dropout_attention', 'heads',
                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
                      'm-F1', 'm-ROC-AUC', 'm-Acc',
                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc',
                      'MR', 'Epochs', 'Params']
+
+
+# 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/0810_215735_ml_bs64_rerun_100821_noFC'
+# Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
+# hyper_params = ['discard_FC_before_MH', 'dropout_attention', 'gru_units', 'heads']
+# integer_vals = ['gru_units', 'heads', 'Epochs']
+# single_precision = ['dropout_attention']
+# desired_col_order = ['discard_FC_before_MH', 'dropout_attention', 'heads', 'gru_units',
+#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+#                      'm-F1', 'm-ROC-AUC', 'm-Acc',
+#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc',
+#                      'MR', 'Epochs', 'Params']
 
 # # Old runs (no discard_FC param)
 # # 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/tune_run_1'

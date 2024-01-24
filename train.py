@@ -226,7 +226,7 @@ def tuning_params(name):
         return {
             "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
             "heads": tune.grid_search([6, 8, 12]),
-            "gru_units": tune.grid_search([12, 24]),
+            # "gru_units": tune.grid_search([12, 24]),
         }
     elif name == "FinalModelMultiBranch":
         return {
@@ -630,6 +630,9 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
         case "BaselineModelWithMHAttentionV2":
             # Six trials in parallel
             num_gpu = 0.16
+        case "FinalModel":
+            # Five trials in parallel
+            num_gpu = 0.2
         case "BaselineModelWithSkipConnectionsV2" | "BaselineModelWithSkipConnectionsAndNormV2" | \
              "BaselineModelWithSkipConnectionsAndNormV2PreActivation" | "FinalModelMultiBranch":
             # One trial at a time

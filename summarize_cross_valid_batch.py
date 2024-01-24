@@ -26,7 +26,7 @@ def main(path):
 
 def summarize_single_cross_valid(cv_path):
     thresholds_active = False
-    include_weighted_avg = False
+    include_weighted_avg = True
     include_at_least_weighted_F1 = True
     path_class_wise = cv_path + '/test_results_class_wise.p'
     path_single_metrics = cv_path + '/test_results_single_metrics.p'

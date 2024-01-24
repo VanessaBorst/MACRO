@@ -2,7 +2,7 @@
 
 source venv/bin/activate
 
-REL_PATH="savedVM/models/BaselineWithMultiHeadAttention_ParamStudy/0117_145626_ml_bs64_attention_type_v2_withFC"
+REL_PATH="savedVM/models/FinalModel_MACRO_ParamStudy/0123_131029_ml_bs64noFC-12gru-entmax15"
 
 # Before the bug fix in Jan 24, the valid set varied from tune run to tune run
 for dir in $(find $REL_PATH -mindepth 1 -maxdepth 1 -type d )

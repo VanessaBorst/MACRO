@@ -1,6 +1,6 @@
 {
   "name": "BaselineWithMultiHeadAttention_V2_CV",
-  "run_details": "_noFC_0.4_8_12_attention_type_v5",
+  "run_details": "_noFC_0.4_8_12_attention_type_v1_reduced_dim_entmax15_special_init",
   "n_gpu": 1,
   "arch": {
       "type": "BaselineModelWithMHAttentionV2",
@@ -11,7 +11,10 @@
           "heads": 8,
           "gru_units": 12,
           "discard_FC_before_MH": true,
-          "attention_type": "v5"
+          "attention_type": "v1",
+          "use_reduced_head_dims": true,
+          "attention_activation_function": "entmax15",
+          "attention_special_init": true
       }
   },
   "data_loader": {
