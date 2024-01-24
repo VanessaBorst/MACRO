@@ -66,7 +66,9 @@ for model_name, model_path in model_paths.items():
         df_results_acc.loc[len(df_results_acc)] = row_values_acc
 
     # Append another row containing the mean
-    df_results_F1.loc['mean'] = df_results_F1.mean()
+    # df_results_F1.loc['mean'] = df_results_F1.mean()
+    # df_results_F1 = pd.concat([df_results_F1, df_results_F1.describe().loc[["mean", "std"]]])
+    df_F1_statistics = df_results_F1.describe().drop(columns=["Fold"])
     df_results_F1 = df_results_F1.round(3)
     df_results_AUC.loc['mean'] = df_results_AUC.mean()
     df_results_AUC = df_results_AUC.round(3)

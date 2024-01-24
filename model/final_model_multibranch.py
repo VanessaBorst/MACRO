@@ -80,12 +80,12 @@ class FinalModelMultiBranch(BaseModel):
             nn.LeakyReLU(0.3)
         )
 
-        # d_model is 24 in this case, before it was 2 * gru_units
+        # d_model = 2 * multi_branch_gru_units * 12
         self._multi_head_contextual_attention = MultiHeadContextualAttention(d_model=third_out_channels,
                                                                              dropout=0.3,
                                                                              heads=multi_branch_heads,
                                                                              discard_FC_before_MH=discard_FC_before_MH)
-
+        # TODO: Alternative: nn.BatchNorm1d(multi_branch_gru_units * 2 * 12)
         self._batchNorm = nn.Sequential(
             nn.BatchNorm1d(third_out_channels),
             nn.LeakyReLU(0.3),
@@ -93,6 +93,7 @@ class FinalModelMultiBranch(BaseModel):
         )
 
         # Input: d_model of the MH mechanism
+        # TODO: # Input: bidirectional GRU, twelve times -> multi_branch_gru_units * 2 * 12
         self._fcn = nn.Linear(in_features=third_out_channels, out_features=num_classes)
         # apply final activation is false by default
 
