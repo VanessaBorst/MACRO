@@ -133,14 +133,14 @@ desired_col_order = ['dropout_attention', 'heads',
 
 
 # path_to_tune = 'savedVM/models/FinalModel_MACRO_MultiBranch_ParamStudy/0831_110846_ml_bs16'
-# hyper_params = [ "branchNet_gru_units", "branchNet_heads", "discard_FC_before_MH", "first_conv_reduction_kernel_size",
-#                  "multi_branch_heads", "second_conv_reduction_kernel_size", "third_conv_reduction_kernel_size",
+# hyper_params = [ "branchNet_gru_units", "branchNet_heads", "discard_FC_before_MH", "conv_reduction_first_kernel_size",
+#                  "multi_branch_heads", "conv_reduction_second_kernel_size", "conv_reduction_third_kernel_size",
 #                  "vary_channels_lighter_version"]
-# integer_vals = ['branchNet_gru_units', 'branchNet_heads', "first_conv_reduction_kernel_size", "multi_branch_heads",
-#                 "second_conv_reduction_kernel_size", "third_conv_reduction_kernel_size", 'Epochs', 'Params']
+# integer_vals = ['branchNet_gru_units', 'branchNet_heads', "conv_reduction_first_kernel_size", "multi_branch_heads",
+#                 "conv_reduction_second_kernel_size", "conv_reduction_third_kernel_size", 'Epochs', 'Params']
 # single_precision = []
-# desired_col_order = ["multi_branch_heads", "first_conv_reduction_kernel_size", "second_conv_reduction_kernel_size",
-#                      "third_conv_reduction_kernel_size",
+# desired_col_order = ["multi_branch_heads", "conv_reduction_first_kernel_size", "conv_reduction_second_kernel_size",
+#                      "conv_reduction_third_kernel_size",
 #                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE', 'm-F1', 'm-ROC-AUC', 'm-Acc',
 #                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs', 'Params']
 

@@ -4,26 +4,48 @@ from torchinfo import summary
 from base import BaseModel
 from layers.BasicBlock1dWithNorm import BasicBlock1dWithNorm
 from layers.BasicBlock1dWithNormPreActivationDesign import BasicBlock1dWithNormPreactivation
-from layers.ContextualAttention import MultiHeadContextualAttention, MultiHeadContextualAttentionV2, \
-    MultiHeadContextualAttentionV3, MultiHeadContextualAttentionV4, MultiHeadContextualAttentionV5
+from model.baseline_model_with_MHAttention_v2 import _get_attention_module
 
 
 class FinalModel(BaseModel):
-    def __init__(self, apply_final_activation, multi_label_training, input_channel=12, num_classes=9,
-                 drop_out_first_conv_blocks=0.2, drop_out_second_conv_blocks=0.2,
-                 drop_out_gru=0.2, dropout_last_bn=0.2,
-                 mid_kernel_size_first_conv_blocks=3, mid_kernel_size_second_conv_blocks=3,
-                 last_kernel_size_first_conv_blocks=24, last_kernel_size_second_conv_blocks=48,
-                 stride_first_conv_blocks=2, stride_second_conv_blocks=2,
-                 down_sample="conv", vary_channels=True, pos_skip="not_last",
-                 norm_type="BN", norm_pos="all", norm_before_act=True,
-                 use_pre_activation_design=True, use_pre_conv=True,
+    def __init__(self,
+                 # General parameters
+                 apply_final_activation,
+                 multi_label_training,
+                 input_channel=12,
+                 num_classes=9,
+                 # CNN-related parameters
+                 drop_out_first_conv_blocks=0.2,
+                 drop_out_second_conv_blocks=0.2,
+                 drop_out_gru=0.2,
+                 dropout_last_bn=0.2,
+                 mid_kernel_size_first_conv_blocks=3,
+                 mid_kernel_size_second_conv_blocks=3,
+                 last_kernel_size_first_conv_blocks=24,
+                 last_kernel_size_second_conv_blocks=48,
+                 stride_first_conv_blocks=2,
+                 stride_second_conv_blocks=2,
+                 down_sample="conv",
+                 vary_channels=True,
+                 pos_skip="not_last",
+                 norm_type="BN",
+                 norm_pos="all",
+                 norm_before_act=True,
+                 use_pre_activation_design=True,
+                 use_pre_conv=True,
                  pre_conv_kernel=16,
-                 gru_units=12, dropout_attention=0.2, heads=3,
+                 # GRU and MHAttention-related parameters
+                 gru_units=12,
+                 heads=3,
+                 dropout_attention=0.2,
                  discard_FC_before_MH=False,
+                 attention_type="v2",
                  use_reduced_head_dims=None,
                  attention_activation_function=None,
-                 attention_type="v2"):
+                 # Multibranch-specific parameters
+                 act_as_branch_net=False,                       # NEW (BranchNet)
+                 vary_channels_lighter_version=False,           # NEW (BranchNet)
+                 ):
         """
         :param apply_final_activation: whether the Sigmoid(sl) or the LogSoftmax(ml) should be applied at the end
         :param multi_label_training: if true, Sigmoid is used as final activation, else the LogSoftmax
@@ -32,19 +54,16 @@ class FinalModel(BaseModel):
         """
         super().__init__()
         self._apply_final_activation = apply_final_activation
+        self._act_as_branch_net = act_as_branch_net
 
+        # Sanity checks for the CNN-related parameters
         assert down_sample == "conv" or down_sample == "max_pool" or down_sample == "avg_pool", \
             "Downsampling should either be conv or max_pool or avg_pool"
 
-        assert use_reduced_head_dims is None or attention_type == "v1", \
-            "use_reduced_head_dims can only be used with attention_type=v1!"
-
-        assert attention_activation_function is None or attention_type == "v1", \
-            "attention_activation_function can only be used with attention_type=v1!"
-
-        if use_reduced_head_dims:
-            assert (2 * gru_units) % heads == 0, \
-                "Twice the number of GRU cells (d_model) must be divisible by num_heads!"
+        # Vary_channels_lighter_version only has a meaning if acting as a branch net
+        assert not vary_channels_lighter_version or (act_as_branch_net is True and vary_channels is True), \
+            "vary_channels_lighter_version only has an effect if vary_channels is True as well and if the model is " \
+            "acting as a branch net"
 
         if use_pre_activation_design:
             assert pos_skip == "all" or pos_skip == "not_last", "For the preactivation design, ''not first'' is no valid" \
@@ -60,11 +79,25 @@ class FinalModel(BaseModel):
         self._use_pre_activation_design = use_pre_activation_design
 
         if vary_channels:
-            out_channel_block_1 = 24
-            out_channel_block_2 = 48
-            out_channel_block_3 = 48
-            out_channel_block_4 = 24
-            out_channel_block_5 = 12
+            if self._act_as_branch_net:
+                if vary_channels_lighter_version:
+                    out_channel_block_1 = 12
+                    out_channel_block_2 = 24
+                    out_channel_block_3 = 24
+                    out_channel_block_4 = 12
+                    out_channel_block_5 = 1
+                else:
+                    out_channel_block_1 = 12
+                    out_channel_block_2 = 24
+                    out_channel_block_3 = 48
+                    out_channel_block_4 = 24
+                    out_channel_block_5 = 12
+            else:
+                out_channel_block_1 = 24
+                out_channel_block_2 = 48
+                out_channel_block_3 = 48
+                out_channel_block_4 = 24
+                out_channel_block_5 = 12
         else:
             out_channel_block_1 = out_channel_block_2 = out_channel_block_3 \
                 = out_channel_block_4 = out_channel_block_5 = 12
@@ -236,43 +269,14 @@ class FinalModel(BaseModel):
             nn.Dropout(drop_out_gru)
         )
 
-        match attention_type:
-            case "v1":
-                # Own MHA implementation with random query initialization
-                head_dims = use_reduced_head_dims if use_reduced_head_dims is not None else False
-                attention_activation = attention_activation_function if attention_activation_function is not None else "softmax"
-                self._multi_head_contextual_attention = MultiHeadContextualAttention(d_model=2 * gru_units,
-                                                                                     dropout=dropout_attention,
-                                                                                     heads=heads,
-                                                                                     discard_FC_before_MH=discard_FC_before_MH,
-                                                                                     use_reduced_head_dims=head_dims,
-                                                                                     attention_activation_function=attention_activation)
-            case "v2":
-                # Torch MHA implementation with random query initialization
-                self._multi_head_contextual_attention = MultiHeadContextualAttentionV2(d_model=2 * gru_units,
-                                                                                       dropout=dropout_attention,
-                                                                                       heads=heads,
-                                                                                       discard_FC_before_MH=discard_FC_before_MH)
-            case "v3":
-                # Torch MHA implementation +  buggy query initialization based on the mean of the BiGRU output
-                self._multi_head_contextual_attention = MultiHeadContextualAttentionV3(d_model=2 * gru_units,
-                                                                                       dropout=dropout_attention,
-                                                                                       heads=heads,
-                                                                                       discard_FC_before_MH=discard_FC_before_MH)
-            case "v4":
-                # Torch MHA implementation +  Learnable query projection with Linear layer
-                self._multi_head_contextual_attention = MultiHeadContextualAttentionV4(d_model=2 * gru_units,
-                                                                                       dropout=dropout_attention,
-                                                                                       heads=heads,
-                                                                                       discard_FC_before_MH=discard_FC_before_MH)
-            case "v5":
-                # Torch MHA implementation +  Method "initialize_weights()" for query initialization
-                self._multi_head_contextual_attention = MultiHeadContextualAttentionV5(d_model=2 * gru_units,
-                                                                                       dropout=dropout_attention,
-                                                                                       heads=heads,
-                                                                                       discard_FC_before_MH=discard_FC_before_MH)
-            case _:
-                raise ValueError(f"Attention type {attention_type} not supported!")
+        self._multi_head_contextual_attention = _get_attention_module(discard_FC_before_MH=discard_FC_before_MH,
+                                                                      dropout_attention=dropout_attention,
+                                                                      d_model=2 * gru_units,
+                                                                      heads=heads,
+                                                                      attention_type=attention_type,
+                                                                      use_reduced_head_dims=use_reduced_head_dims,
+                                                                      attention_activation_function=attention_activation_function,
+                                                                      attention_special_init=False)
 
         self._batchNorm = nn.Sequential(
             # The batch normalization layer has 24*2=48 trainable and 24*2=48 non-trainable parameters
@@ -315,13 +319,19 @@ class FinalModel(BaseModel):
         x = x.permute(0, 2, 1)  # switch seq_length and feature_size for the BiGRU
         x, last_hidden_state = self._biGRU(x)
         x = self._biGru_activation_do(x)
+
+        if self._act_as_branch_net:
+            # Copy BiGRU output for passing it to the MultiBranchNet concatenation
+            single_branch_biGRU_output = x
+
         x = self._multi_head_contextual_attention(x)
         x = self._batchNorm(x)
         x = self._fcn(x)
         if self._apply_final_activation:
-            return self._final_activation(x)
+            return self._final_activation(x) if not self._act_as_branch_net else \
+                self._final_activation(x), single_branch_biGRU_output
         else:
-            return x
+            return x if not self._act_as_branch_net else x, single_branch_biGRU_output
 
 
 if __name__ == "__main__":
@@ -340,5 +350,5 @@ if __name__ == "__main__":
                        dropout_attention=0.3,
                        gru_units=32,
                        heads=16)
-    #print(str(model))
+    # print(str(model))
     summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "kernel_size", "num_params"])

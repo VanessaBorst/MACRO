@@ -231,9 +231,9 @@ def tuning_params(name):
     elif name == "FinalModelMultiBranch":
         return {
             "multi_branch_heads": tune.grid_search([1, 2, 3, 8]),
-            "first_conv_reduction_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
-            "second_conv_reduction_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
-            "third_conv_reduction_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
+            "conv_reduction_first_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
+            "conv_reduction_second_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
+            "conv_reduction_third_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
             "vary_channels_lighter_version": False,  # tune.grid_search([True, False]),
             "discard_FC_before_MH": True,
             "branchNet_gru_units": 24,
@@ -611,9 +611,9 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
         reporter = CLIReporter(
             parameter_columns={
                 "multi_branch_heads": "H",
-                "first_conv_reduction_kernel_size": "1st k",
-                "second_conv_reduction_kernel_size": "2nd k",
-                "third_conv_reduction_kernel_size": "3rd k",
+                "conv_reduction_first_kernel_size": "1st k",
+                "conv_reduction_second_kernel_size": "2nd k",
+                "conv_reduction_third_kernel_size": "3rd k",
                 "vary_channels_lighter_version": "Vary Channels Light"
             },
             metric_columns=["loss", "val_loss",
