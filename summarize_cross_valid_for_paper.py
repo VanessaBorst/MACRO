@@ -10,6 +10,7 @@ model_paths = {'Baseline': 'BaselineModel_CV/0116_145000_ml_bs64_250Hz_60s',
                'Multibranch': 'Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24'}
 include_acc = False
 
+
 # The box extends from the Q1 to Q3 quartile values of the data, with a line at the median (Q2).
 # Q1 = 25% percentile, Q2 = 50% percentile, Q3 = 75% percentile
 # The whiskers extend from the edges of box to show the range of the data.
@@ -27,6 +28,7 @@ def create_and_save_boxplot_for_single_model(df, model_name, metric_name, metric
     plt.tight_layout()
     plt.savefig(os.path.join('figures', f'{model_name} - {metric_name}.pdf'), format="pdf", bbox_inches="tight")
     plt.show()
+
 
 def create_and_save_boxplot_for_macro_avgs(df, model_names, metric_name, metric_cols, title, x_label, y_label,
                                            filename):
@@ -149,16 +151,18 @@ for model_name, model_path in model_paths.items():
     df_results_acc = df_results_acc.round(3)
 
     # Add the average metric_cols across all folds to the final result dataframes
-    df_results_paper[f'{model_name}_F1'] = [df_results_F1.loc['mean'][col] for col in
-                                            ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-                                             'm-AVG_F1', 'W-AVG_F1']]
+    df_results_paper[f'{model_name}_F1'] = [f"{df_results_F1.loc['mean'][col]}±{df_results_F1.loc['std'][col]}"
+                                            for col in ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+                                                        'm-AVG_F1', 'W-AVG_F1']]
 
-    df_results_paper[f'{model_name}_AUC'] = [df_results_AUC.loc['mean'][col] for col in
+    df_results_paper[f'{model_name}_AUC'] = [f"{df_results_AUC.loc['mean'][col]}±{df_results_AUC.loc['std'][col]}"
+                                             for col in
                                              ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
                                               'm-AVG_AUC', 'W-AVG_AUC']]
 
     if include_acc:
-        df_results_paper[f'{model_name}_Acc'] = [df_results_acc.loc['mean'][col] for col in
+        df_results_paper[f'{model_name}_Acc'] = [f"{df_results_acc.loc['mean'][col]}±{df_results_acc.loc['std'][col]}"
+                                                 for col in
                                                  ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
                                                   'm-AVG_Acc', 'W-AVG_Acc']]
 
