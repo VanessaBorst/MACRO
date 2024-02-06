@@ -206,42 +206,42 @@ class ConfigParser:
         if self.config["loss"]["type"] == "BCE_with_logits" or self.config["loss"]["type"] == "balanced_BCE_with_logits":
             assert self.config["arch"]["args"]["multi_label_training"] \
                    and not self.config["arch"]["args"]["apply_final_activation"] \
-                   and not self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
-                   and not self.config["metrics"]["additional_metrics_args"]["log_probs"] \
-                   and self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
+                   and not self.config["metric_cols"]["additional_metrics_args"]["sigmoid_probs"] \
+                   and not self.config["metric_cols"]["additional_metrics_args"]["log_probs"] \
+                   and self.config["metric_cols"]["additional_metrics_args"]["logits"], "The used loss does not " \
                                                                                     "fit to the rest of the " \
                                                                                     "configuration"
         elif self.config["loss"]["type"] == "BCE":
             assert self.config["arch"]["args"]["multi_label_training"] \
                    and self.config["arch"]["args"]["apply_final_activation"] \
-                   and self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
-                   and not self.config["metrics"]["additional_metrics_args"]["log_probs"] \
-                   and not self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
+                   and self.config["metric_cols"]["additional_metrics_args"]["sigmoid_probs"] \
+                   and not self.config["metric_cols"]["additional_metrics_args"]["log_probs"] \
+                   and not self.config["metric_cols"]["additional_metrics_args"]["logits"], "The used loss does not " \
                                                                                         "fit to the rest of the " \
                                                                                         "configuration "
         elif self.config["loss"]["type"] == "nll_loss":
             assert not self.config["arch"]["args"]["multi_label_training"] \
                    and self.config["arch"]["args"]["apply_final_activation"] \
-                   and not self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
-                   and self.config["metrics"]["additional_metrics_args"]["log_probs"] \
-                   and not self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
+                   and not self.config["metric_cols"]["additional_metrics_args"]["sigmoid_probs"] \
+                   and self.config["metric_cols"]["additional_metrics_args"]["log_probs"] \
+                   and not self.config["metric_cols"]["additional_metrics_args"]["logits"], "The used loss does not " \
                                                                                         "fit to the rest of the " \
                                                                                         "configuration "
         elif self.config["loss"]["type"] == "cross_entropy_loss" or self.config["loss"]["type"] == "balanced_cross_entropy":
             assert not self.config["arch"]["args"]["multi_label_training"] \
                    and not self.config["arch"]["args"]["apply_final_activation"] \
-                   and not self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
-                   and not self.config["metrics"]["additional_metrics_args"]["log_probs"] \
-                   and self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
+                   and not self.config["metric_cols"]["additional_metrics_args"]["sigmoid_probs"] \
+                   and not self.config["metric_cols"]["additional_metrics_args"]["log_probs"] \
+                   and self.config["metric_cols"]["additional_metrics_args"]["logits"], "The used loss does not " \
                                                                                     "fit to the rest of the " \
                                                                                     "configuration "
 
-        assert (self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] ^
-                self.config["metrics"]["additional_metrics_args"]["log_probs"]
-                ^ self.config["metrics"]["additional_metrics_args"]["logits"]) and not \
-                   (self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"]
-                    and self.config["metrics"]["additional_metrics_args"]["log_probs"]
-                    and self.config["metrics"]["additional_metrics_args"]["logits"]), \
+        assert (self.config["metric_cols"]["additional_metrics_args"]["sigmoid_probs"] ^
+                self.config["metric_cols"]["additional_metrics_args"]["log_probs"]
+                ^ self.config["metric_cols"]["additional_metrics_args"]["logits"]) and not \
+                   (self.config["metric_cols"]["additional_metrics_args"]["sigmoid_probs"]
+                    and self.config["metric_cols"]["additional_metrics_args"]["log_probs"]
+                    and self.config["metric_cols"]["additional_metrics_args"]["logits"]), \
             "Exactly one of the three must be true"
 
 

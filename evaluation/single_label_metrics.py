@@ -5,10 +5,10 @@ from sklearn.metrics import confusion_matrix, multilabel_confusion_matrix, \
     accuracy_score, top_k_accuracy_score, roc_auc_score, f1_score, balanced_accuracy_score, classification_report
 
 
-# Macro metrics: Macro-level metrics gives equal weight to each class
+# Macro metric_cols: Macro-level metric_cols gives equal weight to each class
 #       => Each class has the same weight in the average
 #       => There is no distinction between highly and poorly populated classes
-# Micro metrics: Micro-level metrics weight all items equally.
+# Micro metric_cols: Micro-level metric_cols weight all items equally.
 #       => Considers all the units together, without taking into consideration possible differences between classes
 #       => Classes with more observations will have more influence in the metric
 #       => Biases the classes towards the most populated class
@@ -17,7 +17,7 @@ from sklearn.metrics import confusion_matrix, multilabel_confusion_matrix, \
 from torchmetrics import Precision, Accuracy, Recall, ROC, F1Score
 from torchmetrics.classification.auroc import AUROC
 
-# TODO: This file has not yet been checked for API updates, since single label metrics are not used for the Macro paper
+# TODO: This file has not yet been checked for API updates, since single label metric_cols are not used for the Macro paper
 
 # ----------------------------------- SKlearn Metric -----------------------------------------------
 
@@ -52,10 +52,10 @@ def _sk_f1(output, target, log_probs, logits, labels, average):
     :param average: Determines the type of averaging performed on the data (if not None).
         Parameter values useful for this application:
         None: The scores for each class are returned
-        'micro': Calculate metrics globally by counting the total true positives, false negatives and false positives.
-        'macro': Calculate metrics for each label, and find their unweighted mean.
+        'micro': Calculate metric_cols globally by counting the total true positives, false negatives and false positives.
+        'macro': Calculate metric_cols for each label, and find their unweighted mean.
                     This does not take label imbalance into account.
-        'weighted': Calculate metrics for each label, and find their average weighted by support
+        'weighted': Calculate metric_cols for each label, and find their average weighted by support
         (the number of true instances for each label).
         This alters ‘macro’ to account for label imbalance; can result in F-score that is not between precision & recall
 
@@ -87,9 +87,9 @@ def _sk_roc_auc(output, target, log_probs, logits, labels, average, multi_class_
     :param labels: Needed for multiclass targets. List of labels that index the classes in output
     :param average: In the multiclass-case, either ‘macro’ or ‘weighted’ or None
         None:       The scores for each class are returned
-        ‘macro’:    Calculate metrics for each label, and find their unweighted mean.
+        ‘macro’:    Calculate metric_cols for each label, and find their unweighted mean.
                     This does not take label imbalance into account.
-        ‘weighted’: Calculate metrics for each label, and find their average, weighted by support
+        ‘weighted’: Calculate metric_cols for each label, and find their average, weighted by support
                     (the number of true instances for each label).
     :param multi_class_cfg: Must be specified
         'ovr': One-vs-rest. Computes the AUC of each class against the rest, sensitive to class imbalance even

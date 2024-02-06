@@ -82,14 +82,14 @@ def test_model_with_threshold(config, cv_data_dir=None, test_idx=None, k_fold=No
     multi_label_training = config['arch']['args']['multi_label_training']
     class_labels = data_loader.dataset.class_labels
 
-    # Store potential parameters needed for metrics
+    # Store potential parameters needed for metric_cols
     _param_dict = {
         "thresholds": thresholds,
         "labels": class_labels,
         "device": device,
-        "sigmoid_probs": config["metrics"]["additional_metrics_args"].get("sigmoid_probs", False),
-        "log_probs": config["metrics"]["additional_metrics_args"].get("log_probs", False),
-        "logits": config["metrics"]["additional_metrics_args"].get("logits", False),
+        "sigmoid_probs": config["metric_cols"]["additional_metrics_args"].get("sigmoid_probs", False),
+        "log_probs": config["metric_cols"]["additional_metrics_args"].get("log_probs", False),
+        "logits": config["metric_cols"]["additional_metrics_args"].get("logits", False),
         "pos_weights": data_loader.dataset.get_ml_pos_weights(
             idx_list=list(range(len(data_loader.sampler))), mode='test'),
         "class_weights": data_loader.dataset.get_inverse_class_frequency(
@@ -140,7 +140,7 @@ def test_model_with_threshold(config, cv_data_dir=None, test_idx=None, k_fold=No
             if type(output) is tuple:
                 output, attention_weights = output
 
-            # Detach tensors needed for further tracing and metrics calculation to remove them from the graph
+            # Detach tensors needed for further tracing and metric_cols calculation to remove them from the graph
             detached_output = output.detach().cpu()
             detached_target = target.detach().cpu()
             if not multi_label_training:
@@ -153,7 +153,7 @@ def test_model_with_threshold(config, cv_data_dir=None, test_idx=None, k_fold=No
 
             # Compute the loss on the test set
             args = inspect.signature(loss_fn).parameters.values()
-            # Output and target are needed for all metrics! Only consider other args WITHOUT default
+            # Output and target are needed for all metric_cols! Only consider other args WITHOUT default
             additional_args = [arg.name for arg in args
                                if arg.name not in ('output', 'target') and arg.default is arg.empty]
             additional_kwargs = {
@@ -164,10 +164,10 @@ def test_model_with_threshold(config, cv_data_dir=None, test_idx=None, k_fold=No
             # total_loss += loss.item() * batch_size
             metric_tracker.iter_update('loss', loss.item(), n=output.shape[0])
 
-            # Compute the the iteration-based metrics on test set
+            # Compute the the iteration-based metric_cols on test set
             for i, met in enumerate(metrics_iter):
                 args = inspect.signature(met).parameters.values()
-                # Output and target are needed for all metrics! Only consider other args WITHOUT default
+                # Output and target are needed for all metric_cols! Only consider other args WITHOUT default
                 additional_args = [arg.name for arg in args
                                    if arg.name not in ('output', 'target') and arg.default is arg.empty]
                 additional_kwargs = {
@@ -187,11 +187,11 @@ def test_model_with_threshold(config, cv_data_dir=None, test_idx=None, k_fold=No
 
     # ------------ Metrics ------------------------------------
     if len(metrics_epoch) > 0 or len(metrics_epoch_class_wise) > 0:
-        # Finally, the epoch-based metrics need to be updated
-        # For this, calculate both, the normal epoch-based metrics as well as the class-wise epoch-based metrics
+        # Finally, the epoch-based metric_cols need to be updated
+        # For this, calculate both, the normal epoch-based metric_cols as well as the class-wise epoch-based metric_cols
         for met in metrics_epoch:
             args = inspect.signature(met).parameters.values()
-            # Output and target are needed for all metrics! Only consider other args WITHOUT default
+            # Output and target are needed for all metric_cols! Only consider other args WITHOUT default
             additional_args = [arg.name for arg in args
                                if arg.name not in ('output', 'target') and arg.default is arg.empty]
             additional_kwargs = {
@@ -205,10 +205,10 @@ def test_model_with_threshold(config, cv_data_dir=None, test_idx=None, k_fold=No
                 metric_tracker.epoch_update(met.__name__, met(target=det_targets, output=det_outputs,
                                                               **additional_kwargs))
 
-        # This holds for the class-wise, epoch-based metrics as well
+        # This holds for the class-wise, epoch-based metric_cols as well
         for met in metrics_epoch_class_wise:
             args = inspect.signature(met).parameters.values()
-            # Output and target are needed for all metrics! Only consider other args WITHOUT default
+            # Output and target are needed for all metric_cols! Only consider other args WITHOUT default
             additional_args = [arg.name for arg in args
                                if arg.name not in ('output', 'target') and arg.default is arg.empty]
             additional_kwargs = {
@@ -408,14 +408,14 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
     elif config['arch']['type'] == 'FinalModel':
         import model.final_model as module_arch
     elif config['arch']['type'] == 'FinalModelMultiBranchOld':
-        import model.final_model_multibranch_old as module_arch
+        import model.old.final_model_multibranch_old as module_arch
     elif config['arch']['type'] == 'FinalModelMultiBranch':
         import model.final_model_multibranch as module_arch
 
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric
     else:
-        # raise NotImplementedError("Single label metrics haven't been checked after the Python update! Do not use them!")
+        # raise NotImplementedError("Single label metric_cols haven't been checked after the Python update! Do not use them!")
         import evaluation.single_label_metrics as module_metric
 
     if not cv_active:
@@ -472,22 +472,22 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
     model = model.to(device)
     model.eval()
 
-    # get function handles of loss and metrics
+    # get function handles of loss and metric_cols
     # Important: The method config['loss'] must exist in the loss module (<module 'model.loss' >)
-    # Equivalently, all metrics specified in the context must exist in the metrics module
+    # Equivalently, all metric_cols specified in the context must exist in the metric_cols module
     loss_fn = getattr(module_loss, config['loss']['type'])
     # if config['arch']['args']['multi_label_training']:
-    #     metrics_iter = [getattr(module_metric, met) for met in config['metrics']['ml']['per_iteration'].keys()]
-    #     metrics_epoch = [getattr(module_metric, met) for met in config['metrics']['ml']['per_epoch']]
+    #     metrics_iter = [getattr(module_metric, met) for met in config['metric_cols']['ml']['per_iteration'].keys()]
+    #     metrics_epoch = [getattr(module_metric, met) for met in config['metric_cols']['ml']['per_epoch']]
     #     metrics_epoch_class_wise = [getattr(module_metric, met) for met in
-    #                                 config['metrics']['ml']['per_epoch_class_wise']]
+    #                                 config['metric_cols']['ml']['per_epoch_class_wise']]
     # else:
-    #     metrics_iter = [getattr(module_metric, met) for met in config['metrics']['sl']['per_iteration'].keys()]
-    #     metrics_epoch = [getattr(module_metric, met) for met in config['metrics']['sl']['per_epoch']]
+    #     metrics_iter = [getattr(module_metric, met) for met in config['metric_cols']['sl']['per_iteration'].keys()]
+    #     metrics_epoch = [getattr(module_metric, met) for met in config['metric_cols']['sl']['per_epoch']]
     #     metrics_epoch_class_wise = [getattr(module_metric, met) for met in
-    #                                 config['metrics']['sl']['per_epoch_class_wise']]
+    #                                 config['metric_cols']['sl']['per_epoch_class_wise']]
 
-    # HARD-CODE the metrics to calc here
+    # HARD-CODE the metric_cols to calc here
     # The sk-summary report is used automatically
     # Thus, the support and class-wise, w-avg and micro-avg for Precision, Recall, F1 are always contained and don't
     # need to be specified below
@@ -521,13 +521,13 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
     # total_metrics_epoch = torch.zeros(len(metrics_epoch))
     # total_metrics_epoch_class_wise = torch.zeros(len(metrics_epoch_class_wise))
 
-    # Store potential parameters needed for metrics
+    # Store potential parameters needed for metric_cols
     _param_dict = {
         "labels": class_labels,
         "device": device,
-        "sigmoid_probs": config["metrics"]["additional_metrics_args"].get("sigmoid_probs", False),
-        "log_probs": config["metrics"]["additional_metrics_args"].get("log_probs", False),
-        "logits": config["metrics"]["additional_metrics_args"].get("logits", False),
+        "sigmoid_probs": config["metric_cols"]["additional_metrics_args"].get("sigmoid_probs", False),
+        "log_probs": config["metric_cols"]["additional_metrics_args"].get("log_probs", False),
+        "logits": config["metric_cols"]["additional_metrics_args"].get("logits", False),
         "pos_weights": data_loader.dataset.get_ml_pos_weights(
             idx_list=list(range(len(data_loader.sampler))),
             mode='test',
@@ -589,7 +589,7 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
                     # single-branch network
                     output, attention_weights = output
 
-            # Detach tensors needed for further tracing and metrics calculation to remove them from the graph
+            # Detach tensors needed for further tracing and metric_cols calculation to remove them from the graph
             detached_output = output.detach().cpu()
             detached_target = target.detach().cpu()
             if not multi_label_training:
@@ -602,7 +602,7 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
 
             # Compute the loss on the test set
             args = inspect.signature(loss_fn).parameters.values()
-            # Output and target are needed for all metrics! Only consider other args WITHOUT default
+            # Output and target are needed for all metric_cols! Only consider other args WITHOUT default
             additional_args = [arg.name for arg in args
                                if arg.name not in ('output', 'target') and arg.default is arg.empty]
 
@@ -632,10 +632,10 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
             # total_loss += loss.item() * batch_size
             metric_tracker.iter_update('loss', loss.item(), n=output.shape[0])
 
-            # Compute the the iteration-based metrics on test set
+            # Compute the the iteration-based metric_cols on test set
             for i, met in enumerate(metrics_iter):
                 args = inspect.signature(met).parameters.values()
-                # Output and target are needed for all metrics! Only consider other args WITHOUT default
+                # Output and target are needed for all metric_cols! Only consider other args WITHOUT default
                 additional_args = [arg.name for arg in args
                                    if arg.name not in ('output', 'target') and arg.default is arg.empty]
                 additional_kwargs = {
@@ -661,11 +661,11 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
 
     # ------------ Metrics ------------------------------------
     if len(metrics_epoch) > 0 or len(metrics_epoch_class_wise) > 0:
-        # Finally, the epoch-based metrics need to be updated
-        # For this, calculate both, the normal epoch-based metrics as well as the class-wise epoch-based metrics
+        # Finally, the epoch-based metric_cols need to be updated
+        # For this, calculate both, the normal epoch-based metric_cols as well as the class-wise epoch-based metric_cols
         for met in metrics_epoch:
             args = inspect.signature(met).parameters.values()
-            # Output and target are needed for all metrics! Only consider other args WITHOUT default
+            # Output and target are needed for all metric_cols! Only consider other args WITHOUT default
             additional_args = [arg.name for arg in args
                                if arg.name not in ('output', 'target') and arg.default is arg.empty]
             additional_kwargs = {
@@ -679,10 +679,10 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
                 metric_tracker.epoch_update(met.__name__, met(target=det_targets, output=det_outputs,
                                                               **additional_kwargs))
 
-        # This holds for the class-wise, epoch-based metrics as well
+        # This holds for the class-wise, epoch-based metric_cols as well
         for met in metrics_epoch_class_wise:
             args = inspect.signature(met).parameters.values()
-            # Output and target are needed for all metrics! Only consider other args WITHOUT default
+            # Output and target are needed for all metric_cols! Only consider other args WITHOUT default
             additional_args = [arg.name for arg in args
                                if arg.name not in ('output', 'target') and arg.default is arg.empty]
             additional_kwargs = {

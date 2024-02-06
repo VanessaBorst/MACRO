@@ -1,40 +1,26 @@
 {
-    "name": "FinalModel_MACRO_CV",
-    "run_details": "_noFC-0.2-6-12_entmax15",
-    "n_gpu": 1,
-    "arch": {
-        "type": "FinalModel",
-        "args": {
-            "apply_final_activation": false,
-            "multi_label_training": true,
-            "down_sample": "conv",
-            "vary_channels": true,
-            "pos_skip": "all",
-            "norm_type": "BN",
-            "norm_pos": "all",
-            "norm_before_act": true,
-            "use_pre_activation_design": true,
-            "use_pre_conv": true,
-            "pre_conv_kernel": 16,
-            "discard_FC_before_MH": true,
-            "dropout_attention": 0.2,
-            "heads": 6,
-            "gru_units": 12,
-            "attention_type": "v1",
-            "use_reduced_head_dims": true,
-            "attention_activation_function": "entmax15"
-        }
+  "name": "Multibranch_MACRO_ParamStudy",
+  "run_details": "",
+  "n_gpu": 1,
+  "arch": {
+    "type": "FinalModelMultiBranch",
+    "args": {
+      "apply_final_activation": false,
+      "multi_label_training": true,
+      "branchNet_reduce_channels": false,
+      "branchNet_discard_FC_before_MH":true,
+      "branchNet_gru_units" : 12,
+      "multi_branch_discard_FC_before_MH" : true,
+      "use_conv_reduction_block": false
+    }
   },
   "data_loader": {
     "type": "ECGDataLoader",
     "cross_valid": {
-      "enabled": true,
-      "k_fold": 10,
-      "data_dir": "data/CinC_CPSC/cross_valid/250Hz/60s",
-      "stratified_k_fold": false
+      "enabled": false
     },
     "args": {
-      "data_dir": "",
+      "data_dir": "data/CinC_CPSC/train/preprocessed/4ms/eq_len_60s",
       "batch_size": 64,
       "shuffle": true,
       "validation_split": 0.25,
@@ -42,7 +28,7 @@
       "pin_memory": false
     },
     "overfit_single_batch": false,
-    "test_dir": ""
+    "test_dir": "data/CinC_CPSC/test/preprocessed/4ms/eq_len_60s"
   },
   "optimizer": {
     "type": "Adam",
@@ -53,8 +39,10 @@
     }
   },
   "loss": {
-    "type": "BCE_with_logits",
-    "add_args": {}
+    "type": "multi_branch_BCE_with_logits",
+    "add_args": {
+      "lambda_balance": 1
+    }
   },
   "metrics": {
     "ml": {
@@ -86,6 +74,7 @@
     "verbosity": 2,
     "monitor": "max val_macro_sk_f1",
     "early_stop": 20,
+    "minimum_diff_for_improvement": 0.001,
     "tensorboard": true,
     "try_run": false,
     "profiler_active": false

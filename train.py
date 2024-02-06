@@ -230,15 +230,29 @@ def tuning_params(name):
         }
     elif name == "FinalModelMultiBranch":
         return {
-            "multi_branch_heads": tune.grid_search([1, 2, 3, 8]),
-            "conv_reduction_first_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
-            "conv_reduction_second_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
-            "conv_reduction_third_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
-            "vary_channels_lighter_version": False,  # tune.grid_search([True, False]),
-            "discard_FC_before_MH": True,
-            "branchNet_gru_units": 24,
-            "branchNet_heads": 2
+            # BranchNet specifics
+            # "branchNet_reduce_channels": tune.grid_search([True, False]),
+            "branchNet_heads": tune.grid_search([6, 8]),        # Add 12 later if time left
+            "branchNet_attention_dropout": tune.grid_search([0.2, 0.4]),
+            # Multibranch specifics
+            "multi_branch_heads": tune.grid_search([24]),  # Add 12 later if time left
+            "multi_branch_attention_dropout": tune.grid_search([0.2, 0.4]),
+            # "use_conv_reduction_block": True
+            # "conv_reduction_first_kernel_size": 3,  # tune.grid_search([3, 16]),  # add 16, 24 later if time left
+            # "conv_reduction_second_kernel_size": 3,  # tune.grid_search([3, 16]),  # add 6, 24 later if time left
+            # "conv_reduction_third_kernel_size": 3,  # tune.grid_search([3, 16]),  # add 6, 24 later if time left
         }
+        # Old
+        # return {
+        #     "multi_branch_heads": tune.grid_search([1, 2, 3, 8]),
+        #     "conv_reduction_first_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
+        #     "conv_reduction_second_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
+        #     "conv_reduction_third_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
+        #     "vary_channels_lighter_version": False,  # tune.grid_search([True, False]),
+        #     "discard_FC_before_MH": True,
+        #     "branchNet_gru_units": 24,
+        #     "branchNet_heads": 2
+        # }
     else:
         return None
 
@@ -610,11 +624,17 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
     elif main_config["arch"]["type"] == "FinalModelMultiBranch":
         reporter = CLIReporter(
             parameter_columns={
-                "multi_branch_heads": "H",
-                "conv_reduction_first_kernel_size": "1st k",
-                "conv_reduction_second_kernel_size": "2nd k",
-                "conv_reduction_third_kernel_size": "3rd k",
-                "vary_channels_lighter_version": "Vary Channels Light"
+
+                "branchNet_reduce_channels": "BN_Rdc",
+                "branchNet_heads": "BN_H",
+                "branchNet_attention_dropout": "BN_DP",
+                # Multibranch specifics
+                "multi_branch_heads": "MB_H",
+                "multi_branch_attention_dropout": "MB_DP",
+                "use_conv_reduction_block": "MB_ConvRed",
+                "conv_reduction_first_kernel_size": "ConvRed_1st",
+                "conv_reduction_second_kernel_size": "ConvRed_2nd",
+                "conv_reduction_third_kernel_size": "ConvRed_3rd"
             },
             metric_columns=["loss", "val_loss",
                             "val_macro_sk_f1",
@@ -633,8 +653,11 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
         case "FinalModel":
             # Five trials in parallel
             num_gpu = 0.2
+        case "FinalModelMultiBranch":
+            # Two trials in parallel
+            num_gpu = 0.5
         case "BaselineModelWithSkipConnectionsV2" | "BaselineModelWithSkipConnectionsAndNormV2" | \
-             "BaselineModelWithSkipConnectionsAndNormV2PreActivation" | "FinalModelMultiBranch":
+             "BaselineModelWithSkipConnectionsAndNormV2PreActivation":
             # One trial at a time
             num_gpu = 1
         case _:
@@ -741,14 +764,14 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
     elif config['arch']['type'] == 'FinalModel':
         import model.final_model as module_arch
     elif config['arch']['type'] == 'FinalModelMultiBranchOld':
-        import model.final_model_multibranch_old as module_arch
+        import model.old.final_model_multibranch_old as module_arch
     elif config['arch']['type'] == 'FinalModelMultiBranch':
         import model.final_model_multibranch as module_arch
 
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric
     else:
-        # raise NotImplementedError("Single label metrics haven't been checked after the Python update! Do not use them!")
+        # raise NotImplementedError("Single label metric_cols haven't been checked after the Python update! Do not use them!")
         import evaluation.single_label_metrics as module_metric
 
     if use_tune:
@@ -797,20 +820,20 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
     if len(device_ids) > 1:
         model = torch.nn.DataParallel(model, device_ids=device_ids)
 
-    # Get function handles of loss and metrics
+    # Get function handles of loss and metric_cols
     # Important: The method config['loss'] must exist in the loss module (<module 'model.loss' >)
-    # Equivalently, all metrics specified in the context must exist in the metrics modul
+    # Equivalently, all metric_cols specified in the context must exist in the metric_cols modul
     criterion = getattr(module_loss, config['loss']['type'])
     if config['arch']['args']['multi_label_training']:
-        metrics_iter = [getattr(module_metric, met) for met in config['metrics']['ml']['per_iteration'].keys()]
-        metrics_epoch = [getattr(module_metric, met) for met in config['metrics']['ml']['per_epoch']]
+        metrics_iter = [getattr(module_metric, met) for met in config['metric_cols']['ml']['per_iteration'].keys()]
+        metrics_epoch = [getattr(module_metric, met) for met in config['metric_cols']['ml']['per_epoch']]
         metrics_epoch_class_wise = [getattr(module_metric, met) for met in
-                                    config['metrics']['ml']['per_epoch_class_wise']]
+                                    config['metric_cols']['ml']['per_epoch_class_wise']]
     else:
-        metrics_iter = [getattr(module_metric, met) for met in config['metrics']['sl']['per_iteration'].keys()]
-        metrics_epoch = [getattr(module_metric, met) for met in config['metrics']['sl']['per_epoch']]
+        metrics_iter = [getattr(module_metric, met) for met in config['metric_cols']['sl']['per_iteration'].keys()]
+        metrics_epoch = [getattr(module_metric, met) for met in config['metric_cols']['sl']['per_epoch']]
         metrics_epoch_class_wise = [getattr(module_metric, met) for met in
-                                    config['metrics']['sl']['per_epoch_class_wise']]
+                                    config['metric_cols']['sl']['per_epoch_class_wise']]
 
     # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())

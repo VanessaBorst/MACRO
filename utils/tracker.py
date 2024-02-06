@@ -11,8 +11,8 @@ smooth = 0  # 1e-6
 
 class MetricTracker:
     """
-    Internally keeps track of the loss and the metrics by means of a dataframe
-    If specified, each update of the metrics is also passed to the TensorboardWriter
+    Internally keeps track of the loss and the metric_cols by means of a dataframe
+    If specified, each update of the metric_cols is also passed to the TensorboardWriter
     """
 
     def __init__(self, keys_iter: list, keys_epoch: list, keys_epoch_class_wise: list, labels: list, writer=None):
@@ -31,7 +31,7 @@ class MetricTracker:
         self._epoch = 0
         self._data_epoch = pd.DataFrame(index=keys_epoch + all_keys_epoch_class_wise, columns=['mean'],
                                         dtype=np.float64)
-        # Set the print option of pandas to at least twice the num of metrics, since they may later be printed together
+        # Set the print option of pandas to at least twice the num of metric_cols, since they may later be printed together
         # (one time for train, one time for valid)
         pd.set_option('display.max_rows', 100)
         self.reset()
@@ -96,7 +96,7 @@ class MetricTracker:
         self.avg()
         self.std()
         iter_result = self._data_iter[['mean', 'std']]
-        # Send the mean epoch values for the iteration metrics to the tensorboard writer as well
+        # Send the mean epoch values for the iteration metric_cols to the tensorboard writer as well
         if self.writer is not None:
             for key, row in iter_result.iterrows():
                 self.writer.add_scalar('epoch_' + key, iter_result.at[key, 'mean'], global_step=self._epoch)
@@ -106,7 +106,7 @@ class MetricTracker:
 class ConfusionMatrixTracker:
     """
         Internally keeps track of the confusion matrix and the class-wise confusion matrices by means of dataframes
-        If specified, each update of the metrics is also passed to the TensorboardWriter
+        If specified, each update of the metric_cols is also passed to the TensorboardWriter
     """
 
     def __init__(self, *keys, writer=None, multi_label_training=True):

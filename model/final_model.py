@@ -43,12 +43,12 @@ class FinalModel(BaseModel):
                  use_reduced_head_dims=None,
                  attention_activation_function=None,
                  # Multibranch-specific parameters
-                 act_as_branch_net=False,                       # NEW (BranchNet)
-                 vary_channels_lighter_version=False,           # NEW (BranchNet)
+                 act_as_branch_net=False,  # NEW (BranchNet)
+                 vary_channels_lighter_version=False,  # NEW (BranchNet)
                  ):
         """
         :param apply_final_activation: whether the Sigmoid(sl) or the LogSoftmax(ml) should be applied at the end
-        :param multi_label_training: if true, Sigmoid is used as final activation, else the LogSoftmax
+        :param multi_label_training: if True, Sigmoid is used as final activation, else the LogSoftmax
         :param num_classes: Num of classes to classify
         :param num_cnn_blocks: Num of CNN blocks to use
         """
@@ -320,9 +320,8 @@ class FinalModel(BaseModel):
         x, last_hidden_state = self._biGRU(x)
         x = self._biGru_activation_do(x)
 
-        if self._act_as_branch_net:
-            # Copy BiGRU output for passing it to the MultiBranchNet concatenation
-            single_branch_biGRU_output = x
+        # Copy BiGRU output for passing it to the MultiBranchNet concatenation
+        single_branch_biGRU_output = x if self._act_as_branch_net else None
 
         x = self._multi_head_contextual_attention(x)
         x = self._batchNorm(x)
@@ -335,20 +334,24 @@ class FinalModel(BaseModel):
 
 
 if __name__ == "__main__":
-    model = FinalModel(apply_final_activation=False,
-                       multi_label_training=True,
-                       down_sample="conv",
-                       vary_channels=True,
-                       pos_skip="all",
-                       norm_before_act=True,
-                       norm_pos="all",
-                       norm_type="BN",
-                       use_pre_activation_design=True,
-                       use_pre_conv=True,
-                       pre_conv_kernel=16,
-                       discard_FC_before_MH=False,
-                       dropout_attention=0.3,
-                       gru_units=32,
-                       heads=16)
+    model = FinalModel(
+        apply_final_activation=False,
+        multi_label_training=True,
+        down_sample="conv",
+        vary_channels=True,
+        pos_skip="all",
+        norm_type="BN",
+        norm_pos="all",
+        norm_before_act=True,
+        use_pre_activation_design=True,
+        use_pre_conv=True,
+        pre_conv_kernel=16,
+        discard_FC_before_MH=True,
+        dropout_attention=0.2,
+        heads=6,
+        gru_units=12,
+        attention_type="v1",
+        use_reduced_head_dims=True,
+        attention_activation_function="entmax15")
     # print(str(model))
-    summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "kernel_size", "num_params"])
+    summary(model, input_size=(2, 12, 15000), col_names=["input_size", "output_size", "kernel_size", "num_params"])

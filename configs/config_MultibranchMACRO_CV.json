@@ -1,30 +1,26 @@
 {
-    "name": "FinalModel_MACRO_CV",
-    "run_details": "_noFC-0.2-6-12_entmax15",
+    "name": "Multibranch_MACRO_CV",
+    "run_details": "convRedBlock_333_0.4_8_false_0.2_24",
     "n_gpu": 1,
     "arch": {
-        "type": "FinalModel",
+        "type": "FinalModelMultiBranch",
         "args": {
             "apply_final_activation": false,
             "multi_label_training": true,
-            "down_sample": "conv",
-            "vary_channels": true,
-            "pos_skip": "all",
-            "norm_type": "BN",
-            "norm_pos": "all",
-            "norm_before_act": true,
-            "use_pre_activation_design": true,
-            "use_pre_conv": true,
-            "pre_conv_kernel": 16,
-            "discard_FC_before_MH": true,
-            "dropout_attention": 0.2,
-            "heads": 6,
-            "gru_units": 12,
-            "attention_type": "v1",
-            "use_reduced_head_dims": true,
-            "attention_activation_function": "entmax15"
+            "branchNet_discard_FC_before_MH": true,
+            "branchNet_gru_units": 12,
+            "multi_branch_discard_FC_before_MH": true,
+            "use_conv_reduction_block": true,
+            "conv_reduction_first_kernel_size": 3,
+            "conv_reduction_second_kernel_size": 3,
+            "conv_reduction_third_kernel_size": 3,
+            "branchNet_attention_dropout": 0.4,
+            "branchNet_heads": 8,
+            "branchNet_reduce_channels": false,
+            "multi_branch_attention_dropout": 0.2,
+            "multi_branch_heads": 24
         }
-  },
+    },
   "data_loader": {
     "type": "ECGDataLoader",
     "cross_valid": {
@@ -53,8 +49,10 @@
     }
   },
   "loss": {
-    "type": "BCE_with_logits",
-    "add_args": {}
+    "type": "multi_branch_BCE_with_logits",
+    "add_args": {
+      "lambda_balance": 1
+    }
   },
   "metrics": {
     "ml": {

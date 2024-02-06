@@ -65,7 +65,7 @@ def fine_tune_thresholds(config, cv_data_dir=None, valid_idx=None, k_fold=None):
             if type(output) is tuple:
                 output, attention_weights = output
 
-            # Detach tensors needed for further tracing and metrics calculation to remove them from the graph
+            # Detach tensors needed for further tracing and metric_cols calculation to remove them from the graph
             detached_output = output.detach().cpu()
             detached_target = target.detach().cpu()
 

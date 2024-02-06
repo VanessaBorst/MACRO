@@ -6,11 +6,8 @@ import torch
 from torchinfo import summary
 
 from base import BaseModel
-from final_model import FinalModel
-from layers.BasicBlock1dWithNorm import BasicBlock1dWithNorm
-from layers.BasicBlock1dWithNormPreActivationDesign import BasicBlock1dWithNormPreactivation
-from layers.ContextualAttention import MultiHeadContextualAttention
 from model.baseline_model_with_MHAttention_v2 import _get_attention_module
+from model.final_model import FinalModel
 
 
 class FinalModelMultiBranch(BaseModel):
@@ -171,49 +168,6 @@ class FinalModelMultiBranch(BaseModel):
             x = self._final_activation(x)
 
         return x, [single_lead_results[i][0] for i in range(12)]
-
-
-# TODO Add attention activation function, reduce head dim and attention type
-class FinalModelBranchNet(FinalModel):
-    def __init__(self,
-                 # General parameters
-                 apply_final_activation=False,
-                 multi_label_training=True,
-                 input_channel=1,
-                 num_classes=9,
-                 # CNN-related parameters
-                 reduce_channels=False,
-                 # GRU and MHA-related parameters
-                 discard_FC_before_MH=True,
-                 gru_units=12,
-                 heads=3,
-                 attention_dropout=0.3,  # MA model: 0.2,
-                 attention_type="v1",
-                 attention_activation_function="entmax15",
-                 use_reduced_head_dims=True):
-        super().__init__(
-            # General parameters
-            apply_final_activation=apply_final_activation,
-            multi_label_training=multi_label_training,
-            input_channel=input_channel,
-            num_classes=num_classes,
-            # CNN-related parameters (almost all as in the default config)
-            pos_skip="all",
-            # GRU and MHA-related parameters
-            gru_units=gru_units,
-            heads=heads,
-            dropout_attention=attention_dropout,
-            discard_FC_before_MH=discard_FC_before_MH,
-            attention_type=attention_type,
-            use_reduced_head_dims=use_reduced_head_dims,
-            attention_activation_function=attention_activation_function,
-            # Multibranch-specific parameters
-            act_as_branch_net=True,
-            vary_channels_lighter_version=reduce_channels,
-        )
-
-    def forward(self, x):
-        return super().forward(x)
 
 
 #
@@ -523,16 +477,16 @@ class FinalModelBranchNet(FinalModel):
 
 
 if __name__ == "__main__":
-    # model = FinalModelMultiBranch(multi_branch_heads=2)
+    model = FinalModelMultiBranch(multi_branch_heads=2)
     # summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "kernel_size", "num_params"],
     #         depth=5)
 
-    model_part = FinalModelBranchNet(apply_final_activation=False,
-                                     multi_label_training=True,
-                                     input_channel=1,
-                                     num_classes=9,
-                                     gru_units=24,
-                                     attention_dropout=0.3,  # MA model: 0.2,
-                                     heads=2,
-                                     discard_FC_before_MH=True)
+    model_part = FinalModel(apply_final_activation=False,
+                            multi_label_training=True,
+                            input_channel=1,
+                            num_classes=9,
+                            gru_units=24,
+                            dropout_attention=0.3,  # MA model: 0.2,
+                            heads=2,
+                            discard_FC_before_MH=True)
     summary(model_part, input_size=(2, 1, 72000), col_names=["input_size", "output_size", "kernel_size", "num_params"])

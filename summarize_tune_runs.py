@@ -68,16 +68,35 @@ def _bold_formatter(x, value, num_decimals=2):
 #                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs']
 
 # 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/0810_215444_ml_bs64_rerun_100821_withFC'
-path_to_tune = 'savedVM/models/FinalModel_MACRO_ParamStudy/0123_131029_ml_bs64noFC-12gru-entmax15'
-hyper_params = ['dropout_attention', 'heads']
-integer_vals = ['heads', 'Epochs']
-single_precision = ['dropout_attention']
-desired_col_order = ['dropout_attention', 'heads',
-                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+# path_to_tune = 'savedVM/models/FinalModel_MACRO_ParamStudy/0123_131029_ml_bs64noFC-12gru-entmax15'
+# hyper_params = ['dropout_attention', 'heads']
+# integer_vals = ['heads', 'Epochs']
+# single_precision = ['dropout_attention']
+# desired_col_order = ['dropout_attention', 'heads',
+#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+#                      'm-F1', 'm-ROC-AUC', 'm-Acc',
+#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc',
+#                      'MR', 'Epochs', 'Params']
+
+path_to_tune = 'savedVM/models/Multibranch_MACRO_ParamStudy/0130_135327_ml_bs64_noConvRedBlock'
+hyper_params = ['branchNet_attention_dropout', 'branchNet_heads',
+                # 'branchNet_reduce_channels',
+                # "conv_reduction_first_kernel_size", 'conv_reduction_second_kernel_size',
+                # 'conv_reduction_third_kernel_size',
+                'multi_branch_attention_dropout', 'multi_branch_heads']
+                # 'use_conv_reduction_block']
+
+integer_vals = ['branchNet_heads', 'multi_branch_heads', 'Epochs']
+# integer_vals = ['branchNet_heads', 'conv_reduction_first_kernel_size', 'conv_reduction_second_kernel_size',
+#                 'conv_reduction_third_kernel_size', 'multi_branch_heads', 'Epochs']
+single_precision = ['branchNet_attention_dropout', 'multi_branch_attention_dropout']
+desired_col_order = ['branchNet_attention_dropout', 'branchNet_heads', # 'branchNet_reduce_channels',
+                     'multi_branch_attention_dropout', 'multi_branch_heads',
+                     # 'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
                      'm-F1', 'm-ROC-AUC', 'm-Acc',
                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc',
-                     'MR', 'Epochs', 'Params']
-
+                     'MR', 'Epochs', 'Params',
+                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',]
 
 # 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/0810_215735_ml_bs64_rerun_100821_noFC'
 # Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
@@ -233,7 +252,7 @@ def _append_to_summary(path, df_summary, tune_dict, best_epoch=None, num_params=
     # Update param configuration
     row_values = [_rename_param_value(tune_dict[k]) for k in tune_dict.keys()]
 
-    # Append F1 metrics (class-wise)
+    # Append F1 metric_cols (class-wise)
     if include_class_wise_f1:
         f1_metrics = df_class_wise.loc['f1-score'][cols_class_wise_f1].values.tolist()
         row_values = row_values + f1_metrics
@@ -258,7 +277,7 @@ def _append_to_summary(path, df_summary, tune_dict, best_epoch=None, num_params=
     row_values = row_values + df_single_metrics['sk_subset_accuracy'].values.tolist()
 
     if include_CPSC_scores:
-        # Append single metrics
+        # Append single metric_cols
         row_values = row_values + df_single_metrics[cols_CPSC_scores].values.tolist()[0]
 
     if include_details:
@@ -272,7 +291,7 @@ def _append_to_summary(path, df_summary, tune_dict, best_epoch=None, num_params=
     df_summary.loc[len(df_summary)] = row_values
 
 
-# Loop through the runs and append the tuning parameters as well as the resulting metrics to the summary df
+# Loop through the runs and append the tuning parameters as well as the resulting metric_cols to the summary df
 def _extract_num_params(tune_path):
     with open(os.path.join(tune_path.replace("/models", "/log"), "debug.log"), "r") as file:
         with mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ) as mmapped_file:
@@ -297,7 +316,7 @@ for tune_run in os.listdir(path_to_tune):
         num_params = _extract_num_params(tune_path)
 
         with open(os.path.join(tune_path, "progress.csv"), "r") as file:
-            with open(os.path.join(tune_path,"..","config.json")) as config_file:
+            with open(os.path.join(tune_path, "..", "config.json")) as config_file:
                 config = json.load(config_file)
                 try:
                     early_stop = config.get('trainer').get('early_stop')
@@ -316,9 +335,8 @@ for tune_run in os.listdir(path_to_tune):
                     _append_to_summary(path, df_summary_test, tune_dict)
 
                 except AttributeError as e:
-                    raise Exception ("The provided config does not contain an early stopping setting."
-                          "Re-check the summarize_tune_run.py script to handle this! (cf. line 295)") from e
-
+                    raise Exception("The provided config does not contain an early stopping setting."
+                                    "Re-check the summarize_tune_run.py script to handle this! (cf. line 295)") from e
 
 # Parse integer values as ints
 for col in integer_vals:
@@ -346,7 +364,7 @@ else:
     df_summary_valid_reordered = df_summary_valid
     df_summary_test_reordered = df_summary_test
 
-# Sort the rows by the main metrics
+# Sort the rows by the main metric_cols
 order_by_cols = ['m-F1', 'MR',
                  'W-AVG_F1']  # MA ['W-AVG_F1', 'W-AVG_ROC', 'MR', 'W-AVG_Acc']  # ['m-F1', 'CPCS_F1', 'W-AVG_F1']
 # Round before sorting
