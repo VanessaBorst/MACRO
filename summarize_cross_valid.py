@@ -10,7 +10,8 @@ import pandas as pd
 # 'savedVM_v2/models/FinalModel/cross_vals_sqrtT/final_cross_validation_sqrtT'
 # 'savedVM_v2/models/FinalModel/cross_vals_sqrtT/cross_validation_withFC_0.4_24_32_finetune_BO'
 # path = 'savedVM_v2/models/FinalModel/cross_vals/cross_validation_rerun_withFC_0.3_32_16_finetune_bayesian'
-path = 'savedVM/models/Multibranch_MACRO_CV/0206_122038_ml_bs64noconvRedBlock_0.4_8_false_0.2_24'
+# path = 'savedVM/models/Multibranch_MACRO_CV/0206_122038_ml_bs64noconvRedBlock_0.4_8_false_0.2_24'
+path="savedVM/models/BaselineModel_CV/0207_164052_ml_bs64_250Hz_60s"
 thresholds_active=False
 include_weighted_avg=True
 include_at_least_weighted_F1 = True

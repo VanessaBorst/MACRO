@@ -700,6 +700,14 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None, test
                                                                 sigmoid_probs=_param_dict["sigmoid_probs"],
                                                                 logits=_param_dict["logits"],
                                                                 labels=_param_dict["labels"])
+
+        # TODO can be removed later again
+        if "additional" in config.test_output_dir.name:
+            # Save det_outputs and det_targets to file for further analysis
+            with open(config.test_output_dir / "det_outputs.p", 'wb') as file:
+                pickle.dump(det_outputs, file)
+            with open(config.test_output_dir / "det_targets.p", 'wb') as file:
+                pickle.dump(det_targets, file)
     else:
         fpr, tpr, thresholds = module_metric.torch_roc(output=det_outputs, target=det_targets,
                                                        log_probs=_param_dict["log_probs"],

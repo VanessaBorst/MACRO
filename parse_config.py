@@ -75,16 +75,16 @@ class ConfigParser:
         if self._save_dir is not None:
             write_json(self.config, self.save_dir / 'config.json')
 
-            # if not self._use_tune:
-            # configure logging module if tuning is not active, else do it within the train method
-            setup_logging(self.log_dir)
-            self.log_levels = {
-                0: logging.WARNING,
-                1: logging.INFO,
-                2: logging.DEBUG
-            }
+        # if not self._use_tune:
+        # configure logging module if tuning is not active, else do it within the train method
+        setup_logging(self.log_dir)
+        self.log_levels = {
+            0: logging.WARNING,
+            1: logging.INFO,
+            2: logging.DEBUG
+        }
 
-            self._do_some_sanity_checks()
+        self._do_some_sanity_checks()
 
 
     @classmethod
