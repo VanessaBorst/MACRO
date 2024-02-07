@@ -252,7 +252,7 @@ def _append_to_summary(path, df_summary, tune_dict, best_epoch=None, num_params=
     # Update param configuration
     row_values = [_rename_param_value(tune_dict[k]) for k in tune_dict.keys()]
 
-    # Append F1 metric_cols (class-wise)
+    # Append F1 metrics (class-wise)
     if include_class_wise_f1:
         f1_metrics = df_class_wise.loc['f1-score'][cols_class_wise_f1].values.tolist()
         row_values = row_values + f1_metrics
@@ -277,7 +277,7 @@ def _append_to_summary(path, df_summary, tune_dict, best_epoch=None, num_params=
     row_values = row_values + df_single_metrics['sk_subset_accuracy'].values.tolist()
 
     if include_CPSC_scores:
-        # Append single metric_cols
+        # Append single metrics
         row_values = row_values + df_single_metrics[cols_CPSC_scores].values.tolist()[0]
 
     if include_details:
@@ -291,7 +291,7 @@ def _append_to_summary(path, df_summary, tune_dict, best_epoch=None, num_params=
     df_summary.loc[len(df_summary)] = row_values
 
 
-# Loop through the runs and append the tuning parameters as well as the resulting metric_cols to the summary df
+# Loop through the runs and append the tuning parameters as well as the resulting metrics to the summary df
 def _extract_num_params(tune_path):
     with open(os.path.join(tune_path.replace("/models", "/log"), "debug.log"), "r") as file:
         with mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ) as mmapped_file:
@@ -364,7 +364,7 @@ else:
     df_summary_valid_reordered = df_summary_valid
     df_summary_test_reordered = df_summary_test
 
-# Sort the rows by the main metric_cols
+# Sort the rows by the main metrics
 order_by_cols = ['m-F1', 'MR',
                  'W-AVG_F1']  # MA ['W-AVG_F1', 'W-AVG_ROC', 'MR', 'W-AVG_Acc']  # ['m-F1', 'CPCS_F1', 'W-AVG_F1']
 # Round before sorting

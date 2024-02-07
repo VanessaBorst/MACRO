@@ -1,8 +1,15 @@
 import os
 import pickle
+from itertools import combinations
+
+import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 import scipy.stats as stats
+from scipy.stats import ttest_ind
+from statsmodels.stats.multicomp import pairwise_tukeyhsd
+from statsmodels.stats.multicomp import MultiComparison
+from sklearn.metrics import roc_curve, auc
 
 base_path = 'savedVM/models/'
 model_paths = {'Baseline': 'BaselineModel_CV/0116_145000_ml_bs64_250Hz_60s',
@@ -96,7 +103,7 @@ for model_name, model_path in model_paths.items():
     for fold in range(1, 11):
         row_values_f1 = row_values_AUC = row_values_acc = [fold]
 
-        # Append class-wise metric_cols (class-wise)
+        # Append class-wise metrics (class-wise)
         f1_metrics = df_class_wise.loc[('fold_' + str(fold), 'f1-score')].iloc[0:9].values.tolist()
         row_values_f1 = row_values_f1 + f1_metrics
 
@@ -150,7 +157,7 @@ for model_name, model_path in model_paths.items():
     df_results_acc = pd.concat([df_results_acc, df_results_acc.describe().loc[["mean", "std"]]])
     df_results_acc = df_results_acc.round(3)
 
-    # Add the average metric_cols across all folds to the final result dataframes
+    # Add the average metrics across all folds to the final result dataframes
     df_results_paper[f'{model_name}_F1'] = [f"{df_results_F1.loc['mean'][col]}±{df_results_F1.loc['std'][col]}"
                                             for col in ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
                                                         'm-AVG_F1', 'W-AVG_F1']]
@@ -168,26 +175,86 @@ for model_name, model_path in model_paths.items():
 
 # TODO: Perform statistical tests to check if there is a significant difference in the mean F1 scores
 #  among the three architectures -> not yet proved and working! (Feb 2024)
-# # Check if there is a significant difference in the mean F1 scores among the three architectures
-# df_macro_F1_summary = df_results_macro_averages[[f'{model_names[0]}_F1',
-#                                                  f'{model_names[1]}_F1',
-#                                                  f'{model_names[2]}_F1']]
-# # Perform ANOVA
-# anova_result = stats.f_oneway(df_macro_F1_summary[f'{model_names[0]}_F1'],
-#                               df_macro_F1_summary[f'{model_names[1]}_F1'],
-#                               df_macro_F1_summary[f'{model_names[2]}_F1'])
-#
-# # Check the p-value
-# p_value = anova_result.pvalue
-# # Decide on significance level
-# alpha = 0.05
-#
-# # Print the result
-# if p_value < alpha:
-#     print("There is a significant difference in means among the architectures.")
-#     # Perform post-hoc tests (e.g., Tukey's HSD or Bonferroni correction)
-# else:
-#     print(f"No significant difference in means (F1 scores) among the architectures. The p-value is {p_value}")
+# Check if there is a significant difference in the mean F1 scores among the three architectures
+df_macro_F1_summary = df_results_macro_averages[[f'{model_names[0]}_F1',
+                                                 f'{model_names[1]}_F1',
+                                                 f'{model_names[2]}_F1']]
+# Perform ANOVA
+anova_result = stats.f_oneway(df_macro_F1_summary[f'{model_names[0]}_F1'],
+                              df_macro_F1_summary[f'{model_names[1]}_F1'],
+                              df_macro_F1_summary[f'{model_names[2]}_F1'])
+
+# Check the p-value
+p_value = anova_result.pvalue
+# Decide on significance level
+alpha = 0.05
+
+# Print the result
+if p_value < alpha:
+    print("There is a significant difference in means among the architectures.")
+    # Perform post-hoc tests (e.g., Tukey's HSD or Bonferroni correction)
+
+    # Tukey's Honestly Significant Difference (HSD):
+    # Combine all scores into a single Pandas DataFrame
+    all_scores_df = pd.concat([df_macro_F1_summary[f'{model_names[0]}_F1'],
+                               df_macro_F1_summary[f'{model_names[1]}_F1'],
+                               df_macro_F1_summary[f'{model_names[2]}_F1']], axis=1)
+    # Reshape the DataFrame for Tukey's HSD
+    stacked_scores = all_scores_df.stack().reset_index()
+    stacked_scores.columns = ['Index', 'Architecture', 'Scores']
+
+    # Perform Tukey's HSD
+    result_thsd = pairwise_tukeyhsd(stacked_scores['Scores'], stacked_scores['Architecture'])
+    print(result_thsd)
+
+    # The output will provide confidence intervals and p-values for pairwise comparisons.
+    # Significant differences are identified where the confidence interval does not include zero and the p-value
+    # is below your chosen significance level (e.g., 0.05).
+
+    # Bonferroni Correction
+    # Perform Bonferroni Correction
+    multi_comp = MultiComparison(stacked_scores['Scores'], stacked_scores['Architecture'])
+    result_bonf = multi_comp.allpairtest(stats.ttest_ind, method='bonf')
+
+    # Print the Bonferroni Correction result
+    print(result_bonf[0])
+
+    # Perform Pairwise t-Tests with Bonferroni Correction:
+    # architecture1_scores = df_macro_F1_summary[f'{model_names[0]}_F1'].values
+    # architecture2_scores = df_macro_F1_summary[f'{model_names[1]}_F1'].values
+    # architecture3_scores = df_macro_F1_summary[f'{model_names[2]}_F1'].values
+    # p_values = []
+    # t_stat, p_value = ttest_ind(architecture1_scores, architecture2_scores)
+    # p_values.append(p_value)
+    # t_stat, p_value = ttest_ind(architecture1_scores, architecture3_scores)
+    # p_values.append(p_value)
+    # t_stat, p_value = ttest_ind(architecture2_scores, architecture3_scores)
+    # p_values.append(p_value)
+    #
+    # # Apply Bonferroni Correction: Todo check which of both is the correct way to apply the correction
+    # adjusted_alpha = 0.05 / len(p_values)
+    # significant_pairs = [f'Architecture{i + 1}-Architecture{j + 1}' for i in range(2) for j in range(i + 1, 3) if
+    #                      p_values.pop(0) < adjusted_alpha]
+
+    architectures = all_scores_df.columns
+    pairs = list(combinations(architectures, 2))
+
+    # Perform pairwise t-tests with Bonferroni correction
+    for pair in pairs:
+        architecture1 = all_scores_df[pair[0]]
+        architecture2 = all_scores_df[pair[1]]
+        t_stat, p_value = stats.ttest_ind(architecture1, architecture2)
+
+        # Apply Bonferroni correction
+        corrected_p_value = p_value * len(pairs)
+
+        # You can interpret the p-values to determine whether there are significant differences between the
+        # architectures. If the corrected p-value is below your significance threshold (e.g., 0.05),
+        # you may reject the null hypothesis and conclude that there is a significant difference
+        print(f"T-test between {pair[0]} and {pair[1]}: Bonferroni corrected p-value = {corrected_p_value}")
+
+else:
+    print(f"No significant difference in means (F1 scores) among the architectures. The p-value is {p_value}")
 
 
 # Visualize the macro averages across all models

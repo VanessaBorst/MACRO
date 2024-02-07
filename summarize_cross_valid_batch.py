@@ -42,7 +42,7 @@ def summarize_single_cross_valid(cv_path):
     df_class_wise = df_class_wise.round(3)
     df_single_metrics = df_single_metrics.astype('float64')
     df_single_metrics = df_single_metrics.round(3)
-    # Create a table with class-wise F1 per Fold, the avg metric_cols, the subset accuracy and the mean values
+    # Create a table with class-wise F1 per Fold, the avg metrics, the subset accuracy and the mean values
     if include_weighted_avg:
         df_results = pd.DataFrame(columns=['Fold', 'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
                                            'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'm-AVG_F1', 'm-AVG_ROC', 'm-AVG_Acc',
@@ -59,7 +59,7 @@ def summarize_single_cross_valid(cv_path):
         # Append the fold id
         row_values.append(fold)
 
-        # Append F1 metric_cols (class-wise)
+        # Append F1 metrics (class-wise)
         f1_metrics = df_class_wise.loc[('fold_' + str(fold), 'f1-score')].iloc[0:9].values.tolist()
         row_values = row_values + f1_metrics
 

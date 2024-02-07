@@ -52,12 +52,12 @@ class ECGTrainer(BaseTrainer):
 
         self.batch_log_step = int(
             512 / self.data_loader.batch_size)  # used for logging frequency during the training loop
-        self.epoch_log_step_train = 25  # used for epoch metric_cols and confusion matrix handling
+        self.epoch_log_step_train = 25  # used for epoch metrics and confusion matrix handling
         self.epoch_log_step_valid = 15  # Usually used for confusion matrix handling, at the moment disabled
 
         self._class_labels = self.data_loader.dataset.class_labels
 
-        # metric_cols
+        # metrics
         keys_iter = [m.__name__ for m in self.metrics_iter]
         keys_epoch = [m.__name__ for m in self.metrics_epoch]
         keys_epoch_class_wise = [m.__name__ for m in self.metrics_epoch_class_wise]
@@ -68,7 +68,7 @@ class ECGTrainer(BaseTrainer):
                                            keys_epoch_class_wise=keys_epoch_class_wise, labels=self._class_labels,
                                            writer=self.writer)
 
-        # Store potential parameters needed for metric_cols
+        # Store potential parameters needed for metrics
         val_class_weights = self.data_loader.dataset.get_inverse_class_frequency(
             idx_list=self.data_loader.valid_sampler.indices, multi_label_training=self.multi_label_training,
             mode='valid', cross_valid_active=cross_valid_active) \
@@ -81,9 +81,9 @@ class ECGTrainer(BaseTrainer):
         self._param_dict = {
             "labels": self._class_labels,
             "device": self.device,
-            "sigmoid_probs": config["metric_cols"]["additional_metrics_args"].get("sigmoid_probs", False),
-            "log_probs": config["metric_cols"]["additional_metrics_args"].get("log_probs", False),
-            "logits": config["metric_cols"]["additional_metrics_args"].get("logits", False),
+            "sigmoid_probs": config["metrics"]["additional_metrics_args"].get("sigmoid_probs", False),
+            "log_probs": config["metrics"]["additional_metrics_args"].get("log_probs", False),
+            "logits": config["metrics"]["additional_metrics_args"].get("logits", False),
             "train_pos_weights": self.data_loader.dataset.get_ml_pos_weights(
                 idx_list=self.data_loader.batch_sampler.sampler.indices,
                 mode='train',
@@ -110,7 +110,7 @@ class ECGTrainer(BaseTrainer):
         Training logic for an epoch
 
         :param epoch: Integer, current training epoch.
-        :return: A log (as dateframe) that contains the loss, the metric_cols and confusion matrices of this epoch.
+        :return: A log (as dateframe) that contains the loss, the metrics and confusion matrices of this epoch.
         """
         self.model.train()
         # Reset the trackers
@@ -118,7 +118,7 @@ class ECGTrainer(BaseTrainer):
         self.train_cms.reset()
 
         if epoch == 1 or epoch % self.epoch_log_step_train == 0:
-            # If there are epoch-based metric_cols, store the intermediate targets and the output scores
+            # If there are epoch-based metrics, store the intermediate targets and the output scores
             outputs_list = []
             targets_list = []
             targets_all_labels_list = [] if not self.multi_label_training else None
@@ -209,7 +209,7 @@ class ECGTrainer(BaseTrainer):
                                 attention_weights=attention_weights.detach().cpu().numpy()[:, :, 0],
                                 batch_idx=batch_idx, epoch=epoch, str_mode="training")
 
-                # Detach tensors needed for further tracing and metric_cols calculation to remove them from the graph
+                # Detach tensors needed for further tracing and metrics calculation to remove them from the graph
                 detached_output = output.detach().cpu()
                 detached_target = target.detach().cpu()
                 if not self.multi_label_training:
@@ -253,7 +253,7 @@ class ECGTrainer(BaseTrainer):
                 if self.writer is not None:
                     self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
 
-                # Iteratively update the loss and the metric_cols with the MetricTracker for each batch
+                # Iteratively update the loss and the metrics with the MetricTracker for each batch
                 # TODO Maybe also track the single lead outputs here?
                 self._do_iter_update(metric_tracker=self.train_metrics, output=detached_output,
                                      target=detached_target, loss_val=loss.item())
@@ -281,10 +281,10 @@ class ECGTrainer(BaseTrainer):
             plt.close(fig_gradient_flow_lines)
             plt.close(fig_gradient_flow_bars)
 
-        # At the end of each epoch, explicitly handle the tracking of metric_cols and confusion matrices by means of
+        # At the end of each epoch, explicitly handle the tracking of metrics and confusion matrices by means of
         # the SummaryWriter/TensorboardWriter, but only each epoch_log_step steps
         if epoch == 1 or epoch % self.epoch_log_step_train == 0:
-            # Update the cms and metric_cols
+            # Update the cms and metrics
             # TODO Maybe also track the single lead outputs here?
             summary_str = self._handle_tracking_at_epoch_end(metric_tracker=self.train_metrics, epoch=epoch,
                                                              outputs=outputs_list, targets=targets_list,
@@ -293,8 +293,8 @@ class ECGTrainer(BaseTrainer):
         else:
             summary_str = "Not calc."
 
-        # Contains only NaNs for all non-iteration-based metric_cols when overfit_single_batch is True
-        # Moreover, the train metric_cols are only contained each epoch_log_step times
+        # Contains only NaNs for all non-iteration-based metrics when overfit_single_batch is True
+        # Moreover, the train metrics are only contained each epoch_log_step times
         train_log = self.train_metrics.result(
             include_epoch_metrics=(epoch == 1 or epoch % self.epoch_log_step_train == 0))
 
@@ -302,7 +302,7 @@ class ECGTrainer(BaseTrainer):
             # log.update({'Note': '-------------Start of Validation-------------'})
             valid_log, valid_summary_str = self._valid_epoch(epoch)
             valid_log.set_index('val_' + valid_log.index.astype(str), inplace=True)
-            # log.update(**{'val_' + k: v for k, v in val_log.items()})  # Extends the dict by the val loss and metric_cols
+            # log.update(**{'val_' + k: v for k, v in val_log.items()})  # Extends the dict by the val loss and metrics
 
         if self.lr_scheduler is not None:
             # TODO adapt later
@@ -354,7 +354,7 @@ class ECGTrainer(BaseTrainer):
         self.valid_metrics.reset()
         self.valid_cms.reset()
 
-        # If there are epoch-based metric_cols, store the intermediate targets. Always store the output scores
+        # If there are epoch-based metrics, store the intermediate targets. Always store the output scores
         outputs_list = []
         targets_list = []
         targets_all_labels_list = [] if not self.multi_label_training else None
@@ -395,7 +395,7 @@ class ECGTrainer(BaseTrainer):
                                 attention_weights=attention_weights.detach().cpu().numpy()[:, :, 0],
                                 batch_idx=batch_idx, epoch=epoch, str_mode="validation")
 
-                # Detach tensors needed for further tracing and metric_cols calculation to remove them from the graph
+                # Detach tensors needed for further tracing and metrics calculation to remove them from the graph
                 detached_output = output.detach().cpu()
                 detached_target = target.detach().cpu()
                 if not self.multi_label_training:
@@ -427,7 +427,7 @@ class ECGTrainer(BaseTrainer):
                 if self.writer is not None:
                     self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx)
 
-                # Iteratively update the loss and the metric_cols with the MetricTracker
+                # Iteratively update the loss and the metrics with the MetricTracker
                 # TODO Maybe also track the single lead outputs here?
                 self._do_iter_update(metric_tracker=self.valid_metrics, output=detached_output,
                                      target=detached_target, loss_val=loss.item())
@@ -438,9 +438,9 @@ class ECGTrainer(BaseTrainer):
                 #     metrics_debug = ", ".join(f"{key}: {value:.6f}" for key, value in current_metrics.items())
                 #     self.logger.debug(epoch_debug + metrics_debug)
 
-        # At the end of each epoch, explicitly handle the tracking of confusion matrices and metric_cols by means of
+        # At the end of each epoch, explicitly handle the tracking of confusion matrices and metrics by means of
         # the SummaryWriter/TensorboardWriter
-        # For validation, metric_cols are calculated each epoch
+        # For validation, metrics are calculated each epoch
         # Do not calculate and track the confusion matrices each time, ony each few epochs
         # TODO Maybe also track the single lead outputs here?
         valid_sum_str = self._handle_tracking_at_epoch_end(metric_tracker=self.valid_metrics, epoch=epoch,
@@ -454,13 +454,13 @@ class ECGTrainer(BaseTrainer):
             for name, p in self.model.named_parameters():
                 self.writer.add_histogram(name, p, bins='auto')
 
-        # For validation, the metric_cols are contained each epoch
+        # For validation, the metrics are contained each epoch
         valid_log = self.valid_metrics.result(include_epoch_metrics=True)
 
         if self._use_tune:
-            # Report some metric_cols back to Ray Tune. Specifically, we send the validation loss and CPSC F1 score back to
-            # Ray Tune. Ray Tune can then use these metric_cols to decide which hyperparameter configuration lead to the
-            # best results. These metric_cols can also be used to stop bad performing trials early
+            # Report some metrics back to Ray Tune. Specifically, we send the validation loss and CPSC F1 score back to
+            # Ray Tune. Ray Tune can then use these metrics to decide which hyperparameter configuration lead to the
+            # best results. These metrics can also be used to stop bad performing trials early
             tune.report(val_loss=valid_log['mean']["loss"],
                         val_macro_sk_f1=valid_log['mean']["macro_sk_f1"],
                         val_weighted_sk_f1=valid_log['mean']["weighted_sk_f1"],
@@ -478,16 +478,16 @@ class ECGTrainer(BaseTrainer):
         return valid_log, valid_sum_str
 
     def _do_iter_update(self, metric_tracker, output, target, loss_val):
-        # Iteratively update the loss and the metric_cols with the MetricTracker
+        # Iteratively update the loss and the metrics with the MetricTracker
         # To this end, the Tracker internally maintains a dataframe containing different columns:
         # columns=['current', 'sum', 'square_sum','counts', 'mean', 'square_avg', 'std']
         # The loss and each metric are updated in a separate row for each of them
         metric_tracker.iter_update('loss', loss_val, n=output.shape[0])
         for met in self.metrics_iter:
             if self.multi_label_training:
-                additional_args = self.config['metric_cols']['ml']['per_iteration'][met.__name__]
+                additional_args = self.config['metrics']['ml']['per_iteration'][met.__name__]
             else:
-                additional_args = self.config['metric_cols']['sl']['per_iteration'][met.__name__]
+                additional_args = self.config['metrics']['sl']['per_iteration'][met.__name__]
             additional_kwargs = {
                 param_name: self._param_dict[param_name] for param_name in additional_args
             }
@@ -510,14 +510,14 @@ class ECGTrainer(BaseTrainer):
                                          det_targets=det_targets, str_mode=mode)
 
         # ------------ Metrics ------------------------------------
-        # Finally, the epoch-based metric_cols need to be updated
-        # For this, calculate both, the normal epoch-based metric_cols as well as the class-wise epoch-based metric_cols
+        # Finally, the epoch-based metrics need to be updated
+        # For this, calculate both, the normal epoch-based metrics as well as the class-wise epoch-based metrics
         # When overfitting a single batch, only a small amount of data is used and hence, not all classes may be present
-        # In such case, not all metric_cols are defined, so skip updating the metric_cols in that case
+        # In such case, not all metrics are defined, so skip updating the metrics in that case
         if not self.overfit_single_batch:
             for met in self.metrics_epoch:
                 args = inspect.signature(met).parameters.values()
-                # Output and target are needed for all metric_cols! Only consider other args WITHOUT default
+                # Output and target are needed for all metrics! Only consider other args WITHOUT default
                 additional_args = [arg.name for arg in args
                                    if arg.name not in ('output', 'target') and arg.default is arg.empty]
                 additional_kwargs = {
@@ -531,10 +531,10 @@ class ECGTrainer(BaseTrainer):
                     metric_tracker.epoch_update(met.__name__, met(target=det_targets, output=det_outputs,
                                                                   **additional_kwargs))
 
-            # This holds for the class-wise, epoch-based metric_cols as well
+            # This holds for the class-wise, epoch-based metrics as well
             for met in self.metrics_epoch_class_wise:
                 args = inspect.signature(met).parameters.values()
-                # Output and target are needed for all metric_cols! Only consider other args WITHOUT default
+                # Output and target are needed for all metrics! Only consider other args WITHOUT default
                 additional_args = [arg.name for arg in args
                                    if arg.name not in ('output', 'target') and arg.default is arg.empty]
                 additional_kwargs = {

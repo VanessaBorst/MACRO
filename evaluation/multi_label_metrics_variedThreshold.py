@@ -48,13 +48,13 @@ def _sk_f1(output, target, sigmoid_probs, logits, labels, thresholds, average):
     :param average: Determines the type of averaging performed on the data (if not None).
         Parameter values useful for this application:
         None: The scores for each class are returned
-        'micro': Calculate metric_cols globally by counting the total true positives, false negatives and false positives.
-        'macro': Calculate metric_cols for each label, and find their unweighted mean.
+        'micro': Calculate metrics globally by counting the total true positives, false negatives and false positives.
+        'macro': Calculate metrics for each label, and find their unweighted mean.
                     This does not take label imbalance into account.
-        'weighted': Calculate metric_cols for each label, and find their average weighted by support
+        'weighted': Calculate metrics for each label, and find their average weighted by support
             (the number of true instances for each label).
             This alters ‘macro’ to account for label imbalance; can result in F-score that is not between precision & recall
-        'samples': Calculate metric_cols for each instance, and find their average
+        'samples': Calculate metrics for each instance, and find their average
                     (only meaningful for multilabel classification where this differs from accuracy_score)
 
     :return: float or array of float, shape = [n_unique_labels]
@@ -85,13 +85,13 @@ def _sk_precision(output, target, sigmoid_probs, logits, labels, thresholds, ave
     :param average: Determines the type of averaging performed on the data (if not None).
         Parameter values useful for this application:
         None: The scores for each class are returned
-        'micro': Calculate metric_cols globally by counting the total true positives, false negatives and false positives.
-        'macro': Calculate metric_cols for each label, and find their unweighted mean.
+        'micro': Calculate metrics globally by counting the total true positives, false negatives and false positives.
+        'macro': Calculate metrics for each label, and find their unweighted mean.
                     This does not take label imbalance into account.
-        'weighted': Calculate metric_cols for each label, and find their average weighted by support
+        'weighted': Calculate metrics for each label, and find their average weighted by support
                     (the number of true instances for each label).
                     This alters ‘macro’ to account for label imbalance; can result in F-score not between precision/recall
-        'samples': Calculate metric_cols for each instance, and find their average
+        'samples': Calculate metrics for each instance, and find their average
                     (only meaningful for multilabel classification where this differs from accuracy_score)
     :return: float (if average is not None) or array of float of shape (n_unique_labels,)
                 -> Precision of the positive class in binary classification or weighted average of the precision of each
@@ -122,13 +122,13 @@ def _sk_recall(output, target, sigmoid_probs, logits, labels, thresholds, averag
     :param average: Determines the type of averaging performed on the data (if not None).
         Parameter values useful for this application:
         None: The scores for each class are returned
-        'micro': Calculate metric_cols globally by counting the total true positives, false negatives and false positives.
-        'macro': Calculate metric_cols for each label, and find their unweighted mean.
+        'micro': Calculate metrics globally by counting the total true positives, false negatives and false positives.
+        'macro': Calculate metrics for each label, and find their unweighted mean.
                     This does not take label imbalance into account.
-        'weighted': Calculate metric_cols for each label, and find their average weighted by support
+        'weighted': Calculate metrics for each label, and find their average weighted by support
                     (the number of true instances for each label).
                     This alters ‘macro’ to account for label imbalance; can result in F-score not between precision/recall
-        'samples': Calculate metric_cols for each instance, and find their average
+        'samples': Calculate metrics for each instance, and find their average
                     (only meaningful for multilabel classification where this differs from accuracy_score)
     :return: float (if average is not None) or array of float of shape (n_unique_labels,)
                 -> Recall of the positive class in binary classification or weighted average of the recall of each class

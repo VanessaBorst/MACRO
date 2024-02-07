@@ -10,7 +10,7 @@ import pandas as pd
 # 'savedVM_v2/models/FinalModel/cross_vals_sqrtT/final_cross_validation_sqrtT'
 # 'savedVM_v2/models/FinalModel/cross_vals_sqrtT/cross_validation_withFC_0.4_24_32_finetune_BO'
 # path = 'savedVM_v2/models/FinalModel/cross_vals/cross_validation_rerun_withFC_0.3_32_16_finetune_bayesian'
-path = 'savedVM/models/FinalModel_MACRO_CV/0125_175845_ml_bs64_noFC-0.2-6-12_entmax15'
+path = 'savedVM/models/Multibranch_MACRO_CV/0206_122038_ml_bs64noconvRedBlock_0.4_8_false_0.2_24'
 thresholds_active=False
 include_weighted_avg=True
 include_at_least_weighted_F1 = True
@@ -33,7 +33,7 @@ df_class_wise = df_class_wise.round(3)
 df_single_metrics = df_single_metrics.astype('float64')
 df_single_metrics = df_single_metrics.round(3)
 
-# Create a table with class-wise F1 per Fold, the avg metric_cols, the subset accuracy and the mean values
+# Create a table with class-wise F1 per Fold, the avg metrics, the subset accuracy and the mean values
 if include_weighted_avg:
     df_results = pd.DataFrame(columns=['Fold', 'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
                                    'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'm-AVG_F1', 'm-AVG_ROC', 'm-AVG_Acc', 'MR'])
@@ -50,7 +50,7 @@ for fold in range(1, 11):
     # Append the fold id
     row_values.append(fold)
 
-    # Append F1 metric_cols (class-wise)
+    # Append F1 metrics (class-wise)
     f1_metrics =df_class_wise.loc[('fold_' + str(fold), 'f1-score')].iloc[0:9].values.tolist()
     row_values = row_values + f1_metrics
 

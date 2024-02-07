@@ -771,7 +771,7 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics as module_metric
     else:
-        # raise NotImplementedError("Single label metric_cols haven't been checked after the Python update! Do not use them!")
+        # raise NotImplementedError("Single label metrics haven't been checked after the Python update! Do not use them!")
         import evaluation.single_label_metrics as module_metric
 
     if use_tune:
@@ -820,20 +820,20 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
     if len(device_ids) > 1:
         model = torch.nn.DataParallel(model, device_ids=device_ids)
 
-    # Get function handles of loss and metric_cols
+    # Get function handles of loss and metrics
     # Important: The method config['loss'] must exist in the loss module (<module 'model.loss' >)
-    # Equivalently, all metric_cols specified in the context must exist in the metric_cols modul
+    # Equivalently, all metrics specified in the context must exist in the metrics modul
     criterion = getattr(module_loss, config['loss']['type'])
     if config['arch']['args']['multi_label_training']:
-        metrics_iter = [getattr(module_metric, met) for met in config['metric_cols']['ml']['per_iteration'].keys()]
-        metrics_epoch = [getattr(module_metric, met) for met in config['metric_cols']['ml']['per_epoch']]
+        metrics_iter = [getattr(module_metric, met) for met in config['metrics']['ml']['per_iteration'].keys()]
+        metrics_epoch = [getattr(module_metric, met) for met in config['metrics']['ml']['per_epoch']]
         metrics_epoch_class_wise = [getattr(module_metric, met) for met in
-                                    config['metric_cols']['ml']['per_epoch_class_wise']]
+                                    config['metrics']['ml']['per_epoch_class_wise']]
     else:
-        metrics_iter = [getattr(module_metric, met) for met in config['metric_cols']['sl']['per_iteration'].keys()]
-        metrics_epoch = [getattr(module_metric, met) for met in config['metric_cols']['sl']['per_epoch']]
+        metrics_iter = [getattr(module_metric, met) for met in config['metrics']['sl']['per_iteration'].keys()]
+        metrics_epoch = [getattr(module_metric, met) for met in config['metrics']['sl']['per_epoch']]
         metrics_epoch_class_wise = [getattr(module_metric, met) for met in
-                                    config['metric_cols']['sl']['per_epoch_class_wise']]
+                                    config['metrics']['sl']['per_epoch_class_wise']]
 
     # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())

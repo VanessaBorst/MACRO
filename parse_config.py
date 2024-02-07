@@ -10,7 +10,8 @@ from utils import get_project_root, read_json, write_json
 
 
 class ConfigParser:
-    def __init__(self, config, resume=None, modification=None, mode=None, use_tune=False, run_id=None):
+    def __init__(self, config, resume=None, modification=None, mode=None, use_tune=False, run_id=None,
+                 create_save_log_dir = True):
         """
         class to parse configuration json file. Handles hyperparameters for training, initializations of modules, checkpoint saving
         and logging module.
@@ -34,50 +35,57 @@ class ConfigParser:
                                       self.config['data_loader']['args']['batch_size'],
                                       self.config['run_details'])
 
-        # Training
-        if mode is None or mode=='train':
-            self._save_dir = Path(
-                os.path.join(get_project_root(), save_dir / 'models' / exper_name / str(run_id + details)))
-            self._log_dir = Path(
-                os.path.join(get_project_root(), save_dir / 'log' / exper_name / str(run_id + details)))
-        else:
-            self._save_dir=None
-            self._log_dir=None
+        if create_save_log_dir:
+            # Training
+            if mode is None or mode=='train':
+                self._save_dir = Path(
+                    os.path.join(get_project_root(), save_dir / 'models' / exper_name / str(run_id + details)))
+                self._log_dir = Path(
+                    os.path.join(get_project_root(), save_dir / 'log' / exper_name / str(run_id + details)))
+            else:
+                self._save_dir=None
+                self._log_dir=None
 
-        # Testing
-        if mode is not None and mode=='test':
-            assert resume is not None, "checkpoint must be provided for testing"
-            assert 'valid' in self.config['data_loader']['test_dir'].lower() or \
-                   'test' in self.config['data_loader']['test_dir'].lower(), "Path should link validation or test dir"
-            self._test_output_dir = Path(os.path.join(resume.parent, 'test_output')) if \
-                'test' in self.config['data_loader']['test_dir'].lower()                 \
-                else Path(os.path.join(resume.parent, 'valid_output'))
-        else:
-            self._test_output_dir = None    # For training not needed
+            # Testing
+            if mode is not None and mode=='test':
+                assert resume is not None, "checkpoint must be provided for testing"
+                assert 'valid' in self.config['data_loader']['test_dir'].lower() or \
+                       'test' in self.config['data_loader']['test_dir'].lower(), "Path should link validation or test dir"
+                self._test_output_dir = Path(os.path.join(resume.parent, 'test_output')) if \
+                    'test' in self.config['data_loader']['test_dir'].lower()                 \
+                    else Path(os.path.join(resume.parent, 'valid_output'))
+            else:
+                self._test_output_dir = None    # For training not needed
 
-        # make directory for saving checkpoints and log and test outputs (if needed).
-        exist_ok = run_id == ''
-        if self._save_dir is not None:
-            self.save_dir.mkdir(parents=True, exist_ok=exist_ok)
-        if self._log_dir is not None:
-            self.log_dir.mkdir(parents=True, exist_ok=exist_ok)
-        if self.test_output_dir is not None:
-            self.test_output_dir.mkdir(parents=True, exist_ok=True)
+            # make directory for saving checkpoints and log and test outputs (if needed).
+            exist_ok = run_id == ''
+            if self._save_dir is not None:
+                self.save_dir.mkdir(parents=True, exist_ok=exist_ok)
+            if self._log_dir is not None:
+                self.log_dir.mkdir(parents=True, exist_ok=exist_ok)
+            if self.test_output_dir is not None:
+                self.test_output_dir.mkdir(parents=True, exist_ok=True)
+
+        else:
+            self._save_dir = None
+            self._log_dir = None
+            self._test_output_dir = None
 
         # save updated config file to the checkpoint dir
         if self._save_dir is not None:
             write_json(self.config, self.save_dir / 'config.json')
 
-        #if not self._use_tune:
-        # configure logging module if tuning is not active, else do it within the train method
-        setup_logging(self.log_dir)
-        self.log_levels = {
-            0: logging.WARNING,
-            1: logging.INFO,
-            2: logging.DEBUG
-        }
+            # if not self._use_tune:
+            # configure logging module if tuning is not active, else do it within the train method
+            setup_logging(self.log_dir)
+            self.log_levels = {
+                0: logging.WARNING,
+                1: logging.INFO,
+                2: logging.DEBUG
+            }
 
-        self._do_some_sanity_checks()
+            self._do_some_sanity_checks()
+
 
     @classmethod
     def from_args(cls, args, mode=None, options=''):
@@ -206,42 +214,42 @@ class ConfigParser:
         if self.config["loss"]["type"] == "BCE_with_logits" or self.config["loss"]["type"] == "balanced_BCE_with_logits":
             assert self.config["arch"]["args"]["multi_label_training"] \
                    and not self.config["arch"]["args"]["apply_final_activation"] \
-                   and not self.config["metric_cols"]["additional_metrics_args"]["sigmoid_probs"] \
-                   and not self.config["metric_cols"]["additional_metrics_args"]["log_probs"] \
-                   and self.config["metric_cols"]["additional_metrics_args"]["logits"], "The used loss does not " \
+                   and not self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
+                   and not self.config["metrics"]["additional_metrics_args"]["log_probs"] \
+                   and self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
                                                                                     "fit to the rest of the " \
                                                                                     "configuration"
         elif self.config["loss"]["type"] == "BCE":
             assert self.config["arch"]["args"]["multi_label_training"] \
                    and self.config["arch"]["args"]["apply_final_activation"] \
-                   and self.config["metric_cols"]["additional_metrics_args"]["sigmoid_probs"] \
-                   and not self.config["metric_cols"]["additional_metrics_args"]["log_probs"] \
-                   and not self.config["metric_cols"]["additional_metrics_args"]["logits"], "The used loss does not " \
+                   and self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
+                   and not self.config["metrics"]["additional_metrics_args"]["log_probs"] \
+                   and not self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
                                                                                         "fit to the rest of the " \
                                                                                         "configuration "
         elif self.config["loss"]["type"] == "nll_loss":
             assert not self.config["arch"]["args"]["multi_label_training"] \
                    and self.config["arch"]["args"]["apply_final_activation"] \
-                   and not self.config["metric_cols"]["additional_metrics_args"]["sigmoid_probs"] \
-                   and self.config["metric_cols"]["additional_metrics_args"]["log_probs"] \
-                   and not self.config["metric_cols"]["additional_metrics_args"]["logits"], "The used loss does not " \
+                   and not self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
+                   and self.config["metrics"]["additional_metrics_args"]["log_probs"] \
+                   and not self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
                                                                                         "fit to the rest of the " \
                                                                                         "configuration "
         elif self.config["loss"]["type"] == "cross_entropy_loss" or self.config["loss"]["type"] == "balanced_cross_entropy":
             assert not self.config["arch"]["args"]["multi_label_training"] \
                    and not self.config["arch"]["args"]["apply_final_activation"] \
-                   and not self.config["metric_cols"]["additional_metrics_args"]["sigmoid_probs"] \
-                   and not self.config["metric_cols"]["additional_metrics_args"]["log_probs"] \
-                   and self.config["metric_cols"]["additional_metrics_args"]["logits"], "The used loss does not " \
+                   and not self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
+                   and not self.config["metrics"]["additional_metrics_args"]["log_probs"] \
+                   and self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
                                                                                     "fit to the rest of the " \
                                                                                     "configuration "
 
-        assert (self.config["metric_cols"]["additional_metrics_args"]["sigmoid_probs"] ^
-                self.config["metric_cols"]["additional_metrics_args"]["log_probs"]
-                ^ self.config["metric_cols"]["additional_metrics_args"]["logits"]) and not \
-                   (self.config["metric_cols"]["additional_metrics_args"]["sigmoid_probs"]
-                    and self.config["metric_cols"]["additional_metrics_args"]["log_probs"]
-                    and self.config["metric_cols"]["additional_metrics_args"]["logits"]), \
+        assert (self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] ^
+                self.config["metrics"]["additional_metrics_args"]["log_probs"]
+                ^ self.config["metrics"]["additional_metrics_args"]["logits"]) and not \
+                   (self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"]
+                    and self.config["metrics"]["additional_metrics_args"]["log_probs"]
+                    and self.config["metrics"]["additional_metrics_args"]["logits"]), \
             "Exactly one of the three must be true"
 
 
