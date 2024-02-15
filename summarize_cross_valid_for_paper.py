@@ -158,17 +158,17 @@ for model_name, model_path in model_paths.items():
     df_results_acc = df_results_acc.round(3)
 
     # Add the average metrics across all folds to the final result dataframes
-    df_results_paper[f'{model_name}_F1'] = [f"{df_results_F1.loc['mean'][col]}±{df_results_F1.loc['std'][col]}"
+    df_results_paper[f'{model_name}_F1'] = [f"{df_results_F1.loc['mean'][col]:.3f}±{df_results_F1.loc['std'][col]:.3f}"
                                             for col in ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
                                                         'm-AVG_F1', 'W-AVG_F1']]
 
-    df_results_paper[f'{model_name}_AUC'] = [f"{df_results_AUC.loc['mean'][col]}±{df_results_AUC.loc['std'][col]}"
+    df_results_paper[f'{model_name}_AUC'] = [f"{df_results_AUC.loc['mean'][col]:.3f}±{df_results_AUC.loc['std'][col]:.3f}"
                                              for col in
                                              ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
                                               'm-AVG_AUC', 'W-AVG_AUC']]
 
     if include_acc:
-        df_results_paper[f'{model_name}_Acc'] = [f"{df_results_acc.loc['mean'][col]}±{df_results_acc.loc['std'][col]}"
+        df_results_paper[f'{model_name}_Acc'] = [f"{df_results_acc.loc['mean'][col]:.3f}±{df_results_acc.loc['std'][col]:.3f}"
                                                  for col in
                                                  ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
                                                   'm-AVG_Acc', 'W-AVG_Acc']]

@@ -232,15 +232,15 @@ def tuning_params(name):
         return {
             # BranchNet specifics
             # "branchNet_reduce_channels": tune.grid_search([True, False]),
-            "branchNet_heads": tune.grid_search([6, 8]),        # Add 12 later if time left
-            "branchNet_attention_dropout": tune.grid_search([0.2, 0.4]),
+            # "branchNet_heads": tune.grid_search([6, 8]),        # Add 12 later if time left
+            # "branchNet_attention_dropout": tune.grid_search([0.2, 0.4]),
             # Multibranch specifics
-            "multi_branch_heads": tune.grid_search([24]),  # Add 12 later if time left
-            "multi_branch_attention_dropout": tune.grid_search([0.2, 0.4]),
+            # "multi_branch_heads": tune.grid_search([24]),  # Add 12 later if time left
+            # "multi_branch_attention_dropout": tune.grid_search([0.2, 0.4]),
             # "use_conv_reduction_block": True
-            # "conv_reduction_first_kernel_size": 3,  # tune.grid_search([3, 16]),  # add 16, 24 later if time left
-            # "conv_reduction_second_kernel_size": 3,  # tune.grid_search([3, 16]),  # add 6, 24 later if time left
-            # "conv_reduction_third_kernel_size": 3,  # tune.grid_search([3, 16]),  # add 6, 24 later if time left
+            "conv_reduction_first_kernel_size": tune.grid_search([3, 8, 16]),  # tune.grid_search([3, 16]),  # add 16, 24 later if time left
+            "conv_reduction_second_kernel_size": tune.grid_search([3, 8, 16]),  # tune.grid_search([3, 16]),  # add 6, 24 later if time left
+            "conv_reduction_third_kernel_size": tune.grid_search([3, 8, 16]),  # tune.grid_search([3, 16]),  # add 6, 24 later if time left
         }
         # Old
         # return {

@@ -1,17 +1,21 @@
 {
   "name": "Multibranch_MACRO_ParamStudy",
-  "run_details": "",
+  "run_details": "convRedBlock_0.2_6_false_0.2_24",
   "n_gpu": 1,
   "arch": {
     "type": "FinalModelMultiBranch",
     "args": {
       "apply_final_activation": false,
       "multi_label_training": true,
+      "branchNet_discard_FC_before_MH": true,
+      "branchNet_gru_units": 12,
+      "multi_branch_discard_FC_before_MH": true,
+      "use_conv_reduction_block": true,
+      "branchNet_attention_dropout": 0.2,
+      "branchNet_heads": 6,
       "branchNet_reduce_channels": false,
-      "branchNet_discard_FC_before_MH":true,
-      "branchNet_gru_units" : 12,
-      "multi_branch_discard_FC_before_MH" : true,
-      "use_conv_reduction_block": false
+      "multi_branch_attention_dropout": 0.2,
+      "multi_branch_heads": 24
     }
   },
   "data_loader": {

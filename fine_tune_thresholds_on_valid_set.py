@@ -9,8 +9,8 @@ import global_config
 from train import _set_seed
 from utils.optimize_thresholds import optimize_ts
 
-def fine_tune_thresholds(config, cv_data_dir=None, valid_idx=None, k_fold=None):
 
+def fine_tune_thresholds(config, cv_data_dir=None, valid_idx=None, k_fold=None):
     import model.final_model as module_arch
 
     _set_seed(global_config.SEED)
@@ -18,15 +18,15 @@ def fine_tune_thresholds(config, cv_data_dir=None, valid_idx=None, k_fold=None):
     logger = config.get_logger('fine_tune_threshold_fold_' + str(k_fold))
 
     data_loader = getattr(module_data, config['data_loader']['type'])(
-            cv_data_dir,
-            batch_size=64,
-            shuffle=False,
-            validation_split=0.0,
-            num_workers=4,
-            cross_valid=True,
-            test_idx=valid_idx,
-            cv_train_mode=False,
-            fold_id=k_fold
+        cv_data_dir,
+        batch_size=64,
+        shuffle=False,
+        validation_split=0.0,
+        num_workers=4,
+        cross_valid=True,
+        test_idx=valid_idx,
+        cv_train_mode=False,
+        fold_id=k_fold
     )
 
     class_labels = data_loader.dataset.class_labels
