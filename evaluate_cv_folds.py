@@ -12,6 +12,7 @@ from matplotlib import pyplot as plt
 
 import global_config
 from data_loader.ecg_data_set import ECGDataset
+from logger import update_logging_setup_for_tune_or_cross_valid
 
 from parse_config import ConfigParser
 from test import test_model
@@ -171,17 +172,7 @@ def create_roc_curve_report(main_path):
 
 
 def evaluate_cross_validation(main_path):
-    # Load the main config
-    config = read_json(os.path.join(main_path, "config.json"))
-    config = ConfigParser(config=config, create_save_log_dir=False)
-    # Update paths to old paths (otherwise set to current date)
-    config.save_dir = Path(main_path)
-    config.log_dir = Path(main_path)
-
-    assert config["data_loader"]["cross_valid"]["enabled"], "Cross-valid should be enabled when running this script"
-    # fix random seeds for reproducibility
-    global_config.SEED = config.config.get("SEED", global_config.SEED)
-    _set_seed(global_config.SEED)
+    config = load_config_and_setup_paths(main_path)
 
     total_num_folds = config["data_loader"]["cross_valid"]["k_fold"]
     data_dir = config["data_loader"]["cross_valid"]["data_dir"]
@@ -190,77 +181,48 @@ def evaluate_cross_validation(main_path):
     config["data_loader"]["args"]["data_dir"] = data_dir
     dataset = ECGDataset(data_dir)
     n_samples = len(dataset)
-    idx_full = np.arange(n_samples)
-    np.random.shuffle(idx_full)
 
     # Get the main config and the dirs for logging and saving checkpoints
     base_config = copy.deepcopy(config)
     base_save_dir = config.save_dir
+    base_log_dir = config.log_dir
 
-    # Run k-fold-cross-validation for evaluation
-    fold_size = n_samples // total_num_folds
-    fold_data = []
-    lower_limit = 0
-    for i in range(0, total_num_folds):
-        if i != total_num_folds - 1:
-            fold_data.append(idx_full[lower_limit:lower_limit + fold_size])
-            lower_limit = lower_limit + fold_size
-        else:
-            # Last fold may be a bit larger
-            fold_data.append(idx_full[lower_limit:n_samples])
+    # Divide the samples into k distinct sets
+    fold_data = split_dataset_into_folds(n_samples, total_num_folds)
 
     # Save the results of each run
-    class_wise_metrics = ["precision", "recall", "f1-score", "torch_roc_auc", "torch_accuracy", "support"]
-    folds = ['fold_' + str(i) for i in range(1, total_num_folds + 1)]
-
-    iterables = [folds, class_wise_metrics]
-    multi_index = pd.MultiIndex.from_product(iterables, names=["fold", "metric"])
-
-    test_results_class_wise = pd.DataFrame(columns=['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-                                                    'macro avg', 'weighted avg'], index=multi_index)
-
-    test_results_single_metrics = pd.DataFrame(columns=['loss', 'sk_subset_accuracy'])
+    class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics = \
+        prepare_result_data_structures(total_num_folds)
 
     print("Starting with " + str(total_num_folds) + "-fold cross validation")
     valid_fold_index = total_num_folds - 2
     test_fold_index = total_num_folds - 1
+
     for k in range(total_num_folds):
         print("Starting fold " + str(k))
-
-        train_sets = [fold for id, fold in enumerate(fold_data)
-                      if id != valid_fold_index and id != test_fold_index]
-        train_idx = np.concatenate(train_sets, axis=0)
-        valid_idx = fold_data[valid_fold_index]
-        test_idx = fold_data[test_fold_index]
+        # Get the idx for valid and test samples, train idx not needed
+        train_idx, valid_idx, test_idx = get_train_valid_test_indices(base_save_dir,
+                                                                      dataset,
+                                                                      fold_data,
+                                                                      k,
+                                                                      test_fold_index,
+                                                                      valid_fold_index)
 
         # Adapt the log and save paths for the current fold
-        # config.save_dir = Path(os.path.join(base_save_dir, "Fold_" + str(k + 1), "additional_eval"))
-        # config.log_dir = Path(os.path.join(base_log_dir, "Fold_" + str(k + 1), "additional_eval"))
-        # ensure_dir(config.save_dir)
-        # ensure_dir(config.log_dir)
-        # update_logging_setup_for_tune_or_cross_valid(config.log_dir)
-
-        # Load the old data split for sanity check
-        with open(os.path.join(base_save_dir, "Fold_" + str(k + 1), "data_split.csv"), "r") as file:
-            data = pd.read_csv(file, index_col=0, header=None)
-            dict = {
-                "train_records": data.loc["train_records"],
-                "valid_records": data.loc["valid_records"].dropna(),
-                "test_records": data.loc["test_records"].dropna()
-            }
-        assert np.array(dataset.records)[train_idx].tolist() == dict["train_records"].tolist(), \
-            "Train indices do not match the old data split"
-        assert np.array(dataset.records)[valid_idx].tolist() == dict["valid_records"].tolist(), \
-            "Valid indices do not match the old data split"
-        assert np.array(dataset.records)[test_idx].tolist() == dict["test_records"].tolist(), \
-            "Test indices do not match the old data split"
+        config.save_dir = Path(os.path.join(base_save_dir, "Fold_" + str(k + 1), "additional_eval"))
+        config.log_dir = Path(os.path.join(base_log_dir, "Fold_" + str(k + 1), "additional_eval"))
+        ensure_dir(config.save_dir)
+        ensure_dir(config.log_dir)
+        update_logging_setup_for_tune_or_cross_valid(config.log_dir)
 
         # Skip the training and load the trained model
         config.resume = os.path.join(base_save_dir, "Fold_" + str(k + 1), "model_best.pth")
-        # config.resume = Path(os.path.join(config.save_dir, "model_best.pth"))
+
+        #  Do the testing and add the fold results to the dfs
         config.test_output_dir = Path(os.path.join(base_save_dir, "Fold_" + str(k + 1), "additional_eval"))
         ensure_dir(config.test_output_dir)
-        fold_eval_class_wise, fold_eval_single_metrics = test_fold(config, data_dir=data_dir, test_idx=test_idx,
+        fold_eval_class_wise, fold_eval_single_metrics = test_fold(config, data_dir=data_dir,
+                                                                   test_idx=test_idx,
                                                                    k_fold=k, total_num_folds=total_num_folds)
 
         # Class-Wise Metrics
@@ -317,10 +279,83 @@ def evaluate_cross_validation(main_path):
     print("Finished additional eval of cross-fold-validation")
 
 
+def prepare_result_data_structures(total_num_folds, include_valid_results=False):
+    class_wise_metrics = ["precision", "recall", "f1-score", "torch_roc_auc", "torch_accuracy", "support"]
+    folds = ['fold_' + str(i) for i in range(1, total_num_folds + 1)]
+    iterables = [folds, class_wise_metrics]
+    multi_index = pd.MultiIndex.from_product(iterables, names=["fold", "metric"])
+    if include_valid_results:
+        valid_results = pd.DataFrame(columns=folds)
+    test_results_class_wise = pd.DataFrame(columns=['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+                                                    'macro avg', 'weighted avg'], index=multi_index)
+    test_results_single_metrics = pd.DataFrame(columns=['loss', 'sk_subset_accuracy'])
+    return class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics if not include_valid_results \
+        else class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics, valid_results
+
+
+def load_config_and_setup_paths(main_path):
+    # Load the main config
+    config = read_json(os.path.join(main_path, "config.json"))
+    config = ConfigParser(config=config, create_save_log_dir=False)
+
+    # Update paths to old paths (otherwise set to current date)
+    config.save_dir = Path(main_path)
+    config.log_dir = Path(main_path)
+
+    assert config["data_loader"]["cross_valid"]["enabled"], "Cross-valid should be enabled when running this script"
+
+    # fix random seeds for reproducibility
+    global_config.SEED = config.config.get("SEED", global_config.SEED)
+    _set_seed(global_config.SEED)
+
+    return config
+
+
+def get_train_valid_test_indices(base_save_dir, dataset, fold_data, k, test_fold_index, valid_fold_index):
+    train_sets = [fold for id, fold in enumerate(fold_data)
+                  if id != valid_fold_index and id != test_fold_index]
+    train_idx = np.concatenate(train_sets, axis=0)
+    valid_idx = fold_data[valid_fold_index]
+    test_idx = fold_data[test_fold_index]
+    # Load the old data split for sanity check
+    with open(os.path.join(base_save_dir, "Fold_" + str(k + 1), "data_split.csv"), "r") as file:
+        data = pd.read_csv(file, index_col=0, header=None)
+        dict = {
+            "train_records": data.loc["train_records"],
+            "valid_records": data.loc["valid_records"].dropna(),
+            "test_records": data.loc["test_records"].dropna()
+        }
+    assert np.array(dataset.records)[train_idx].tolist() == dict["train_records"].tolist(), \
+        "Train indices do not match the old data split"
+    assert np.array(dataset.records)[valid_idx].tolist() == dict["valid_records"].tolist(), \
+        "Valid indices do not match the old data split"
+    assert np.array(dataset.records)[test_idx].tolist() == dict["test_records"].tolist(), \
+        "Test indices do not match the old data split"
+
+    return train_idx, valid_idx, test_idx
+
+
+def split_dataset_into_folds(n_samples, total_num_folds):
+    idx_full = np.arange(n_samples)
+    np.random.shuffle(idx_full)
+
+    fold_size = n_samples // total_num_folds
+    fold_data = []
+    lower_limit = 0
+    for i in range(0, total_num_folds):
+        if i != total_num_folds - 1:
+            fold_data.append(idx_full[lower_limit:lower_limit + fold_size])
+            lower_limit = lower_limit + fold_size
+        else:
+            # Last fold may be a bit larger
+            fold_data.append(idx_full[lower_limit:n_samples])
+    return fold_data
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='MACRO Paper: Cross-Validation Evaluation')
     parser.add_argument('-p', '--path', default=None, type=str,
                         help='main path to CV runs(default: None)')
     args = parser.parse_args()
-    # evaluate_cross_validation(args.path)
+    evaluate_cross_validation(args.path)
     create_roc_curve_report(args.path)

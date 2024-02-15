@@ -6,136 +6,564 @@ import csv
 import time
 import os
 import pickle
-import random
 import pandas as pd
 from pathlib import Path
-
 import numpy as np
 
+import torch
+from tqdm import tqdm
+import data_loader.data_loaders as module_data
+import global_config
+from evaluate_cv_folds import split_dataset_into_folds, get_train_valid_test_indices, load_config_and_setup_paths, \
+    prepare_result_data_structures
+
+# fix random seeds for reproducibility
+from train import _set_seed
+from utils.optimize_thresholds import optimize_ts
+
 from data_loader.ecg_data_set import ECGDataset
-from fine_tune_thresholds_on_valid_set import fine_tune_thresholds
 from logger import update_logging_setup_for_tune_or_cross_valid
 
-from parse_config import ConfigParser
-from test import test_model_with_threshold
+from utils import ensure_dir, read_json
 
 
-import global_config
+# Should only be used with cv_active
+def test_fold_with_thresholds(config,
+                              cv_data_dir=None,
+                              test_idx=None,
+                              k_fold=None,
+                              total_num_folds=None,
+                              thresholds=None):
+    # Conditional inputs depending on the config
+    if config['arch']['type'] == 'BaselineModel':
+        import model.baseline_model as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithMHAttentionV2':
+        import model.baseline_model_with_MHAttention_v2 as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndNormV2PreActivation':
+        import model.baseline_model_with_skips_and_norm_v2_pre_activation_design as module_arch
+    elif config['arch']['type'] == 'FinalModel':
+        import model.final_model as module_arch
+    elif config['arch']['type'] == 'FinalModelMultiBranch':
+        import model.final_model_multibranch as module_arch
 
-from train import _set_seed
-from utils import ensure_dir
+    if config['arch']['args']['multi_label_training']:
+        import evaluation.multi_label_metrics as module_metric
+    else:
+        raise NotImplementedError("Single label metrics haven't been checked after the Python update! Do not use them!")
+        import evaluation.single_label_metrics as module_metric
 
+    logger = config.get_logger('test_fold_' + str(k_fold))
 
-def test_fold_with_thresholds(config, data_dir, test_idx, k_fold, thresholds):
-    df_class_wise_results, df_single_metric_results = test_model_with_threshold(config, cv_data_dir=data_dir,
-                                                                                test_idx=test_idx, k_fold=k_fold,
-                                                                                thresholds=thresholds)
+    stratified_k_fold = config.config.get("data_loader", {}).get("cross_valid", {}).get("stratified_k_fold", False)
+    data_loader = getattr(module_data, config['data_loader']['type'])(
+        cv_data_dir,
+        batch_size=64,
+        shuffle=False,
+        validation_split=0.0,
+        num_workers=4,
+        cross_valid=True,
+        test_idx=test_idx,
+        cv_train_mode=False,
+        fold_id=k_fold,
+        total_num_folds=total_num_folds,
+        stratified_k_fold=stratified_k_fold
+    )
+
+    # build model architecture
+    model = config.init_obj('arch', module_arch)
+    logger.info(model)
+
+    # Load the model from the checkpoint
+    logger.info('Loading checkpoint: {} ...'.format(config.resume))
+    checkpoint = torch.load(config.resume, map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+    state_dict = checkpoint['state_dict']
+    if config['n_gpu'] > 1:
+        model = torch.nn.DataParallel(model)
+    model.load_state_dict(state_dict)
+
+    # Prepare the model for testing
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = model.to(device)
+    model.eval()
+
+    loss_fn = getattr(module_loss, config['loss']['type'])
+
+    metrics_iter = [getattr(module_metric, met) for met in ['sk_subset_accuracy']]
+    metrics_epoch = [getattr(module_metric, met) for met in ['cpsc_score',
+                                                             'weighted_torch_roc_auc',
+                                                             'weighted_torch_accuracy',
+                                                             'macro_torch_roc_auc',
+                                                             'macro_torch_accuracy']]
+    metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_torch_roc_auc',
+                                                                        'class_wise_torch_accuracy']]
+
+    multi_label_training = config['arch']['args']['multi_label_training']
+    class_labels = data_loader.dataset.class_labels
+
+    # Store potential parameters needed for metrics
+    _param_dict = {
+        "thresholds": thresholds,
+        "labels": class_labels,
+        "device": device,
+        "sigmoid_probs": config["metrics"]["additional_metrics_args"].get("sigmoid_probs", False),
+        "log_probs": config["metrics"]["additional_metrics_args"].get("log_probs", False),
+        "logits": config["metrics"]["additional_metrics_args"].get("logits", False),
+        "pos_weights": data_loader.dataset.get_ml_pos_weights(
+            idx_list=list(range(len(data_loader.sampler))),
+            mode='test',
+            cross_valid_active=cv_active),
+        "class_weights": data_loader.dataset.get_inverse_class_frequency(
+            idx_list=list(range(len(data_loader.sampler))),
+            multi_label_training=multi_label_training,
+            mode='test',
+            cross_valid_active=cv_active),
+        "lambda_balance": config["loss"]["add_args"].get("lambda_balance", 1)
+    }
+
+    # Setup visualization writer instance
+    # writer = TensorboardWriter(config.test_output_dir, logger, config['trainer']['tensorboard'])
+
+    # Set up confusion matrices tracker
+    cm_tracker = ConfusionMatrixTracker(*class_labels, writer=None,
+                                        multi_label_training=multi_label_training)
+
+    # Set up metric tracker
+    keys_iter = [m.__name__ for m in metrics_iter]
+    keys_epoch = [m.__name__ for m in metrics_epoch]
+    keys_epoch_class_wise = [m.__name__ for m in metrics_epoch_class_wise]
+    metric_tracker = MetricTracker(keys_iter=['loss'] + keys_iter, keys_epoch=keys_epoch,
+                                   keys_epoch_class_wise=keys_epoch_class_wise,
+                                   labels=class_labels,
+                                   writer=None)
+
+    with torch.no_grad():
+
+        # Store the intermediate targets. Always store the output scores
+        outputs_list = []
+        targets_list = []
+        targets_all_labels_list = [] if not multi_label_training else None
+
+        start = time.time()
+
+        for batch_idx, (padded_records, _, first_labels, labels_one_hot, record_names) in \
+                enumerate(tqdm(data_loader)):
+            if multi_label_training:
+                data, target = padded_records.to(device), labels_one_hot.to(device)
+            else:
+                # target contains the first GT label, target_all_labels contains all labels in 1-hot-encoding
+                data, target, target_all_labels = padded_records.to(device), first_labels.to(device), \
+                    labels_one_hot.to(device)
+
+            data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)
+            output = model(data)
+
+            multi_lead_branch_active = False
+            if type(output) is tuple:
+                if isinstance(output[1], list):
+                    # multi-branch network
+                    # first element is the overall network output, the second one a list of the single lead branches
+                    multi_lead_branch_active = True
+                    output, single_lead_outputs = output
+                    # detached_single_lead_outputs = torch.stack(single_lead_outputs).detach().cpu()
+                else:
+                    # single-branch network
+                    output, attention_weights = output
+
+            # Detach tensors needed for further tracing and metrics calculation to remove them from the graph
+            detached_output = output.detach().cpu()
+            detached_target = target.detach().cpu()
+            if not multi_label_training:
+                detached_target_all_labels = target_all_labels.detach().cpu()
+
+            outputs_list.append(detached_output)
+            targets_list.append(detached_target)
+            if not multi_label_training:
+                targets_all_labels_list.append(detached_target_all_labels)
+
+            # Compute the loss on the test set
+            args = inspect.signature(loss_fn).parameters.values()
+            # Output and target are needed for all metrics! Only consider other args WITHOUT default
+            additional_args = [arg.name for arg in args
+                               if arg.name not in ('output', 'target') and arg.default is arg.empty]
+
+            if not multi_lead_branch_active:
+                additional_kwargs = {
+                    param_name: _param_dict[param_name] for param_name in additional_args
+                }
+                loss = loss_fn(output=output, target=target, **additional_kwargs)
+            else:
+                # Ensure that self.criterion is a function, namely multi_branch_BCE_with_logits
+                assert callable(loss_fn) and loss_fn.__name__ == "multi_branch_BCE_with_logits", \
+                    "For the multibranch network, the multibranch BCE with logits loss function has to be used!"
+
+                assert additional_args == ['single_lead_outputs', 'lambda_balance'], \
+                    "Something went wrong with the kwargs"
+
+                additional_kwargs = {
+                    "lambda_balance": _param_dict["lambda_balance"]
+                }
+
+                # Calculate the joint loss of each single lead branch and the overall network
+                loss = loss_fn(target=target, output=output,
+                               single_lead_outputs=single_lead_outputs,
+                               **additional_kwargs)
+
+            # batch_size = data.shape[0]
+            # total_loss += loss.item() * batch_size
+            metric_tracker.iter_update('loss', loss.item(), n=output.shape[0])
+
+            # Compute the the iteration-based metrics on test set
+            for i, met in enumerate(metrics_iter):
+                args = inspect.signature(met).parameters.values()
+                # Output and target are needed for all metrics! Only consider other args WITHOUT default
+                additional_args = [arg.name for arg in args
+                                   if arg.name not in ('output', 'target') and arg.default is arg.empty]
+                additional_kwargs = {
+                    param_name: _param_dict[param_name] for param_name in additional_args
+                }
+                metric_tracker.iter_update(met.__name__, met(target=detached_target, output=detached_output,
+                                                             **additional_kwargs), n=output.shape[0])
+                # total_metrics_iter[i] += met(output=detached_output, target=detached_target,
+                #                              **additional_kwargs) * batch_size
+
+    # Get detached tensors from the list for further evaluation
+    # For this, create a tensor from the dynamically filled list
+    det_outputs = torch.cat(outputs_list).detach().cpu()
+    det_targets = torch.cat(targets_list).detach().cpu()
+    det_targets_all_labels = torch.cat(
+        targets_all_labels_list).detach().cpu() if not multi_label_training else None
+
+    # ------------ Metrics ------------------------------------
+    if len(metrics_epoch) > 0 or len(metrics_epoch_class_wise) > 0:
+        # Finally, the epoch-based metrics need to be updated
+        # For this, calculate both, the normal epoch-based metrics as well as the class-wise epoch-based metrics
+        for met in metrics_epoch:
+            args = inspect.signature(met).parameters.values()
+            # Output and target are needed for all metrics! Only consider other args WITHOUT default
+            additional_args = [arg.name for arg in args
+                               if arg.name not in ('output', 'target') and arg.default is arg.empty]
+            additional_kwargs = {
+                param_name: _param_dict[param_name] for param_name in additional_args
+            }
+            if not multi_label_training and met.__name__ == 'cpsc_score':
+                # Consider all labels for evaluation, even in the single label case
+                metric_tracker.epoch_update(met.__name__, met(target=det_targets_all_labels, output=det_outputs,
+                                                              **additional_kwargs))
+            else:
+                metric_tracker.epoch_update(met.__name__, met(target=det_targets, output=det_outputs,
+                                                              **additional_kwargs))
+
+        # This holds for the class-wise, epoch-based metrics as well
+        for met in metrics_epoch_class_wise:
+            args = inspect.signature(met).parameters.values()
+            # Output and target are needed for all metrics! Only consider other args WITHOUT default
+            additional_args = [arg.name for arg in args
+                               if arg.name not in ('output', 'target') and arg.default is arg.empty]
+            additional_kwargs = {
+                param_name: _param_dict[param_name] for param_name in additional_args
+            }
+            metric_tracker.class_wise_epoch_update(met.__name__, met(target=det_targets, output=det_outputs,
+                                                                     **additional_kwargs))
+
+    # ------------ ROC Plots ------------------------------------
+    if config['arch']['args']['multi_label_training']:
+        fpr, tpr, thresholds = module_metric.torch_roc(output=det_outputs, target=det_targets,
+                                                       sigmoid_probs=_param_dict["sigmoid_probs"],
+                                                       logits=_param_dict["logits"], labels=_param_dict["labels"])
+        roc_auc_scores = module_metric.class_wise_torch_roc_auc(output=det_outputs, target=det_targets,
+                                                                sigmoid_probs=_param_dict["sigmoid_probs"],
+                                                                logits=_param_dict["logits"],
+                                                                labels=_param_dict["labels"])
+    else:
+        fpr, tpr, thresholds = module_metric.torch_roc(output=det_outputs, target=det_targets,
+                                                       log_probs=_param_dict["log_probs"],
+                                                       logits=_param_dict["logits"], labels=_param_dict["labels"])
+        roc_auc_scores = module_metric.class_wise_torch_roc_auc(output=det_outputs, target=det_targets,
+                                                                log_probs=_param_dict["log_probs"],
+                                                                logits=_param_dict["logits"],
+                                                                labels=_param_dict["labels"])
+
+    fig, axs = plt.subplots(3, 3, figsize=(15, 10))
+    axis_0 = 0
+    axis_1 = 0
+    line_width = 2
+    target_names = ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]
+    desired_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE']
+    class_shares = {'SNR': ' (12.5%)',
+                    'AF': ' (16.6%)',
+                    'IAVB': ' (9.8%)',
+                    'LBBB': ' (3.2%)',
+                    'RBBB': ' (25.2%)',
+                    'PAC': ' (8.4%)',
+                    'PVC': ' (9.5%)',
+                    'STD': ' (11.8%)',
+                    'STE': ' (3.0%)'}
+    for i in range(0, 9):
+        desired_class = desired_order[i]
+        idx = target_names.index(desired_class)
+        fpr_class_i = fpr[idx].numpy()
+        tpr_class_i = tpr[idx].numpy()
+        # Scale values by a factor of 1000 to better match the cpsc raw values
+        axs[axis_0, axis_1].plot(fpr_class_i, tpr_class_i, color='darkorange', lw=line_width,
+                                 label='ROC curve (area = %0.3f)' % roc_auc_scores[idx])
+        axs[axis_0, axis_1].plot([0, 1], [0, 1], color='navy', lw=line_width, linestyle='--')
+        axs[axis_0, axis_1].set_xlabel('False Positive Rate')
+        axs[axis_0, axis_1].set_ylabel('True Positive Rate')
+        axs[axis_0, axis_1].set_xlim([0.0, 1.0])
+        axs[axis_0, axis_1].set_ylim([0.0, 1.05])
+        axs[axis_0, axis_1].legend(loc="lower right")
+
+        class_name = str(target_names[idx]).replace('VEB', 'PVC')
+        axs[axis_0, axis_1].set_title('ROC curve for class ' + class_name + str(class_shares[class_name]))
+        # Also save the single plots per class
+        file_name = 'roc_curve_' + class_name + '.pdf'
+        extent = axs[axis_0, axis_1].get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+        # Pad the saved area by 30% in the x-direction and 35% in the y-direction
+        fig.savefig(config.test_output_dir / file_name, bbox_inches=extent.expanded(1.3, 1.35))
+        axis_1 = (axis_1 + 1) % 3
+        if axis_1 == 0:
+            axis_0 += 1
+    plt.tight_layout()
+    plt.savefig(config.test_output_dir / "roc_curves.pdf")
+
+    # ------------ Confusion matrices ------------------------
+    # Dump the confusion matrices into a pickle file and write figures of them to file
+    # 1) Update the confusion matrices maintained by the ClassificationTracker
+    upd_class_wise_cms = module_metric.class_wise_confusion_matrices_multi_label_sk(output=det_outputs,
+                                                                                    target=det_targets,
+                                                                                    sigmoid_probs=_param_dict[
+                                                                                        'sigmoid_probs'],
+                                                                                    logits=_param_dict['logits'],
+                                                                                    labels=_param_dict['labels'],
+                                                                                    thresholds=_param_dict[
+                                                                                        'thresholds'])
+    cm_tracker.update_class_wise_cms(upd_class_wise_cms)
+    # 2) Explicitly write a plot of the confusion matrices to a file
+    cm_tracker.save_result_cms_to_file(config.test_output_dir)
+    # Moreover, save them as pickle
+    path_name = os.path.join(config.test_output_dir, "cms_test_model.p")
+    with open(path_name, 'wb') as cm_file:
+        all_cms = [cm_tracker.cm, cm_tracker.class_wise_cms]
+        pickle.dump(all_cms, cm_file)
+
+    # ------------------- Summary Report -------------------
+    summary_dict = multi_label_metrics_variedThreshold.sk_classification_summary(output=det_outputs, target=det_targets,
+                                                                                 sigmoid_probs=_param_dict[
+                                                                                     "sigmoid_probs"],
+                                                                                 logits=_param_dict["logits"],
+                                                                                 labels=_param_dict["labels"],
+                                                                                 output_dict=True,
+                                                                                 thresholds=_param_dict['thresholds'])
+
+    # ------------------------------------Final Test Steps ---------------------------------------------
+    df_sklearn_summary = pd.DataFrame.from_dict(summary_dict)
+    df_metric_results = metric_tracker.result(include_epoch_metrics=True)
+
+    df_class_wise_results = pd.DataFrame(
+        columns=['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'macro avg', 'weighted avg'])
+    df_class_wise_results = pd.concat([df_class_wise_results, df_sklearn_summary[
+        ['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'macro avg', 'weighted avg']]])
+
+    df_class_wise_metrics = df_metric_results.loc[df_metric_results.index.str.startswith(
+        ('class_wise', 'weighted', 'macro'))]['mean'].to_frame()
+    df_class_wise_metrics.index = df_class_wise_metrics.index.set_names('metric')
+    df_class_wise_metrics.reset_index(inplace=True)
+    # df_class_wise_metrics['metric'] = df_class_wise_metrics['metric'].apply(lambda x: str(x).replace("class_wise_", "").replace("_class", ""))
+
+    metric_names = [met.__name__.replace("class_wise_", "") for met in metrics_epoch_class_wise]
+    for metric_name in metric_names:
+        df_temp = df_class_wise_metrics.loc[df_class_wise_metrics.metric.str.contains(metric_name)].transpose()
+        df_temp = df_temp.rename(columns=df_temp.iloc[0]).drop(df_temp.index[0])
+        df_temp.rename(index={'mean': metric_name}, inplace=True)
+        cols = df_temp.columns.tolist()
+        # Reorder the dataframe
+        desired_order = []
+        for i in range(0, 9):
+            desired_order.append('class_wise_' + metric_name + '_class_' + str(i))
+        if 'macro_' + metric_name in cols:
+            desired_order.append('macro_' + metric_name)
+        if 'weighted_' + metric_name in cols:
+            desired_order.append('weighted_' + metric_name)
+        # if 'micro' + metric_name in cols:
+        #     desired_order.append('micro' + metric_name)
+        df_temp = df_temp[desired_order]
+        df_temp.columns = df_class_wise_results.columns
+        df_class_wise_results = pd.concat([df_class_wise_results, df_temp], axis=0)
+
+    idx = df_class_wise_results.index.drop('support').tolist() + ['support']
+    df_class_wise_results = df_class_wise_results.reindex(idx)
+    df_class_wise_results.loc['support'] = df_class_wise_results.loc['support'].apply(int)
+
+    # Reorder the class columns of the dataframe to match the one used in the
+    desired_col_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE', 'macro avg', 'weighted avg']
+    df_class_wise_results = df_class_wise_results[desired_col_order]
+
+    df_single_metric_results = df_metric_results.loc[~df_metric_results.index.str.startswith(
+        ('class_wise', 'weighted', 'macro'))]['mean'].to_frame().transpose()
+    df_single_metric_results.rename(index={'mean': 'value'}, inplace=True)
+
+    with open(os.path.join(config.test_output_dir, 'eval_class_wise.p'), 'wb') as file:
+        pickle.dump(df_class_wise_results, file)
+
+    with open(os.path.join(config.test_output_dir, 'eval_single_metrics.p'), 'wb') as file:
+        pickle.dump(df_single_metric_results, file)
+
+    with open(os.path.join(config.test_output_dir, 'eval_results.tex'), 'w') as file:
+        df_class_wise_results.to_latex(buf=file, index=True, bold_rows=True, float_format="{:0.3f}".format)
+        df_single_metric_results.to_latex(buf=file, index=True, bold_rows=True, float_format="{:0.3f}".format)
+
+    end = time.time()
+    ty_res = time.gmtime(end - start)
+    res = time.strftime("%H hours, %M minutes, %S seconds", ty_res)
+
+    eval_log = {'Runtime': res}
+    eval_info_single_metrics = ', '.join(
+        f"{key}: {str(value).split('Name')[0].split('value')[1]}" for key, value in df_single_metric_results.items())
+    eval_info_class_wise_metrics = ', '.join(f"{key}: {value}" for key, value in df_class_wise_results.items())
+    logger_info = f"{eval_log}\n{eval_info_single_metrics}\n{eval_info_class_wise_metrics}\n"
+    logger.info(logger_info)
+
     return df_class_wise_results, df_single_metric_results
 
 
+def fine_tune_thresholds_on_valid_set(config, cv_data_dir=None, valid_idx=None, k_fold=None):
+    import model.final_model as module_arch
 
-def fine_tune_thresholds_cross_validation(config):
-    k_fold = config["data_loader"]["cross_valid"]["k_fold"]
+    _set_seed(global_config.SEED)
+
+    logger = config.get_logger('fine_tune_threshold_fold_' + str(k_fold))
+
+    data_loader = getattr(module_data, config['data_loader']['type'])(
+        cv_data_dir,
+        batch_size=64,
+        shuffle=False,
+        validation_split=0.0,
+        num_workers=4,
+        cross_valid=True,
+        test_idx=valid_idx,
+        cv_train_mode=False,
+        fold_id=k_fold
+    )
+
+    class_labels = data_loader.dataset.class_labels
+
+    # build model architecture
+    model = config.init_obj('arch', module_arch)
+    logger.info(model)
+
+    # Load the model from the checkpoint
+    logger.info('Loading checkpoint: {} ...'.format(config.resume))
+    checkpoint = torch.load(config.resume, map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+    state_dict = checkpoint['state_dict']
+    if config['n_gpu'] > 1:
+        model = torch.nn.DataParallel(model)
+    model.load_state_dict(state_dict)
+
+    # Prepare the model for testing
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = model.to(device)
+    model.eval()
+
+    # Inference: Compute the raw network scores on the validation data
+    with torch.no_grad():
+
+        # Store the intermediate targets. Always store the output scores
+        outputs_list = []
+        targets_list = []
+
+        for batch_idx, (padded_records, _, first_labels, labels_one_hot, record_names) in \
+                enumerate(tqdm(data_loader)):
+            data, target = padded_records.to(device), labels_one_hot.to(device)
+
+            data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)
+            output = model(data)
+
+            if type(output) is tuple:
+                output, attention_weights = output
+
+            # Detach tensors needed for further tracing and metrics calculation to remove them from the graph
+            detached_output = output.detach().cpu()
+            detached_target = target.detach().cpu()
+
+            outputs_list.append(detached_output)
+            targets_list.append(detached_target)
+
+    # Get detached tensors from the list for fine-tuning the thresholds
+    # For this, create a tensor from the dynamically filled list
+    det_outputs = torch.cat(outputs_list).detach().cpu()
+    det_targets = torch.cat(targets_list).detach().cpu()
+
+    # ------------ Fine tune thresholds ------------------------------------
+    thresholds = optimize_ts(target=det_targets, logits=det_outputs, labels=class_labels)
+
+    return thresholds
+
+
+def fine_tune_thresholds_cross_validation(main_path):
+    config = load_config_and_setup_paths(main_path)
+
+    total_num_folds = config["data_loader"]["cross_valid"]["k_fold"]
     data_dir = config["data_loader"]["cross_valid"]["data_dir"]
+
     # Update data dir in Dataloader ARGs!
     config["data_loader"]["args"]["data_dir"] = data_dir
     dataset = ECGDataset(data_dir)
     n_samples = len(dataset)
-    idx_full = np.arange(n_samples)
-    np.random.shuffle(idx_full)
 
     # Get the main config and the dirs for logging and saving checkpoints
     base_config = copy.deepcopy(config)
-    base_log_dir = config.log_dir
     base_save_dir = config.save_dir
-
-    # Path("savedVM_v2/models/FinalModel/cross_validation_rerun_withFC_0.3_32_16")
-    # Path("savedVM_v2/models/FinalModel/final_cross_validation")
-    # Path("savedVM_v2/models/FinalModel/cross_validation_rerun_withFC_0.2_12_8")
-    # Path("savedVM_v2/models/FinalModel/cross_validation_rerun_noFC_0.2_24_8")
-    # Path("savedVM_v2/models/FinalModel/final_cross_validation_sqrtT")
-    # models_path = Path("savedVM_v2/models/FinalModel/final_cross_validation_sqrtT")
-
-    models_path = Path("savedVM/models/FinalModel_MACRO_CV/0908_092410_ml_bs32_cross_validation_MACRO_withFC_0.3_12_3_macroES_BS32")
+    base_log_dir = config.log_dir
 
     # Divide the samples into k distinct sets
-    fold_size = n_samples // k_fold
-    fold_data = []
-    lower_limit = 0
-    for i in range(0, k_fold):
-        if i != k_fold - 1:
-            fold_data.append(idx_full[lower_limit:lower_limit + fold_size])
-            lower_limit = lower_limit + fold_size
-        else:
-            # Last fold may be a bit larger
-            fold_data.append(idx_full[lower_limit:n_samples])
-
-    # Run k-fold-cross-validation
-    # Each time, one of the subset functions as valid and another as test set
+    fold_data = split_dataset_into_folds(n_samples=n_samples, total_num_folds=total_num_folds)
 
     # Save the results of each run
-    class_wise_metrics = ["precision", "recall", "f1-score", "torch_roc_auc", "torch_acc", "support"]
-    folds = ['fold_' + str(i) for i in range(1, k_fold + 1)]
+    class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics, valid_results = \
+        prepare_result_data_structures(total_num_folds, include_valid_results=True)
 
-    iterables = [folds, class_wise_metrics]
-    multi_index = pd.MultiIndex.from_product(iterables, names=["fold", "metric"])
-
-    valid_results = pd.DataFrame(columns=folds)
-    test_results_class_wise = pd.DataFrame(columns=['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-                                                    'macro avg', 'weighted avg'], index=multi_index)
-
-    test_results_single_metrics = pd.DataFrame(columns=['loss', 'sk_subset_accuracy', 'cpsc_F1', 'cpsc_Faf',
-                                                        'cpsc_Fblock', 'cpsc_Fpc', 'cpsc_Fst'])
-
-    print("Finetuning " + str(k_fold) + "-fold cross validation")
+    print("Finetuning " + str(total_num_folds) + "-fold cross validation")
     start = time.time()
-    valid_fold_index = k_fold - 2
-    test_fold_index = k_fold - 1
-    for k in range(k_fold):
-        # Get the idx for valid and test samples, train idx not needed
-        train_sets = [fold for id, fold in enumerate(fold_data)
-                      if id != valid_fold_index and id != test_fold_index]
-        train_idx = np.concatenate(train_sets, axis=0)
-        # valid_idx = fold_data[valid_fold_index]
-        valid_idx = np.concatenate([fold_data[valid_fold_index], train_idx], axis=0)
-        test_idx = fold_data[test_fold_index]
+    valid_fold_index = total_num_folds - 2
+    test_fold_index = total_num_folds - 1
 
+    for k in range(total_num_folds):
         print("Starting fold " + str(k))
-        print("Valid Set: " + str(valid_fold_index) + ", Test Set: " + str(test_fold_index))
+        # Get the idx for valid and test samples, train idx not needed
+        train_idx, valid_idx, test_idx = get_train_valid_test_indices(base_save_dir,
+                                                                      dataset,
+                                                                      fold_data,
+                                                                      k,
+                                                                      test_fold_index,
+                                                                      valid_fold_index)
 
         # Adapt the log and save paths for the current fold
-        config.save_dir = Path(os.path.join(base_save_dir, "Fold_" + str(k + 1)))
-        config.log_dir = Path(os.path.join(base_log_dir, "Fold_" + str(k + 1)))
+        config.save_dir = Path(os.path.join(base_save_dir, "Fold_" + str(k + 1), "fine_tune_thresholds"))
+        config.log_dir = Path(os.path.join(base_log_dir, "Fold_" + str(k + 1), "fine_tune_thresholds"))
         ensure_dir(config.save_dir)
         ensure_dir(config.log_dir)
         update_logging_setup_for_tune_or_cross_valid(config.log_dir)
 
-        # Write record names to pickle for reproducing single folds
-        dict = {
-            "valid_records": np.array(dataset.records)[valid_idx],
-            "test_records": np.array(dataset.records)[test_idx]
-        }
-        with open(os.path.join(config.save_dir, "data_split.csv"), "w") as file:
-            pd.DataFrame.from_dict(data=dict, orient='index').to_csv(file, header=False)
+        # Skip training and find the best thresholds on the validation set
+        config.resume = Path(os.path.join(base_save_dir, "Fold_" + str(k + 1), "model_best.pth"))
 
-        # Skip training!
-
-        # Find the best thresholds on the validation set
-        config.resume = Path(os.path.join(models_path, "Fold_" + str(k + 1), "model_best.pth"))
-        thresholds = fine_tune_thresholds(config, cv_data_dir=data_dir, valid_idx=valid_idx, k_fold=k)
-        # [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+        ############################### THRESHOLD TUINING ###############################
+        thresholds = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]   #fine_tune_thresholds_on_valid_set((config, cv_data_dir=data_dir, valid_idx=valid_idx, k_fold=k)
+        # Default: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
         with open(os.path.join(config.save_dir, "thresholds.csv"), "w") as file:
             wr = csv.writer(file, quoting=csv.QUOTE_ALL)
             wr.writerow(thresholds)
-            # pd.DataFrame.from_dict(data=thresholds, orient='index').to_csv(file, header=False)
-
 
         # Do the testing with the fine_tuned thresholds and add the fold results to the dfs
         config.test_output_dir = Path(os.path.join(config.save_dir, 'test_output_fold_' + str(k + 1)))
         ensure_dir(config.test_output_dir)
-        fold_eval_class_wise, fold_eval_single_metrics = test_fold_with_thresholds(config, data_dir=data_dir,
+        total_num_folds = config["data_loader"]["cross_valid"]["k_fold"]
+        fold_eval_class_wise, fold_eval_single_metrics = test_fold_with_thresholds(config,
+                                                                                   cv_data_dir=data_dir,
                                                                                    test_idx=test_idx,
-                                                                                   k_fold=k, thresholds=thresholds)
+                                                                                   k_fold=k,
+                                                                                   total_num_folds=total_num_folds,
+                                                                                   thresholds=thresholds)
         # Class-Wise Metrics
         test_results_class_wise.loc[(folds[k], fold_eval_class_wise.index), fold_eval_class_wise.columns] = \
             fold_eval_class_wise.values
@@ -145,8 +573,8 @@ def fine_tune_thresholds_cross_validation(config):
         test_results_single_metrics = test_results_single_metrics.append(pd_series)
 
         # Update the indices and reset the config (including resume!)
-        valid_fold_index = (valid_fold_index + 1) % (k_fold)
-        test_fold_index = (test_fold_index + 1) % (k_fold)
+        valid_fold_index = (valid_fold_index + 1) % (total_num_folds)
+        test_fold_index = (test_fold_index + 1) % (total_num_folds)
         config = copy.deepcopy(base_config)
 
     # Summarize the results of the cross validation and write everything to files
@@ -202,26 +630,8 @@ def fine_tune_thresholds_cross_validation(config):
 
 
 if __name__ == '__main__':
-    args = argparse.ArgumentParser(description='MA Vanessa')
-    args.add_argument('-c', '--config', default=None, type=str,
-                      help='config file path (default: None)')
-    args.add_argument('-r', '--resume', default=None, type=str,
-                      help='path to latest checkpoint (default: None)')
-    args.add_argument('-d', '--device', default=None, type=str,
-                      help='indices of GPUs to enable (default: all)')
-    args.add_argument('-t', '--tune', action='store_true', help='Use to enable tuning')
-
-    # custom cli options to modify configuration from default values given in json file.
-    CustomArgs = collections.namedtuple('CustomArgs', 'flags type target')
-    options = [
-        CustomArgs(['--lr', '--learning_rate'], type=float, target='optimizer;args;lr'),
-        CustomArgs(['--bs', '--batch_size'], type=int, target='data_loader;args;batch_size')
-        # options added here can be modified by command line flags.
-    ]
-    config = ConfigParser.from_args(args=args, options=options)
-    assert config["data_loader"]["cross_valid"]["enabled"], "Cross-valid should be enabled when running this script"
-
-    # fix random seeds for reproducibility
-    _set_seed(global_config.SEED)
-
-    fine_tune_thresholds_cross_validation(config)
+    parser = argparse.ArgumentParser(description='MACRO Paper: Threshold Finetuning for CV')
+    parser.add_argument('-p', '--path', default=None, type=str,
+                        help='main path to CV runs(default: None)')
+    args = parser.parse_args()
+    fine_tune_thresholds_cross_validation(args.path)
