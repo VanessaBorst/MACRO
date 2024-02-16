@@ -61,32 +61,7 @@ def optimize_ts(logits, target, labels, fast=False):
     return [round(threshold, 2) for threshold in thresholds]
 
 
-def optimize_ts_manual(logits, target, labels):
-    sigmoid_probs = torch.sigmoid(logits)
-
-    def evaluate_ts(thresholds):
-        res_binar = apply_threshold(sigmoid_probs, thresholds)
-
-        macro_f1 = f1_score(y_true=target, y_pred=res_binar, labels=labels, average="macro")
-
-        return macro_f1
-
-    best = []
-    best_score = -1
-    # Way too much! Must be done for each class separately -> TODO (compare https://github.com/onlyzdd/ecg-diagnosis)
-    base_options = [np.arange(0, 1, 0.1) for _ in range(0, target.shape[1])]
-    all_combinations = list(itertools.product(*base_options))
-    for t in all_combinations:
-        score = evaluate_ts(t)
-        if score > best_score:
-            best_score = score
-            best = t
-    print('Best scores: ' + str(round(best_score, 5)) + ' @ thresholds =' + str(best))
-
-    return best
-
-
-def optimize_ts_roc_auc(logits, target, labels):
+def optimize_ts_based_on_roc_auc(logits, target, labels):
     sigmoid_probs = torch.sigmoid(logits)
 
     fpr_all, tpr_all, thresholds_all = module_metric.torch_roc(output=logits, target=target,
@@ -112,7 +87,7 @@ def optimize_ts_roc_auc(logits, target, labels):
     return best_thresholds
 
 
-def optimize_ts_f1(logits, target, labels):
+def optimize_ts_based_on_f1(logits, target, labels):
     sigmoid_probs = torch.sigmoid(logits)
 
     # Find the best threshold per class
@@ -133,3 +108,30 @@ def optimize_ts_f1(logits, target, labels):
 
     print('Best Macro F1: ' + str(macro_f1) + ' @ thresholds =' + str(best_thresholds))
     return [round(threshold, 1) for threshold in best_thresholds]
+
+
+
+def optimize_ts_manual(logits, target, labels):
+    # TODO WIP!!!!
+    sigmoid_probs = torch.sigmoid(logits)
+
+    def evaluate_ts(thresholds):
+        res_binar = apply_threshold(sigmoid_probs, thresholds)
+
+        macro_f1 = f1_score(y_true=target, y_pred=res_binar, labels=labels, average="macro")
+
+        return macro_f1
+
+    best = []
+    best_score = -1
+    # Way too much! Must be done for each class separately -> TODO (compare https://github.com/onlyzdd/ecg-diagnosis)
+    base_options = [np.arange(0, 1, 0.1) for _ in range(0, target.shape[1])]
+    all_combinations = list(itertools.product(*base_options))
+    for t in all_combinations:
+        score = evaluate_ts(t)
+        if score > best_score:
+            best_score = score
+            best = t
+    print('Best scores: ' + str(round(best_score, 5)) + ' @ thresholds =' + str(best))
+
+    return best

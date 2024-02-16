@@ -1,5 +1,8 @@
+import inspect
+from matplotlib import pyplot as plt
+from utils.tracker import ConfusionMatrixTracker, MetricTracker
+
 import argparse
-import collections
 import copy
 import csv
 
@@ -13,18 +16,20 @@ import numpy as np
 import torch
 from tqdm import tqdm
 import data_loader.data_loaders as module_data
+import model.loss as module_loss
 import global_config
 from evaluate_cv_folds import split_dataset_into_folds, get_train_valid_test_indices, load_config_and_setup_paths, \
     prepare_result_data_structures
 
 # fix random seeds for reproducibility
 from train import _set_seed
-from utils.optimize_thresholds import optimize_ts
+from utils.optimize_thresholds import optimize_ts, optimize_ts_based_on_roc_auc, optimize_ts_based_on_f1, \
+    optimize_ts_manual
 
 from data_loader.ecg_data_set import ECGDataset
 from logger import update_logging_setup_for_tune_or_cross_valid
 
-from utils import ensure_dir, read_json
+from utils import ensure_dir
 
 
 # Should only be used with cv_active
@@ -47,7 +52,7 @@ def test_fold_with_thresholds(config,
         import model.final_model_multibranch as module_arch
 
     if config['arch']['args']['multi_label_training']:
-        import evaluation.multi_label_metrics as module_metric
+        import evaluation.multi_label_metrics_variedThreshold as module_metric
     else:
         raise NotImplementedError("Single label metrics haven't been checked after the Python update! Do not use them!")
         import evaluation.single_label_metrics as module_metric
@@ -91,11 +96,11 @@ def test_fold_with_thresholds(config,
     metrics_iter = [getattr(module_metric, met) for met in ['sk_subset_accuracy']]
     metrics_epoch = [getattr(module_metric, met) for met in ['cpsc_score',
                                                              'weighted_torch_roc_auc',
-                                                             'weighted_torch_accuracy',
+                                                             'weighted_torch_acc',
                                                              'macro_torch_roc_auc',
-                                                             'macro_torch_accuracy']]
+                                                             'macro_torch_acc']]
     metrics_epoch_class_wise = [getattr(module_metric, met) for met in ['class_wise_torch_roc_auc',
-                                                                        'class_wise_torch_accuracy']]
+                                                                        'class_wise_torch_acc']]
 
     multi_label_training = config['arch']['args']['multi_label_training']
     class_labels = data_loader.dataset.class_labels
@@ -111,12 +116,17 @@ def test_fold_with_thresholds(config,
         "pos_weights": data_loader.dataset.get_ml_pos_weights(
             idx_list=list(range(len(data_loader.sampler))),
             mode='test',
-            cross_valid_active=cv_active),
+            cross_valid_active=True),
         "class_weights": data_loader.dataset.get_inverse_class_frequency(
             idx_list=list(range(len(data_loader.sampler))),
             multi_label_training=multi_label_training,
             mode='test',
-            cross_valid_active=cv_active),
+            cross_valid_active=True),
+        "class_freqs": data_loader.dataset.get_class_frequency(
+            idx_list=list(range(len(data_loader.sampler))),
+            multi_label_training=multi_label_training,
+            mode='test',
+            cross_valid_active=True),
         "lambda_balance": config["loss"]["add_args"].get("lambda_balance", 1)
     }
 
@@ -347,7 +357,7 @@ def test_fold_with_thresholds(config,
         pickle.dump(all_cms, cm_file)
 
     # ------------------- Summary Report -------------------
-    summary_dict = multi_label_metrics_variedThreshold.sk_classification_summary(output=det_outputs, target=det_targets,
+    summary_dict = module_metric.sk_classification_summary(output=det_outputs, target=det_targets,
                                                                                  sigmoid_probs=_param_dict[
                                                                                      "sigmoid_probs"],
                                                                                  logits=_param_dict["logits"],
@@ -426,8 +436,18 @@ def test_fold_with_thresholds(config,
     return df_class_wise_results, df_single_metric_results
 
 
-def fine_tune_thresholds_on_valid_set(config, cv_data_dir=None, valid_idx=None, k_fold=None):
-    import model.final_model as module_arch
+def fine_tune_thresholds_on_valid_set(config, cv_data_dir=None, valid_idx=None, k_fold=None, strategy=None):
+    # Conditional inputs depending on the config
+    if config['arch']['type'] == 'BaselineModel':
+        import model.baseline_model as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithMHAttentionV2':
+        import model.baseline_model_with_MHAttention_v2 as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndNormV2PreActivation':
+        import model.baseline_model_with_skips_and_norm_v2_pre_activation_design as module_arch
+    elif config['arch']['type'] == 'FinalModel':
+        import model.final_model as module_arch
+    elif config['arch']['type'] == 'FinalModelMultiBranch':
+        import model.final_model_multibranch as module_arch
 
     _set_seed(global_config.SEED)
 
@@ -494,13 +514,27 @@ def fine_tune_thresholds_on_valid_set(config, cv_data_dir=None, valid_idx=None, 
     det_targets = torch.cat(targets_list).detach().cpu()
 
     # ------------ Fine tune thresholds ------------------------------------
-    thresholds = optimize_ts(target=det_targets, logits=det_outputs, labels=class_labels)
+    thresholds = None
+    match strategy:
+        case "manual":
+            thresholds = optimize_ts_manual(logits=det_outputs, target=det_targets, labels=class_labels)
+        case "bayesianOptimization":
+            thresholds = optimize_ts(logits=det_outputs, target=det_targets, labels=class_labels)
+        case "roc_auc":
+            raise ValueError("The strategy for threshold optimization is not tested yet!")
+            thresholds = optimize_ts_based_on_roc_auc(logits=det_outputs, target=det_targets, labels=class_labels)
+        case "f1":
+            raise ValueError("The strategy for threshold optimization is not tested yet!")
+            thresholds = optimize_ts_based_on_f1(logits=det_outputs, target=det_targets, labels=class_labels)
+        case _:
+            # Should not occur
+            raise ValueError("The strategy for threshold optimization is not valid!")
 
     return thresholds
 
 
-def fine_tune_thresholds_cross_validation(main_path):
-    config = load_config_and_setup_paths(main_path)
+def fine_tune_thresholds_cross_validation(main_path, strategy=None):
+    config = load_config_and_setup_paths(main_path=main_path, sub_dir=f"threshold_tuning_{strategy}")
 
     total_num_folds = config["data_loader"]["cross_valid"]["k_fold"]
     data_dir = config["data_loader"]["cross_valid"]["data_dir"]
@@ -528,28 +562,32 @@ def fine_tune_thresholds_cross_validation(main_path):
     test_fold_index = total_num_folds - 1
 
     for k in range(total_num_folds):
-        print("Starting fold " + str(k))
+        print("Starting fold " + str(k+1))
         # Get the idx for valid and test samples, train idx not needed
-        train_idx, valid_idx, test_idx = get_train_valid_test_indices(base_save_dir,
-                                                                      dataset,
-                                                                      fold_data,
-                                                                      k,
-                                                                      test_fold_index,
-                                                                      valid_fold_index)
+        # TODO CHECK IF TO INCLUDE TRAIN IDX FOR THRESHOLD OPTIMIZATION
+        train_idx, valid_idx, test_idx = get_train_valid_test_indices(main_path=main_path,
+                                                                      dataset=dataset,
+                                                                      fold_data=fold_data,
+                                                                      k=k,
+                                                                      test_fold_index=test_fold_index,
+                                                                      valid_fold_index=valid_fold_index,
+                                                                      merge_train_into_valid_idx=True)
 
         # Adapt the log and save paths for the current fold
-        config.save_dir = Path(os.path.join(base_save_dir, "Fold_" + str(k + 1), "fine_tune_thresholds"))
-        config.log_dir = Path(os.path.join(base_log_dir, "Fold_" + str(k + 1), "fine_tune_thresholds"))
+        config.save_dir = Path(os.path.join(base_save_dir, "Fold_" + str(k + 1)))
+        config.log_dir = Path(os.path.join(base_log_dir, "Fold_" + str(k + 1)))
         ensure_dir(config.save_dir)
         ensure_dir(config.log_dir)
         update_logging_setup_for_tune_or_cross_valid(config.log_dir)
 
         # Skip training and find the best thresholds on the validation set
-        config.resume = Path(os.path.join(base_save_dir, "Fold_" + str(k + 1), "model_best.pth"))
+        config.resume = Path(os.path.join(main_path, "Fold_" + str(k + 1), "model_best.pth"))
 
         ############################### THRESHOLD TUINING ###############################
-        thresholds = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]   #fine_tune_thresholds_on_valid_set((config, cv_data_dir=data_dir, valid_idx=valid_idx, k_fold=k)
-        # Default: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+        thresholds = fine_tune_thresholds_on_valid_set(config, cv_data_dir=data_dir,
+                                                       valid_idx=valid_idx, k_fold=k,
+                                                       strategy=strategy) \
+            if strategy is not None else [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]   # Default
         with open(os.path.join(config.save_dir, "thresholds.csv"), "w") as file:
             wr = csv.writer(file, quoting=csv.QUOTE_ALL)
             wr.writerow(thresholds)
@@ -565,6 +603,7 @@ def fine_tune_thresholds_cross_validation(main_path):
                                                                                    total_num_folds=total_num_folds,
                                                                                    thresholds=thresholds)
         # Class-Wise Metrics
+        fold_eval_class_wise = fold_eval_class_wise.rename(index={'torch_acc': 'torch_accuracy'})
         test_results_class_wise.loc[(folds[k], fold_eval_class_wise.index), fold_eval_class_wise.columns] = \
             fold_eval_class_wise.values
         # Single Metrics
@@ -633,5 +672,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='MACRO Paper: Threshold Finetuning for CV')
     parser.add_argument('-p', '--path', default=None, type=str,
                         help='main path to CV runs(default: None)')
+    parser.add_argument('--strategy', default=None, type=str,
+                        help='strategy to use for threshold optimization (default: None)')
     args = parser.parse_args()
-    fine_tune_thresholds_cross_validation(args.path)
+    fine_tune_thresholds_cross_validation(args.path, args.strategy)

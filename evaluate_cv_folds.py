@@ -126,6 +126,7 @@ def create_roc_curve_report(main_path):
             # 'ROC curve for class ' + str(target_names[idx]) + str())
             extent = axs[axis_0, axis_1].get_window_extent().transformed(fig.dpi_scale_trans.inverted())
             # Pad the saved area by 30% in the x-direction and 35% in the y-direction
+            # TODO: AttributeError: 'collections.OrderedDict' object has no attribute 'test_output_dir'
             fig.savefig(config.test_output_dir / file_name, bbox_inches=extent.expanded(1.3, 1.35))
             axis_1 = (axis_1 + 1) % 3
             if axis_1 == 0:
@@ -172,7 +173,7 @@ def create_roc_curve_report(main_path):
 
 
 def evaluate_cross_validation(main_path):
-    config = load_config_and_setup_paths(main_path)
+    config = load_config_and_setup_paths(main_path, "additional_eval")
 
     total_num_folds = config["data_loader"]["cross_valid"]["k_fold"]
     data_dir = config["data_loader"]["cross_valid"]["data_dir"]
@@ -201,6 +202,7 @@ def evaluate_cross_validation(main_path):
     for k in range(total_num_folds):
         print("Starting fold " + str(k))
         # Get the idx for valid and test samples, train idx not needed
+        # TODO ADAPT DIR PATHS
         train_idx, valid_idx, test_idx = get_train_valid_test_indices(base_save_dir,
                                                                       dataset,
                                                                       fold_data,
@@ -289,18 +291,21 @@ def prepare_result_data_structures(total_num_folds, include_valid_results=False)
     test_results_class_wise = pd.DataFrame(columns=['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
                                                     'macro avg', 'weighted avg'], index=multi_index)
     test_results_single_metrics = pd.DataFrame(columns=['loss', 'sk_subset_accuracy'])
-    return class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics if not include_valid_results \
-        else class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics, valid_results
+    if not include_valid_results:
+        return class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics
+    else:
+        return class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics, valid_results
 
 
-def load_config_and_setup_paths(main_path):
+def load_config_and_setup_paths(main_path, sub_dir=None):
     # Load the main config
     config = read_json(os.path.join(main_path, "config.json"))
     config = ConfigParser(config=config, create_save_log_dir=False)
 
     # Update paths to old paths (otherwise set to current date)
-    config.save_dir = Path(main_path)
-    config.log_dir = Path(main_path)
+    config.save_dir = Path(main_path) if sub_dir is None else os.path.join(Path(main_path), sub_dir)
+    log_dir = Path(main_path.replace("models", "log"))
+    config.log_dir = log_dir if sub_dir is None else os.path.join(log_dir, sub_dir)
 
     assert config["data_loader"]["cross_valid"]["enabled"], "Cross-valid should be enabled when running this script"
 
@@ -311,14 +316,15 @@ def load_config_and_setup_paths(main_path):
     return config
 
 
-def get_train_valid_test_indices(base_save_dir, dataset, fold_data, k, test_fold_index, valid_fold_index):
+def get_train_valid_test_indices(main_path, dataset, fold_data, k, test_fold_index, valid_fold_index,
+                                 merge_train_into_valid_idx=False):
     train_sets = [fold for id, fold in enumerate(fold_data)
                   if id != valid_fold_index and id != test_fold_index]
     train_idx = np.concatenate(train_sets, axis=0)
     valid_idx = fold_data[valid_fold_index]
     test_idx = fold_data[test_fold_index]
     # Load the old data split for sanity check
-    with open(os.path.join(base_save_dir, "Fold_" + str(k + 1), "data_split.csv"), "r") as file:
+    with open(os.path.join(main_path, "Fold_" + str(k + 1), "data_split.csv"), "r") as file:
         data = pd.read_csv(file, index_col=0, header=None)
         dict = {
             "train_records": data.loc["train_records"],
@@ -331,6 +337,9 @@ def get_train_valid_test_indices(base_save_dir, dataset, fold_data, k, test_fold
         "Valid indices do not match the old data split"
     assert np.array(dataset.records)[test_idx].tolist() == dict["test_records"].tolist(), \
         "Test indices do not match the old data split"
+
+    if merge_train_into_valid_idx:
+        valid_idx = np.concatenate([fold_data[valid_fold_index], train_idx], axis=0)
 
     return train_idx, valid_idx, test_idx
 
