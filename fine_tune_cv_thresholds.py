@@ -19,7 +19,7 @@ import data_loader.data_loaders as module_data
 import model.loss as module_loss
 import global_config
 from evaluate_cv_folds import split_dataset_into_folds, get_train_valid_test_indices, load_config_and_setup_paths, \
-    prepare_result_data_structures
+    prepare_result_data_structures, setup_cross_fold
 
 # fix random seeds for reproducibility
 from train import _set_seed
@@ -514,11 +514,11 @@ def fine_tune_thresholds_on_valid_set(config, cv_data_dir=None, valid_idx=None, 
     det_targets = torch.cat(targets_list).detach().cpu()
 
     # ------------ Fine tune thresholds ------------------------------------
-    thresholds = None
     match strategy:
         case "manual":
             thresholds = optimize_ts_manual(logits=det_outputs, target=det_targets, labels=class_labels)
         case "bayesianOptimization":
+            # raise ValueError("The strategy for threshold optimization is not tested yet!")
             thresholds = optimize_ts(logits=det_outputs, target=det_targets, labels=class_labels)
         case "roc_auc":
             raise ValueError("The strategy for threshold optimization is not tested yet!")
@@ -533,24 +533,11 @@ def fine_tune_thresholds_on_valid_set(config, cv_data_dir=None, valid_idx=None, 
     return thresholds
 
 
-def fine_tune_thresholds_cross_validation(main_path, strategy=None):
-    config = load_config_and_setup_paths(main_path=main_path, sub_dir=f"threshold_tuning_{strategy}")
+def fine_tune_thresholds_cross_validation(main_path, strategy=None, includeTrain=False):
+    sub_dir = f"threshold_tuning_{strategy}" if not includeTrain else f"threshold_tuning_{strategy}_includeTrain"
+    config = load_config_and_setup_paths(main_path=main_path, sub_dir=sub_dir)
 
-    total_num_folds = config["data_loader"]["cross_valid"]["k_fold"]
-    data_dir = config["data_loader"]["cross_valid"]["data_dir"]
-
-    # Update data dir in Dataloader ARGs!
-    config["data_loader"]["args"]["data_dir"] = data_dir
-    dataset = ECGDataset(data_dir)
-    n_samples = len(dataset)
-
-    # Get the main config and the dirs for logging and saving checkpoints
-    base_config = copy.deepcopy(config)
-    base_save_dir = config.save_dir
-    base_log_dir = config.log_dir
-
-    # Divide the samples into k distinct sets
-    fold_data = split_dataset_into_folds(n_samples=n_samples, total_num_folds=total_num_folds)
+    base_config, base_log_dir, base_save_dir, data_dir, dataset, fold_data, total_num_folds = setup_cross_fold(config)
 
     # Save the results of each run
     class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics, valid_results = \
@@ -564,14 +551,13 @@ def fine_tune_thresholds_cross_validation(main_path, strategy=None):
     for k in range(total_num_folds):
         print("Starting fold " + str(k+1))
         # Get the idx for valid and test samples, train idx not needed
-        # TODO CHECK IF TO INCLUDE TRAIN IDX FOR THRESHOLD OPTIMIZATION
         train_idx, valid_idx, test_idx = get_train_valid_test_indices(main_path=main_path,
                                                                       dataset=dataset,
                                                                       fold_data=fold_data,
                                                                       k=k,
                                                                       test_fold_index=test_fold_index,
                                                                       valid_fold_index=valid_fold_index,
-                                                                      merge_train_into_valid_idx=True)
+                                                                      merge_train_into_valid_idx=includeTrain)
 
         # Adapt the log and save paths for the current fold
         config.save_dir = Path(os.path.join(base_save_dir, "Fold_" + str(k + 1)))
@@ -583,7 +569,7 @@ def fine_tune_thresholds_cross_validation(main_path, strategy=None):
         # Skip training and find the best thresholds on the validation set
         config.resume = Path(os.path.join(main_path, "Fold_" + str(k + 1), "model_best.pth"))
 
-        ############################### THRESHOLD TUINING ###############################
+        ############################### THRESHOLD TUNING ###############################
         thresholds = fine_tune_thresholds_on_valid_set(config, cv_data_dir=data_dir,
                                                        valid_idx=valid_idx, k_fold=k,
                                                        strategy=strategy) \
@@ -591,11 +577,11 @@ def fine_tune_thresholds_cross_validation(main_path, strategy=None):
         with open(os.path.join(config.save_dir, "thresholds.csv"), "w") as file:
             wr = csv.writer(file, quoting=csv.QUOTE_ALL)
             wr.writerow(thresholds)
+        ############################### END THRESHOLD TUNING ###############################
 
         # Do the testing with the fine_tuned thresholds and add the fold results to the dfs
         config.test_output_dir = Path(os.path.join(config.save_dir, 'test_output_fold_' + str(k + 1)))
         ensure_dir(config.test_output_dir)
-        total_num_folds = config["data_loader"]["cross_valid"]["k_fold"]
         fold_eval_class_wise, fold_eval_single_metrics = test_fold_with_thresholds(config,
                                                                                    cv_data_dir=data_dir,
                                                                                    test_idx=test_idx,
@@ -674,5 +660,8 @@ if __name__ == '__main__':
                         help='main path to CV runs(default: None)')
     parser.add_argument('--strategy', default=None, type=str,
                         help='strategy to use for threshold optimization (default: None)')
+    parser.add_argument('--includeTrain',  action='store_true',
+                        help='Set this flag if the training data should be included for threshold optimization '
+                             '(default: False)')
     args = parser.parse_args()
-    fine_tune_thresholds_cross_validation(args.path, args.strategy)
+    fine_tune_thresholds_cross_validation(args.path, args.strategy, args.includeTrain)

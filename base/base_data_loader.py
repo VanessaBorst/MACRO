@@ -108,17 +108,21 @@ class BaseDataLoader(DataLoader):
 
                 test_sampler = SubsetRandomSampler(test_idx)
 
-                # Write it to file for reproducibility, if not yet existing
-                # If existing, check that the split is always the same (for fixed SEED)
-                if stratified_k_fold:
-                    path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
-                                        "stratified", f"seed_{global_config.SEED}")
-                else:
-                    path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
-                                        f"seed_{global_config.SEED}")
-                file_name = os.path.join(path, "cv_test_" + str(fold_id + 1) + ".txt")
-                ensure_dir(path)
-                _consistency_check_data_split_cv(file_name, desired_ids=test_idx)
+                if total_num_folds is not None:
+                    # For threshold optimization, the data split is checked before and the idx can vary
+                    # (depending on whether only the valid idx or the train +  valid idx are used for the optimization)
+                    # In this case, they are passed as test_idx parameter, since no training is needed
+                    # Write it to file for reproducibility, if not yet existing
+                    # If existing, check that the split is always the same (for fixed SEED)
+                    if stratified_k_fold:
+                        path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
+                                            "stratified", f"seed_{global_config.SEED}")
+                    else:
+                        path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
+                                            f"seed_{global_config.SEED}")
+                    file_name = os.path.join(path, "cv_test_" + str(fold_id + 1) + ".txt")
+                    ensure_dir(path)
+                    _consistency_check_data_split_cv(file_name, desired_ids=test_idx)
 
                 # turn off shuffle option which is mutually exclusive with sampler
                 self.shuffle = False

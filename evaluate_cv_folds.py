@@ -9,7 +9,6 @@ from pathlib import Path
 import numpy as np
 from matplotlib import pyplot as plt
 
-
 import global_config
 from data_loader.ecg_data_set import ECGDataset
 from logger import update_logging_setup_for_tune_or_cross_valid
@@ -28,10 +27,14 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
 
 
-def test_fold(config, data_dir, test_idx, k_fold, total_num_folds):
-    df_class_wise_results, df_single_metric_results = test_model(config, tune_config=None, cv_active=True,
-                                                                 cv_data_dir=data_dir, test_idx=test_idx,
-                                                                 k_fold=k_fold, total_num_folds=total_num_folds)
+def test_fold(config, cv_data_dir, test_idx, k_fold, total_num_folds):
+    df_class_wise_results, df_single_metric_results = test_model(config=config,
+                                                                 tune_config=None,
+                                                                 cv_active=True,
+                                                                 cv_data_dir=cv_data_dir,
+                                                                 test_idx=test_idx,
+                                                                 k_fold=k_fold,
+                                                                 total_num_folds=total_num_folds)
     return df_class_wise_results, df_single_metric_results
 
 
@@ -49,14 +52,52 @@ def create_roc_curve_report(main_path):
         validation_split=0.0,
         num_workers=4,
         cross_valid=True,
-        test_idx=np.array([14, 16, 17, 32, 34, 39, 60, 89, 93, 96, 111, 113, 126, 133, 180, 191, 194, 231, 255, 262, 268, 271, 281, 287, 293, 295, 321, 323, 329, 330, 342, 361, 371, 389, 390, 407, 413, 416, 424, 434, 438, 441, 443, 454, 455, 460, 464, 481, 508, 538, 544, 545, 555, 557, 581, 588, 604, 609, 612, 639, 672, 686, 687, 695, 703, 713, 719, 731, 744, 757, 762, 763, 788, 794, 819, 821, 826, 836, 837, 845, 855, 862, 867, 874, 881, 892, 915, 922, 924, 931, 936, 942, 950, 979, 998, 1007, 1038, 1061, 1092, 1100, 1104, 1105, 1111, 1118, 1128, 1132, 1133, 1146, 1150, 1153, 1159, 1221, 1222, 1230, 1235, 1246, 1248, 1257, 1258, 1282, 1305, 1312, 1326, 1329, 1336, 1343, 1346, 1363, 1378, 1381, 1382, 1389, 1401, 1406, 1418, 1425, 1427, 1438, 1439, 1442, 1443, 1452, 1474, 1507, 1510, 1513, 1514, 1521, 1524, 1537, 1543, 1551, 1557, 1558, 1593, 1594, 1602, 1639, 1647, 1649, 1656, 1662, 1669, 1675, 1684, 1704, 1731, 1734, 1755, 1759, 1760, 1764, 1771, 1789, 1792, 1794, 1795, 1847, 1871, 1873, 1888, 1891, 1897, 1902, 1922, 1968, 1994, 1996, 2004, 2009, 2010, 2011, 2023, 2040, 2046, 2050, 2056, 2072, 2080, 2108, 2140, 2159, 2161, 2174, 2185, 2191, 2201, 2213, 2216, 2227, 2240, 2241, 2255, 2270, 2289, 2301, 2338, 2341, 2359, 2360, 2378, 2388, 2395, 2397, 2412, 2414, 2425, 2428, 2446, 2467, 2478, 2480, 2483, 2490, 2495, 2507, 2512, 2521, 2523, 2528, 2533, 2541, 2543, 2551, 2557, 2563, 2566, 2567, 2574, 2578, 2587, 2599, 2610, 2620, 2621, 2622, 2624, 2625, 2637, 2640, 2654, 2657, 2666, 2684, 2709, 2721, 2741, 2747, 2751, 2766, 2768, 2778, 2795, 2800, 2810, 2819, 2838, 2843, 2854, 2856, 2863, 2871, 2878, 2880, 2884, 2894, 2917, 2936, 2937, 2944, 2945, 2947, 2969, 2989, 2999, 3003, 3026, 3034, 3047, 3054, 3064, 3072, 3078, 3082, 3084, 3086, 3092, 3095, 3101, 3116, 3121, 3132, 3143, 3155, 3178, 3200, 3224, 3226, 3230, 3252, 3258, 3261, 3273, 3287, 3295, 3306, 3310, 3316, 3323, 3325, 3329, 3331, 3348, 3356, 3358, 3365, 3367, 3373, 3377, 3387, 3393, 3406, 3427, 3429, 3454, 3458, 3463, 3465, 3476, 3481, 3486, 3505, 3512, 3518, 3527, 3537, 3539, 3556, 3561, 3573, 3574, 3579, 3582, 3622, 3624, 3651, 3655, 3656, 3665, 3668, 3687, 3700, 3702, 3708, 3719, 3727, 3737, 3741, 3751, 3753, 3796, 3815, 3831, 3839, 3860, 3862, 3866, 3875, 3881, 3891, 3892, 3895, 3899, 3914, 3918, 3933, 3937, 3940, 3943, 3956, 3959, 3963, 3971, 3978, 3997, 4004, 4007, 4011, 4022, 4028, 4029, 4030, 4043, 4050, 4060, 4063, 4097, 4099, 4102, 4104, 4112, 4118, 4142, 4143, 4149, 4166, 4169, 4173, 4184, 4195, 4201, 4202, 4231, 4235, 4242, 4245, 4254, 4277, 4293, 4295, 4309, 4310, 4313, 4321, 4343, 4344, 4355, 4360, 4384, 4386, 4391, 4418, 4421, 4436, 4451, 4454, 4455, 4462, 4486, 4496, 4501, 4507, 4508, 4538, 4541, 4547, 4550, 4576, 4584, 4590, 4591, 4602, 4610, 4626, 4628, 4636, 4645, 4648, 4671, 4679, 4692, 4703, 4718, 4721, 4725, 4731, 4736, 4756, 4761, 4765, 4782, 4783, 4841, 4846, 4851, 4861, 4862, 4867, 4904, 4933, 4939, 4940, 4947, 4951, 4955, 4958, 4968, 4976, 4981, 4982, 4985, 5000, 5009, 5015, 5016, 5036, 5046, 5060, 5088, 5093, 5109, 5126, 5150, 5182, 5189, 5206, 5208, 5218, 5236, 5243, 5246, 5250, 5255, 5256, 5257, 5264, 5306, 5307, 5314, 5318, 5325, 5327, 5338, 5339, 5342, 5345, 5353, 5367, 5373, 5397, 5410, 5417, 5421, 5424, 5451, 5461, 5474, 5484, 5494, 5497, 5530, 5531, 5533, 5543, 5550, 5571, 5586, 5594, 5613, 5616, 5626, 5630, 5642, 5646, 5650, 5660, 5664, 5679, 5703, 5722, 5731, 5746, 5747, 5762, 5795, 5815, 5837, 5845, 5857, 5862, 5879, 5880, 5888, 5915, 5921, 5934, 5957, 5971, 5973, 5975, 5986, 5992, 6010, 6027, 6049, 6052, 6065, 6077, 6084, 6085, 6086, 6087, 6113, 6114, 6115, 6118, 6139, 6169, 6173, 6182, 6195, 6202, 6226, 6233, 6236, 6245, 6250, 6257, 6262, 6269, 6284, 6302, 6306, 6309, 6354, 6357, 6359, 6364, 6368, 6382, 6409, 6427, 6433, 6440, 6445, 6448, 6468, 6481, 6483, 6484, 6494, 6503, 6504, 6505, 6515, 6517, 6527, 6533, 6544, 6545, 6553, 6564, 6566, 6570, 6578, 6601, 6611, 6615, 6624, 6625, 6628, 6640, 6648, 6653, 6659, 6681, 6694, 6717, 6740, 6752, 6771, 6775, 6782, 6806, 6812, 6816, 6833, 6834, 6836, 6838, 6857, 6862, 6870, 6874]),   #Dummy value
+        test_idx=np.array(
+            [14, 16, 17, 32, 34, 39, 60, 89, 93, 96, 111, 113, 126, 133, 180, 191, 194, 231, 255, 262, 268, 271, 281,
+             287, 293, 295, 321, 323, 329, 330, 342, 361, 371, 389, 390, 407, 413, 416, 424, 434, 438, 441, 443, 454,
+             455, 460, 464, 481, 508, 538, 544, 545, 555, 557, 581, 588, 604, 609, 612, 639, 672, 686, 687, 695, 703,
+             713, 719, 731, 744, 757, 762, 763, 788, 794, 819, 821, 826, 836, 837, 845, 855, 862, 867, 874, 881, 892,
+             915, 922, 924, 931, 936, 942, 950, 979, 998, 1007, 1038, 1061, 1092, 1100, 1104, 1105, 1111, 1118, 1128,
+             1132, 1133, 1146, 1150, 1153, 1159, 1221, 1222, 1230, 1235, 1246, 1248, 1257, 1258, 1282, 1305, 1312, 1326,
+             1329, 1336, 1343, 1346, 1363, 1378, 1381, 1382, 1389, 1401, 1406, 1418, 1425, 1427, 1438, 1439, 1442, 1443,
+             1452, 1474, 1507, 1510, 1513, 1514, 1521, 1524, 1537, 1543, 1551, 1557, 1558, 1593, 1594, 1602, 1639, 1647,
+             1649, 1656, 1662, 1669, 1675, 1684, 1704, 1731, 1734, 1755, 1759, 1760, 1764, 1771, 1789, 1792, 1794, 1795,
+             1847, 1871, 1873, 1888, 1891, 1897, 1902, 1922, 1968, 1994, 1996, 2004, 2009, 2010, 2011, 2023, 2040, 2046,
+             2050, 2056, 2072, 2080, 2108, 2140, 2159, 2161, 2174, 2185, 2191, 2201, 2213, 2216, 2227, 2240, 2241, 2255,
+             2270, 2289, 2301, 2338, 2341, 2359, 2360, 2378, 2388, 2395, 2397, 2412, 2414, 2425, 2428, 2446, 2467, 2478,
+             2480, 2483, 2490, 2495, 2507, 2512, 2521, 2523, 2528, 2533, 2541, 2543, 2551, 2557, 2563, 2566, 2567, 2574,
+             2578, 2587, 2599, 2610, 2620, 2621, 2622, 2624, 2625, 2637, 2640, 2654, 2657, 2666, 2684, 2709, 2721, 2741,
+             2747, 2751, 2766, 2768, 2778, 2795, 2800, 2810, 2819, 2838, 2843, 2854, 2856, 2863, 2871, 2878, 2880, 2884,
+             2894, 2917, 2936, 2937, 2944, 2945, 2947, 2969, 2989, 2999, 3003, 3026, 3034, 3047, 3054, 3064, 3072, 3078,
+             3082, 3084, 3086, 3092, 3095, 3101, 3116, 3121, 3132, 3143, 3155, 3178, 3200, 3224, 3226, 3230, 3252, 3258,
+             3261, 3273, 3287, 3295, 3306, 3310, 3316, 3323, 3325, 3329, 3331, 3348, 3356, 3358, 3365, 3367, 3373, 3377,
+             3387, 3393, 3406, 3427, 3429, 3454, 3458, 3463, 3465, 3476, 3481, 3486, 3505, 3512, 3518, 3527, 3537, 3539,
+             3556, 3561, 3573, 3574, 3579, 3582, 3622, 3624, 3651, 3655, 3656, 3665, 3668, 3687, 3700, 3702, 3708, 3719,
+             3727, 3737, 3741, 3751, 3753, 3796, 3815, 3831, 3839, 3860, 3862, 3866, 3875, 3881, 3891, 3892, 3895, 3899,
+             3914, 3918, 3933, 3937, 3940, 3943, 3956, 3959, 3963, 3971, 3978, 3997, 4004, 4007, 4011, 4022, 4028, 4029,
+             4030, 4043, 4050, 4060, 4063, 4097, 4099, 4102, 4104, 4112, 4118, 4142, 4143, 4149, 4166, 4169, 4173, 4184,
+             4195, 4201, 4202, 4231, 4235, 4242, 4245, 4254, 4277, 4293, 4295, 4309, 4310, 4313, 4321, 4343, 4344, 4355,
+             4360, 4384, 4386, 4391, 4418, 4421, 4436, 4451, 4454, 4455, 4462, 4486, 4496, 4501, 4507, 4508, 4538, 4541,
+             4547, 4550, 4576, 4584, 4590, 4591, 4602, 4610, 4626, 4628, 4636, 4645, 4648, 4671, 4679, 4692, 4703, 4718,
+             4721, 4725, 4731, 4736, 4756, 4761, 4765, 4782, 4783, 4841, 4846, 4851, 4861, 4862, 4867, 4904, 4933, 4939,
+             4940, 4947, 4951, 4955, 4958, 4968, 4976, 4981, 4982, 4985, 5000, 5009, 5015, 5016, 5036, 5046, 5060, 5088,
+             5093, 5109, 5126, 5150, 5182, 5189, 5206, 5208, 5218, 5236, 5243, 5246, 5250, 5255, 5256, 5257, 5264, 5306,
+             5307, 5314, 5318, 5325, 5327, 5338, 5339, 5342, 5345, 5353, 5367, 5373, 5397, 5410, 5417, 5421, 5424, 5451,
+             5461, 5474, 5484, 5494, 5497, 5530, 5531, 5533, 5543, 5550, 5571, 5586, 5594, 5613, 5616, 5626, 5630, 5642,
+             5646, 5650, 5660, 5664, 5679, 5703, 5722, 5731, 5746, 5747, 5762, 5795, 5815, 5837, 5845, 5857, 5862, 5879,
+             5880, 5888, 5915, 5921, 5934, 5957, 5971, 5973, 5975, 5986, 5992, 6010, 6027, 6049, 6052, 6065, 6077, 6084,
+             6085, 6086, 6087, 6113, 6114, 6115, 6118, 6139, 6169, 6173, 6182, 6195, 6202, 6226, 6233, 6236, 6245, 6250,
+             6257, 6262, 6269, 6284, 6302, 6306, 6309, 6354, 6357, 6359, 6364, 6368, 6382, 6409, 6427, 6433, 6440, 6445,
+             6448, 6468, 6481, 6483, 6484, 6494, 6503, 6504, 6505, 6515, 6517, 6527, 6533, 6544, 6545, 6553, 6564, 6566,
+             6570, 6578, 6601, 6611, 6615, 6624, 6625, 6628, 6640, 6648, 6653, 6659, 6681, 6694, 6717, 6740, 6752, 6771,
+             6775, 6782, 6806, 6812, 6816, 6833, 6834, 6836, 6838, 6857, 6862, 6870, 6874]),  # Dummy value
         cv_train_mode=False,
         fold_id=0,
         total_num_folds=total_num_folds
     )
 
     _param_dict = {
-        "labels": data_loader.dataset.class_labels, # array([0, 1, 2, 3, 4, 5, 6, 7, 8])
+        "labels": data_loader.dataset.class_labels,  # array([0, 1, 2, 3, 4, 5, 6, 7, 8])
         "sigmoid_probs": config["metrics"]["additional_metrics_args"].get("sigmoid_probs", False),
         "logits": config["metrics"]["additional_metrics_args"].get("logits", False),
     }
@@ -134,7 +175,6 @@ def create_roc_curve_report(main_path):
         plt.tight_layout(pad=2, h_pad=3, w_pad=1.5)
         plt.savefig(config.test_output_dir / "roc_curves_with_shares.pdf")
 
-
         # viz = plot_roc_curve(model, X[test], y[test],
         #                      name='ROC fold {}'.format(i),
         #                      alpha=0.3, lw=1, ax=ax)
@@ -172,24 +212,160 @@ def create_roc_curve_report(main_path):
     plt.close()
 
 
+def run_inference_on_given_fold_data(config, cv_data_dir=None,
+                                     test_idx=None, k_fold=None, total_num_folds=None):
+    # Conditional inputs depending on the config
+    if config['arch']['type'] == 'BaselineModel':
+        import model.baseline_model as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithMHAttentionV2':
+        import model.baseline_model_with_MHAttention_v2 as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndNormV2PreActivation':
+        import model.baseline_model_with_skips_and_norm_v2_pre_activation_design as module_arch
+    elif config['arch']['type'] == 'FinalModel':
+        import model.final_model as module_arch
+    elif config['arch']['type'] == 'FinalModelMultiBranch':
+        import model.final_model_multibranch as module_arch
+
+    if config['arch']['args']['multi_label_training']:
+        import evaluation.multi_label_metrics as module_metric
+    else:
+        raise NotImplementedError(
+            "Single label metrics haven't been checked after the Python update! Do not use them!")
+        import evaluation.single_label_metrics as module_metric
+
+    multi_label_training = True
+    logger = config.get_logger('run_inference_on_fold_' + str(k_fold))
+
+    stratified_k_fold = config.config.get("data_loader", {}).get("cross_valid", {}).get("stratified_k_fold", False)
+    data_loader = getattr(module_data, config['data_loader']['type'])(
+        cv_data_dir,
+        batch_size=64,
+        shuffle=False,
+        validation_split=0.0,
+        num_workers=4,
+        cross_valid=True,
+        test_idx=test_idx,
+        cv_train_mode=False,
+        fold_id=k_fold,
+        total_num_folds=total_num_folds,
+        stratified_k_fold=stratified_k_fold
+    )
+
+    model = config.init_obj('arch', module_arch)
+    logger.info(model)
+
+    # Load the model from the checkpoint
+    logger.info('Loading checkpoint: {} ...'.format(config.resume))
+    checkpoint = torch.load(config.resume,
+                            map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+    state_dict = checkpoint['state_dict']
+    if config['n_gpu'] > 1:
+        model = torch.nn.DataParallel(model)
+    model.load_state_dict(state_dict)
+
+    # Prepare the model for testing
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = model.to(device)
+    model.eval()
+
+    # class_labels = data_loader.dataset.class_labels
+    #
+    # # Store potential parameters needed for metrics
+    # _param_dict = {
+    #     "labels": class_labels,
+    #     "device": device,
+    #     "sigmoid_probs": config["metrics"]["additional_metrics_args"].get("sigmoid_probs", False),
+    #     "log_probs": config["metrics"]["additional_metrics_args"].get("log_probs", False),
+    #     "logits": config["metrics"]["additional_metrics_args"].get("logits", False),
+    #     "pos_weights": data_loader.dataset.get_ml_pos_weights(
+    #         idx_list=list(range(len(data_loader.sampler))),
+    #         mode='test',
+    #         cross_valid_active=cv_active),
+    #     "class_weights": data_loader.dataset.get_inverse_class_frequency(
+    #         idx_list=list(range(len(data_loader.sampler))),
+    #         multi_label_training=multi_label_training,
+    #         mode='test',
+    #         cross_valid_active=cv_active),
+    #     "lambda_balance": config["loss"]["add_args"].get("lambda_balance", 1)
+    # }
+
+    with torch.no_grad():
+        # Store the intermediate targets. Always store the output scores
+        outputs_list = []
+        targets_list = []
+        single_lead_outputs_list = []
+        targets_all_labels_list = [] if not multi_label_training else None
+
+        start = time.time()
+
+        for batch_idx, (padded_records, _, first_labels, labels_one_hot, record_names) in \
+                enumerate(tqdm(data_loader)):
+            data, target = padded_records.to(device), labels_one_hot.to(device)
+            data = data.permute(0, 2, 1)  # switch seq_len and feature_size (12 = #leads)
+            output = model(data)
+            multi_lead_branch_active = False
+            if type(output) is tuple:
+                if isinstance(output[1], list):
+                    # multi-branch network
+                    # first element is the overall network output, the second one a list of the single lead branches
+                    multi_lead_branch_active = True
+                    output, single_lead_outputs = output
+                    detached_single_lead_outputs = torch.stack(single_lead_outputs).detach().cpu()
+                    single_lead_outputs_list.append(detached_single_lead_outputs)
+                else:
+                    # single-branch network
+                    output, attention_weights = output
+
+            # Detach tensors needed for further tracing and metrics calculation to remove them from the graph
+            detached_output = output.detach().cpu()
+            detached_target = target.detach().cpu()
+            outputs_list.append(detached_output)
+            targets_list.append(detached_target)
+
+            # INNER_EPOCH METRICS COULD BE CALCULATED WITH DETACHED TENSORS HERE
+
+    # Get detached tensors from the list for further evaluation
+    # For this, create a tensor from the dynamically filled list
+    det_outputs = torch.cat(outputs_list).detach().cpu()
+    det_targets = torch.cat(targets_list).detach().cpu()
+
+    # ------------ Metrics could be calculated here ------------------------------------
+
+    # ------------ ROC Plots could be created here------------------------------------
+
+    # ------------ Confusion matrices could be determined here------------------------
+
+    # ------------------- Summary Report -------------------
+    summary_dict = multi_label_metrics.sk_classification_summary(output=det_outputs, target=det_targets,
+                                                                 sigmoid_probs=_param_dict["sigmoid_probs"],
+                                                                 logits=_param_dict["logits"],
+                                                                 labels=_param_dict["labels"],
+                                                                 output_dict=True)
+
+    # ------------------------------------Final Test Steps ---------------------------------------------
+    df_sklearn_summary = pd.DataFrame.from_dict(summary_dict)
+
+    df_class_wise_results = pd.DataFrame(
+        columns=['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'macro avg', 'weighted avg'])
+    df_class_wise_results = pd.concat([df_class_wise_results, df_sklearn_summary[
+        ['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'macro avg', 'weighted avg']]])
+
+    # Reorder the class columns of the dataframe to match the one used in the
+    desired_col_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE', 'macro avg',
+                         'weighted avg']
+    df_class_wise_results = df_class_wise_results[desired_col_order]
+
+    with open(os.path.join(config.test_output_dir, 'eval_results.tex'), 'w') as file:
+        df_class_wise_results.to_latex(buf=file, index=True, bold_rows=True, float_format="{:0.3f}".format)
+        # df_single_metric_results.to_latex(buf=file, index=True, bold_rows=True, float_format="{:0.3f}".format)
+
+    return df_class_wise_results  # , df_single_metric_results
+
+
 def evaluate_cross_validation(main_path):
-    config = load_config_and_setup_paths(main_path, "additional_eval")
+    config = load_config_and_setup_paths(main_path, sub_dir="additional_eval")
 
-    total_num_folds = config["data_loader"]["cross_valid"]["k_fold"]
-    data_dir = config["data_loader"]["cross_valid"]["data_dir"]
-
-    # Update data dir in Dataloader ARGs!
-    config["data_loader"]["args"]["data_dir"] = data_dir
-    dataset = ECGDataset(data_dir)
-    n_samples = len(dataset)
-
-    # Get the main config and the dirs for logging and saving checkpoints
-    base_config = copy.deepcopy(config)
-    base_save_dir = config.save_dir
-    base_log_dir = config.log_dir
-
-    # Divide the samples into k distinct sets
-    fold_data = split_dataset_into_folds(n_samples, total_num_folds)
+    base_config, base_log_dir, base_save_dir, data_dir, dataset, fold_data, total_num_folds = setup_cross_fold(config)
 
     # Save the results of each run
     class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics = \
@@ -200,32 +376,34 @@ def evaluate_cross_validation(main_path):
     test_fold_index = total_num_folds - 1
 
     for k in range(total_num_folds):
-        print("Starting fold " + str(k))
+        print("Starting fold " + str(k + 1))
         # Get the idx for valid and test samples, train idx not needed
-        # TODO ADAPT DIR PATHS
-        train_idx, valid_idx, test_idx = get_train_valid_test_indices(base_save_dir,
-                                                                      dataset,
-                                                                      fold_data,
-                                                                      k,
-                                                                      test_fold_index,
-                                                                      valid_fold_index)
+        train_idx, valid_idx, test_idx = get_train_valid_test_indices(main_path=main_path,
+                                                                      dataset=dataset,
+                                                                      fold_data=fold_data,
+                                                                      k=k,
+                                                                      test_fold_index=test_fold_index,
+                                                                      valid_fold_index=valid_fold_index,
+                                                                      merge_train_into_valid_idx=False)
 
         # Adapt the log and save paths for the current fold
-        config.save_dir = Path(os.path.join(base_save_dir, "Fold_" + str(k + 1), "additional_eval"))
-        config.log_dir = Path(os.path.join(base_log_dir, "Fold_" + str(k + 1), "additional_eval"))
+        config.save_dir = Path(os.path.join(base_save_dir, "Fold_" + str(k + 1)))
+        config.log_dir = Path(os.path.join(base_log_dir, "Fold_" + str(k + 1)))
         ensure_dir(config.save_dir)
         ensure_dir(config.log_dir)
         update_logging_setup_for_tune_or_cross_valid(config.log_dir)
 
         # Skip the training and load the trained model
-        config.resume = os.path.join(base_save_dir, "Fold_" + str(k + 1), "model_best.pth")
+        config.resume = os.path.join(main_path, "Fold_" + str(k + 1), "model_best.pth")
 
         #  Do the testing and add the fold results to the dfs
-        config.test_output_dir = Path(os.path.join(base_save_dir, "Fold_" + str(k + 1), "additional_eval"))
+        config.test_output_dir = Path(os.path.join(config.save_dir, 'test_output_fold_' + str(k + 1)))
         ensure_dir(config.test_output_dir)
-        fold_eval_class_wise, fold_eval_single_metrics = test_fold(config, data_dir=data_dir,
+        fold_eval_class_wise, fold_eval_single_metrics = test_fold(config,
+                                                                   cv_data_dir=data_dir,
                                                                    test_idx=test_idx,
-                                                                   k_fold=k, total_num_folds=total_num_folds)
+                                                                   k_fold=k,
+                                                                   total_num_folds=total_num_folds)
 
         # Class-Wise Metrics
         test_results_class_wise.loc[(folds[k], fold_eval_class_wise.index), fold_eval_class_wise.columns] = \
@@ -279,6 +457,28 @@ def evaluate_cross_validation(main_path):
                                              escape=False)
 
     print("Finished additional eval of cross-fold-validation")
+
+
+def setup_cross_fold(config):
+    # Get the number of folds and the data dir
+    total_num_folds = config["data_loader"]["cross_valid"]["k_fold"]
+    data_dir = config["data_loader"]["cross_valid"]["data_dir"]
+
+    # Update data dir in Dataloader ARGs!
+    config["data_loader"]["args"]["data_dir"] = data_dir
+    dataset = ECGDataset(data_dir)
+    n_samples = len(dataset)
+
+    # Get the main config and the dirs for logging and saving checkpoints
+    base_config = copy.deepcopy(config)
+    base_save_dir = config.save_dir
+    base_log_dir = config.log_dir
+
+    # Divide the samples into k distinct sets
+    fold_data = split_dataset_into_folds(n_samples=n_samples, total_num_folds=total_num_folds)
+
+    # Return everything
+    return base_config, base_log_dir, base_save_dir, data_dir, dataset, fold_data, total_num_folds
 
 
 def prepare_result_data_structures(total_num_folds, include_valid_results=False):

@@ -167,6 +167,7 @@ class FinalModelMultiBranch(BaseModel):
         if self._apply_final_activation:
             x = self._final_activation(x)
 
+        # Returns the multi-branch MACRO output as well as the 12 branchNet predictions
         return x, [single_lead_results[i][0] for i in range(12)]
 
 
@@ -478,8 +479,8 @@ class FinalModelMultiBranch(BaseModel):
 
 if __name__ == "__main__":
     model = FinalModelMultiBranch(multi_branch_heads=2)
-    # summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "kernel_size", "num_params"],
-    #         depth=5)
+    summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "kernel_size", "num_params"],
+            depth=5)
 
     model_part = FinalModel(apply_final_activation=False,
                             multi_label_training=True,

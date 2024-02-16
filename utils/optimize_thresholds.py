@@ -16,7 +16,7 @@ def apply_threshold(sigmoid_probs, thresholds):
 
 
 def apply_single_threshold(sigmoid_probs, threshold):
-    torch.where(sigmoid_probs > threshold, 1, 0)
+    return torch.where(sigmoid_probs > threshold, 1, 0)
 
 
 def optimize_ts(logits, target, labels, fast=False):
@@ -110,17 +110,39 @@ def optimize_ts_based_on_f1(logits, target, labels):
     return [round(threshold, 1) for threshold in best_thresholds]
 
 
-
+# Optimizing the thresholds manually by iterating over the thresholds per class and finding the best F1-Score for each
 def optimize_ts_manual(logits, target, labels):
-    # TODO WIP!!!!
     sigmoid_probs = torch.sigmoid(logits)
 
-    def evaluate_ts(thresholds):
-        res_binar = apply_threshold(sigmoid_probs, thresholds)
+    # Find the best threshold per class
+    best_thresholds = []
+    best_class_f1_scores = []
+    for class_idx in range(0, target.shape[1]):
+        # Get only label and score for the current class
+        y_true = target[:, class_idx]
+        y_score = sigmoid_probs[:, class_idx]
 
-        macro_f1 = f1_score(y_true=target, y_pred=res_binar, labels=labels, average="macro")
+        best_f1_score = -1
+        best_threshold = 0
+        for threshold in np.arange(0.05, 1, 0.05):
+            res_binar = apply_single_threshold(y_score, threshold)
+            score = f1_score(y_true=y_true, y_pred=res_binar, labels=labels)
+            if score > best_f1_score:
+                best_f1_score = score
+                best_threshold = threshold
 
-        return macro_f1
+        best_thresholds.append(best_threshold)
+        best_class_f1_scores.append(best_f1_score)
+
+    res_binar = apply_threshold(sigmoid_probs, best_thresholds)
+    macro_f1 = f1_score(y_true=target, y_pred=res_binar, labels=labels, average="macro")
+
+    print('Best Macro F1: ' + str(macro_f1) + ' @ thresholds =' + str(best_thresholds))
+    return [round(threshold, 2) for threshold in best_thresholds]
+
+
+
+
 
     best = []
     best_score = -1
