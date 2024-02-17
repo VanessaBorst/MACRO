@@ -19,7 +19,7 @@ import data_loader.data_loaders as module_data
 import model.loss as module_loss
 import global_config
 from retrieve_detached_cross_fold_tensors import split_dataset_into_folds, get_train_valid_test_indices, load_config_and_setup_paths, \
-    prepare_result_data_structures, setup_cross_fold
+    prepare_result_data_structures, setup_cross_fold, prepare_model_for_inference
 
 # fix random seeds for reproducibility
 from train import _set_seed
@@ -515,8 +515,8 @@ def fine_tune_thresholds_cross_validation(main_path, strategy=None, includeTrain
     base_config, base_log_dir, base_save_dir, data_dir, dataset, fold_data, total_num_folds = setup_cross_fold(config)
 
     # Save the results of each run
-    class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics, valid_results = \
-        prepare_result_data_structures(total_num_folds, include_valid_results=True)
+    class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics = \
+        prepare_result_data_structures(total_num_folds, include_valid_results=False)
 
     print("Finetuning " + str(total_num_folds) + "-fold cross validation")
     start = time.time()
@@ -603,13 +603,7 @@ def fine_tune_thresholds_cross_validation(main_path, strategy=None, includeTrain
     with open(path, 'wb') as file:
         pickle.dump(test_results_single_metrics, file)
 
-    #  --------------------------- Train Result ---------------------------
-    valid_results['mean'] = valid_results.mean(axis=1)
-    valid_results['median'] = valid_results.median(axis=1)
-
-    path = os.path.join(base_save_dir, "cross_validation_valid_results.p")
-    with open(path, 'wb') as file:
-        pickle.dump(valid_results, file)
+    #  --------------------------- Omit Train Result ---------------------------
 
     # --------------------------- Test Metrics To Latex---------------------------
     with open(os.path.join(base_save_dir, 'cross_validation_results.tex'), 'w') as file:
