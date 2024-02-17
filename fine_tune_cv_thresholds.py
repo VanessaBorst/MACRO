@@ -18,7 +18,7 @@ from tqdm import tqdm
 import data_loader.data_loaders as module_data
 import model.loss as module_loss
 import global_config
-from evaluate_cv_folds import split_dataset_into_folds, get_train_valid_test_indices, load_config_and_setup_paths, \
+from retrieve_detached_cross_fold_tensors import split_dataset_into_folds, get_train_valid_test_indices, load_config_and_setup_paths, \
     prepare_result_data_structures, setup_cross_fold
 
 # fix random seeds for reproducibility
@@ -39,17 +39,7 @@ def test_fold_with_thresholds(config,
                               k_fold=None,
                               total_num_folds=None,
                               thresholds=None):
-    # Conditional inputs depending on the config
-    if config['arch']['type'] == 'BaselineModel':
-        import model.baseline_model as module_arch
-    elif config['arch']['type'] == 'BaselineModelWithMHAttentionV2':
-        import model.baseline_model_with_MHAttention_v2 as module_arch
-    elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndNormV2PreActivation':
-        import model.baseline_model_with_skips_and_norm_v2_pre_activation_design as module_arch
-    elif config['arch']['type'] == 'FinalModel':
-        import model.final_model as module_arch
-    elif config['arch']['type'] == 'FinalModelMultiBranch':
-        import model.final_model_multibranch as module_arch
+
 
     if config['arch']['args']['multi_label_training']:
         import evaluation.multi_label_metrics_variedThreshold as module_metric
@@ -74,22 +64,7 @@ def test_fold_with_thresholds(config,
         stratified_k_fold=stratified_k_fold
     )
 
-    # build model architecture
-    model = config.init_obj('arch', module_arch)
-    logger.info(model)
-
-    # Load the model from the checkpoint
-    logger.info('Loading checkpoint: {} ...'.format(config.resume))
-    checkpoint = torch.load(config.resume, map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
-    state_dict = checkpoint['state_dict']
-    if config['n_gpu'] > 1:
-        model = torch.nn.DataParallel(model)
-    model.load_state_dict(state_dict)
-
-    # Prepare the model for testing
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = model.to(device)
-    model.eval()
+    device, model = prepare_model_for_inference(config, logger)
 
     loss_fn = getattr(module_loss, config['loss']['type'])
 

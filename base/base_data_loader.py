@@ -109,8 +109,9 @@ class BaseDataLoader(DataLoader):
                 test_sampler = SubsetRandomSampler(test_idx)
 
                 if total_num_folds is not None:
-                    # For threshold optimization, the data split is checked before and the idx can vary
-                    # (depending on whether only the valid idx or the train +  valid idx are used for the optimization)
+                    # For threshold optimization and raw inference on an arbitrary data amount (train, valid OR test),
+                    # the data split is checked before and the idx can vary
+                    # (For the optimization, depending on whether only the valid idx or the train +  valid idx are used)
                     # In this case, they are passed as test_idx parameter, since no training is needed
                     # Write it to file for reproducibility, if not yet existing
                     # If existing, check that the split is always the same (for fixed SEED)

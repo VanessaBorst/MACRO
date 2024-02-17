@@ -23,19 +23,21 @@ import data_loader.data_loaders as module_data
 
 # Needed for working with SSH Interpreter...
 import os
+import torch
+from tqdm import tqdm
 
 os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
 
 
-def test_fold(config, cv_data_dir, test_idx, k_fold, total_num_folds):
-    df_class_wise_results, df_single_metric_results = test_model(config=config,
-                                                                 tune_config=None,
-                                                                 cv_active=True,
-                                                                 cv_data_dir=cv_data_dir,
-                                                                 test_idx=test_idx,
-                                                                 k_fold=k_fold,
-                                                                 total_num_folds=total_num_folds)
-    return df_class_wise_results, df_single_metric_results
+# def test_fold(config, cv_data_dir, test_idx, k_fold, total_num_folds):
+#     df_class_wise_results, df_single_metric_results = test_model(config=config,
+#                                                                  tune_config=None,
+#                                                                  cv_active=True,
+#                                                                  cv_data_dir=cv_data_dir,
+#                                                                  test_idx=test_idx,
+#                                                                  k_fold=k_fold,
+#                                                                  total_num_folds=total_num_folds)
+#     return df_class_wise_results, df_single_metric_results
 
 
 def create_roc_curve_report(main_path):
@@ -213,30 +215,19 @@ def create_roc_curve_report(main_path):
 
 
 def run_inference_on_given_fold_data(config, cv_data_dir=None,
-                                     test_idx=None, k_fold=None, total_num_folds=None):
-    # Conditional inputs depending on the config
-    if config['arch']['type'] == 'BaselineModel':
-        import model.baseline_model as module_arch
-    elif config['arch']['type'] == 'BaselineModelWithMHAttentionV2':
-        import model.baseline_model_with_MHAttention_v2 as module_arch
-    elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndNormV2PreActivation':
-        import model.baseline_model_with_skips_and_norm_v2_pre_activation_design as module_arch
-    elif config['arch']['type'] == 'FinalModel':
-        import model.final_model as module_arch
-    elif config['arch']['type'] == 'FinalModelMultiBranch':
-        import model.final_model_multibranch as module_arch
+                                     test_idx=None,
+                                     k_fold=None,
+                                     data_type=None):
 
-    if config['arch']['args']['multi_label_training']:
-        import evaluation.multi_label_metrics as module_metric
-    else:
-        raise NotImplementedError(
-            "Single label metrics haven't been checked after the Python update! Do not use them!")
-        import evaluation.single_label_metrics as module_metric
+    # if config['arch']['args']['multi_label_training']:
+    #     import evaluation.multi_label_metrics as module_metric
+    # else:
+    #     raise NotImplementedError(
+    #         "Single label metrics haven't been checked after the Python update! Do not use them!")
+    #     import evaluation.single_label_metrics as module_metric
 
-    multi_label_training = True
-    logger = config.get_logger('run_inference_on_fold_' + str(k_fold))
+    logger = config.get_logger('run_inference_on_fold_' + str(k_fold) + f'_{data_type}')
 
-    stratified_k_fold = config.config.get("data_loader", {}).get("cross_valid", {}).get("stratified_k_fold", False)
     data_loader = getattr(module_data, config['data_loader']['type'])(
         cv_data_dir,
         batch_size=64,
@@ -246,27 +237,10 @@ def run_inference_on_given_fold_data(config, cv_data_dir=None,
         cross_valid=True,
         test_idx=test_idx,
         cv_train_mode=False,
-        fold_id=k_fold,
-        total_num_folds=total_num_folds,
-        stratified_k_fold=stratified_k_fold
+        fold_id=k_fold
     )
 
-    model = config.init_obj('arch', module_arch)
-    logger.info(model)
-
-    # Load the model from the checkpoint
-    logger.info('Loading checkpoint: {} ...'.format(config.resume))
-    checkpoint = torch.load(config.resume,
-                            map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
-    state_dict = checkpoint['state_dict']
-    if config['n_gpu'] > 1:
-        model = torch.nn.DataParallel(model)
-    model.load_state_dict(state_dict)
-
-    # Prepare the model for testing
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = model.to(device)
-    model.eval()
+    device, model = prepare_model_for_inference(config, logger)
 
     # class_labels = data_loader.dataset.class_labels
     #
@@ -280,12 +254,12 @@ def run_inference_on_given_fold_data(config, cv_data_dir=None,
     #     "pos_weights": data_loader.dataset.get_ml_pos_weights(
     #         idx_list=list(range(len(data_loader.sampler))),
     #         mode='test',
-    #         cross_valid_active=cv_active),
+    #         cross_valid_active=True),
     #     "class_weights": data_loader.dataset.get_inverse_class_frequency(
     #         idx_list=list(range(len(data_loader.sampler))),
     #         multi_label_training=multi_label_training,
     #         mode='test',
-    #         cross_valid_active=cv_active),
+    #         cross_valid_active=True),
     #     "lambda_balance": config["loss"]["add_args"].get("lambda_balance", 1)
     # }
 
@@ -294,9 +268,6 @@ def run_inference_on_given_fold_data(config, cv_data_dir=None,
         outputs_list = []
         targets_list = []
         single_lead_outputs_list = []
-        targets_all_labels_list = [] if not multi_label_training else None
-
-        start = time.time()
 
         for batch_idx, (padded_records, _, first_labels, labels_one_hot, record_names) in \
                 enumerate(tqdm(data_loader)):
@@ -328,6 +299,16 @@ def run_inference_on_given_fold_data(config, cv_data_dir=None,
     # For this, create a tensor from the dynamically filled list
     det_outputs = torch.cat(outputs_list).detach().cpu()
     det_targets = torch.cat(targets_list).detach().cpu()
+    det_single_lead_outputs = torch.cat(single_lead_outputs_list).detach().cpu() if multi_lead_branch_active else None
+
+    # Store the tensors for further evaluation
+    with open(os.path.join(config.save_dir, f"{data_type}_det_outputs.p"), 'wb') as file:
+        pickle.dump(det_outputs, file)
+    with open(os.path.join(config.save_dir, f"{data_type}_det_targets.p"), 'wb') as file:
+        pickle.dump(det_targets, file)
+    if det_single_lead_outputs is not None:
+        with open(os.path.join(config.save_dir, f"{data_type}_det_single_lead_outputs.p"), 'wb') as file:
+            pickle.dump(det_single_lead_outputs, file)
 
     # ------------ Metrics could be calculated here ------------------------------------
 
@@ -336,40 +317,70 @@ def run_inference_on_given_fold_data(config, cv_data_dir=None,
     # ------------ Confusion matrices could be determined here------------------------
 
     # ------------------- Summary Report -------------------
-    summary_dict = multi_label_metrics.sk_classification_summary(output=det_outputs, target=det_targets,
-                                                                 sigmoid_probs=_param_dict["sigmoid_probs"],
-                                                                 logits=_param_dict["logits"],
-                                                                 labels=_param_dict["labels"],
-                                                                 output_dict=True)
+    # summary_dict = module_metric.sk_classification_summary(output=det_outputs, target=det_targets,
+    #                                                        sigmoid_probs=_param_dict["sigmoid_probs"],
+    #                                                        logits=_param_dict["logits"],
+    #                                                        labels=_param_dict["labels"],
+    #                                                        output_dict=True)
+    #
+    # df_sklearn_summary = pd.DataFrame.from_dict(summary_dict)
+    #
+    # df_class_wise_results = pd.DataFrame(
+    #     columns=['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'macro avg', 'weighted avg'])
+    # df_class_wise_results = pd.concat([df_class_wise_results, df_sklearn_summary[
+    #     ['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'macro avg', 'weighted avg']]])
+    #
+    # # Reorder the class columns of the dataframe to match the one used in the
+    # desired_col_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE', 'macro avg',
+    #                      'weighted avg']
+    # df_class_wise_results = df_class_wise_results[desired_col_order]
 
-    # ------------------------------------Final Test Steps ---------------------------------------------
-    df_sklearn_summary = pd.DataFrame.from_dict(summary_dict)
+    # with open(os.path.join(config.test_output_dir, 'eval_results.tex'), 'w') as file:
+    #     df_class_wise_results.to_latex(buf=file, index=True, bold_rows=True, float_format="{:0.3f}".format)
+    # df_single_metric_results.to_latex(buf=file, index=True, bold_rows=True, float_format="{:0.3f}".format)
 
-    df_class_wise_results = pd.DataFrame(
-        columns=['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'macro avg', 'weighted avg'])
-    df_class_wise_results = pd.concat([df_class_wise_results, df_sklearn_summary[
-        ['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'macro avg', 'weighted avg']]])
-
-    # Reorder the class columns of the dataframe to match the one used in the
-    desired_col_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE', 'macro avg',
-                         'weighted avg']
-    df_class_wise_results = df_class_wise_results[desired_col_order]
-
-    with open(os.path.join(config.test_output_dir, 'eval_results.tex'), 'w') as file:
-        df_class_wise_results.to_latex(buf=file, index=True, bold_rows=True, float_format="{:0.3f}".format)
-        # df_single_metric_results.to_latex(buf=file, index=True, bold_rows=True, float_format="{:0.3f}".format)
-
-    return df_class_wise_results  # , df_single_metric_results
+    print("Finished fold " + str(k_fold) + " " + data_type + " inference")
 
 
-def evaluate_cross_validation(main_path):
-    config = load_config_and_setup_paths(main_path, sub_dir="additional_eval")
+def prepare_model_for_inference(config, logger):
+
+    # Conditional inputs depending on the config
+    if config['arch']['type'] == 'BaselineModel':
+        import model.baseline_model as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithMHAttentionV2':
+        import model.baseline_model_with_MHAttention_v2 as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndNormV2PreActivation':
+        import model.baseline_model_with_skips_and_norm_v2_pre_activation_design as module_arch
+    elif config['arch']['type'] == 'FinalModel':
+        import model.final_model as module_arch
+    elif config['arch']['type'] == 'FinalModelMultiBranch':
+        import model.final_model_multibranch as module_arch
+
+    model = config.init_obj('arch', module_arch)
+    logger.info(model)
+    # Load the model from the checkpoint
+    logger.info('Loading checkpoint: {} ...'.format(config.resume))
+    checkpoint = torch.load(config.resume,
+                            map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+    state_dict = checkpoint['state_dict']
+    if config['n_gpu'] > 1:
+        model = torch.nn.DataParallel(model)
+    model.load_state_dict(state_dict)
+    # Prepare the model for testing
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = model.to(device)
+    model.eval()
+    return device, model
+
+
+def retrieve_detached_cross_fold_tensors_for_further_evaluation(main_path):
+    config = load_config_and_setup_paths(main_path, sub_dir="output_logging")
 
     base_config, base_log_dir, base_save_dir, data_dir, dataset, fold_data, total_num_folds = setup_cross_fold(config)
 
     # Save the results of each run
-    class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics = \
-        prepare_result_data_structures(total_num_folds)
+    # class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics = \
+    #     prepare_result_data_structures(total_num_folds)
 
     print("Starting with " + str(total_num_folds) + "-fold cross validation")
     valid_fold_index = total_num_folds - 2
@@ -396,67 +407,72 @@ def evaluate_cross_validation(main_path):
         # Skip the training and load the trained model
         config.resume = os.path.join(main_path, "Fold_" + str(k + 1), "model_best.pth")
 
-        #  Do the testing and add the fold results to the dfs
-        config.test_output_dir = Path(os.path.join(config.save_dir, 'test_output_fold_' + str(k + 1)))
-        ensure_dir(config.test_output_dir)
-        fold_eval_class_wise, fold_eval_single_metrics = test_fold(config,
-                                                                   cv_data_dir=data_dir,
-                                                                   test_idx=test_idx,
-                                                                   k_fold=k,
-                                                                   total_num_folds=total_num_folds)
+        # #  Do the testing and add the fold results to the dfs
+        # config.test_output_dir = Path(os.path.join(config.save_dir, 'test_output_fold_' + str(k + 1)))
+        # ensure_dir(config.test_output_dir)
 
-        # Class-Wise Metrics
-        test_results_class_wise.loc[(folds[k], fold_eval_class_wise.index), fold_eval_class_wise.columns] = \
-            fold_eval_class_wise.values
-        # Single Metrics
-        pd_series = fold_eval_single_metrics.loc['value']
-        pd_series.name = folds[k]
-        test_results_single_metrics = test_results_single_metrics.append(pd_series)
+        run_inference_on_given_fold_data(config=config,
+                                         cv_data_dir=data_dir,
+                                         test_idx=train_idx,
+                                         k_fold=k,
+                                         data_type="train")
+
+        run_inference_on_given_fold_data(config=config,
+                                         cv_data_dir=data_dir,
+                                         test_idx=valid_idx,
+                                         k_fold=k,
+                                         data_type="valid")
+
+        run_inference_on_given_fold_data(config=config,
+                                         cv_data_dir=data_dir,
+                                         test_idx=test_idx,
+                                         k_fold=k,
+                                         data_type="test")
 
         # Update the indices and reset the config (including resume!)
         valid_fold_index = (valid_fold_index + 1) % (total_num_folds)
         test_fold_index = (test_fold_index + 1) % (total_num_folds)
         config = copy.deepcopy(base_config)
 
-    # Summarize the results of the cross validation and write everything to files
-    # --------------------------- Test Class-Wise Metrics ---------------------------
-    iterables_summary = [["mean", "median"], class_wise_metrics]
-    multi_index = pd.MultiIndex.from_product(iterables_summary, names=["merging", "metric"])
-    test_results_class_wise_summary = pd.DataFrame(
-        columns=['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-                 'macro avg', 'weighted avg'], index=multi_index)
-    for metric in class_wise_metrics:
-        test_results_class_wise_summary.loc[('mean', metric)] = test_results_class_wise.xs(metric, level=1).mean()
-        test_results_class_wise_summary.loc[('median', metric)] = test_results_class_wise.xs(metric, level=1).median()
+    # # Summarize the results of the cross validation and write everything to files
+    # # --------------------------- Test Class-Wise Metrics ---------------------------
+    # iterables_summary = [["mean", "median"], class_wise_metrics]
+    # multi_index = pd.MultiIndex.from_product(iterables_summary, names=["merging", "metric"])
+    # test_results_class_wise_summary = pd.DataFrame(
+    #     columns=['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+    #              'macro avg', 'weighted avg'], index=multi_index)
+    # for metric in class_wise_metrics:
+    #     test_results_class_wise_summary.loc[('mean', metric)] = test_results_class_wise.xs(metric, level=1).mean()
+    #     test_results_class_wise_summary.loc[('median', metric)] = test_results_class_wise.xs(metric, level=1).median()
+    #
+    # ensure_dir(os.path.join(base_save_dir, "additional_eval"))
+    # path = os.path.join(base_save_dir, "additional_eval", "test_results_class_wise.p")
+    # with open(path, 'wb') as file:
+    #     pickle.dump(test_results_class_wise, file)
+    # path = os.path.join(base_save_dir, "additional_eval", "test_results_class_wise_summary.p")
+    # with open(path, 'wb') as file:
+    #     pickle.dump(test_results_class_wise_summary, file)
+    #
+    # # --------------------------- Test Single Metrics ---------------------------
+    # test_results_single_metrics.loc['mean'] = test_results_single_metrics.mean()
+    # test_results_single_metrics.loc['median'] = test_results_single_metrics[:][:-1].median()
+    #
+    # path = os.path.join(base_save_dir, "additional_eval", "test_results_single_metrics.p")
+    # with open(path, 'wb') as file:
+    #     pickle.dump(test_results_single_metrics, file)
+    #
+    # #  --------------------------- Omit Train Result ---------------------------
+    #
+    # # --------------------------- Test Metrics To Latex---------------------------
+    # with open(os.path.join(base_save_dir, "additional_eval", 'cross_validation_results.tex'), 'w') as file:
+    #     file.write("Class-Wise Summary:\n\n")
+    #     test_results_class_wise_summary.to_latex(buf=file, index=False, float_format="{:0.3f}".format,
+    #                                              escape=False)
+    #     file.write("\n\n\nSingle Metrics:\n\n")
+    #     test_results_single_metrics.to_latex(buf=file, index=False, float_format="{:0.3f}".format,
+    #                                          escape=False)
 
-    ensure_dir(os.path.join(base_save_dir, "additional_eval"))
-    path = os.path.join(base_save_dir, "additional_eval", "test_results_class_wise.p")
-    with open(path, 'wb') as file:
-        pickle.dump(test_results_class_wise, file)
-    path = os.path.join(base_save_dir, "additional_eval", "test_results_class_wise_summary.p")
-    with open(path, 'wb') as file:
-        pickle.dump(test_results_class_wise_summary, file)
-
-    # --------------------------- Test Single Metrics ---------------------------
-    test_results_single_metrics.loc['mean'] = test_results_single_metrics.mean()
-    test_results_single_metrics.loc['median'] = test_results_single_metrics[:][:-1].median()
-
-    path = os.path.join(base_save_dir, "additional_eval", "test_results_single_metrics.p")
-    with open(path, 'wb') as file:
-        pickle.dump(test_results_single_metrics, file)
-
-    #  --------------------------- Omit Train Result ---------------------------
-
-    # --------------------------- Test Metrics To Latex---------------------------
-    with open(os.path.join(base_save_dir, "additional_eval", 'cross_validation_results.tex'), 'w') as file:
-        file.write("Class-Wise Summary:\n\n")
-        test_results_class_wise_summary.to_latex(buf=file, index=False, float_format="{:0.3f}".format,
-                                                 escape=False)
-        file.write("\n\n\nSingle Metrics:\n\n")
-        test_results_single_metrics.to_latex(buf=file, index=False, float_format="{:0.3f}".format,
-                                             escape=False)
-
-    print("Finished additional eval of cross-fold-validation")
+    print("Finished additional run of cross-fold-validation to retrieve detached tensors for further evaluation")
 
 
 def setup_cross_fold(config):
@@ -566,5 +582,5 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--path', default=None, type=str,
                         help='main path to CV runs(default: None)')
     args = parser.parse_args()
-    evaluate_cross_validation(args.path)
-    create_roc_curve_report(args.path)
+    retrieve_detached_cross_fold_tensors_for_further_evaluation(args.path)
+    # create_roc_curve_report(args.path)
