@@ -14,7 +14,7 @@ from sklearn.metrics import roc_curve, auc
 base_path = 'savedVM/models/'
 model_paths = {'Baseline': 'BaselineModel_CV/0116_145000_ml_bs64_250Hz_60s',
                'Final_Model': 'FinalModel_MACRO_CV/0123_171857_ml_bs64_noFC-0.2-6-12_entmax15',
-               'Multibranch': 'Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24'}
+               'Multibranch': 'Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24/Ridge Regression'}
 include_acc = False
 
 
@@ -24,7 +24,6 @@ include_acc = False
 # The position of the whiskers is set by default to 1.5*IQR (IQR = Q3 - Q1) from the edges of the box.
 # Outlier points are those past the end of the whiskers.
 def create_and_save_boxplot_for_single_model(df, model_name, metric_name, metric_full_name):
-    # Boxplot for Acc
     x_labels = [w.replace(f'W-AVG_{metric_name}', 'w-AVG').replace(f'm-AVG_{metric_name}', 'm-AVG')
                 for w in df.columns[1:].values.tolist()]
     ax = df.drop(columns=["Fold"]).boxplot(meanline=True, showmeans=True)  # , figsize=(15,8)
@@ -35,6 +34,8 @@ def create_and_save_boxplot_for_single_model(df, model_name, metric_name, metric
     plt.tight_layout()
     plt.savefig(os.path.join('figures', f'{model_name} - {metric_name}.pdf'), format="pdf", bbox_inches="tight")
     plt.show()
+    # Clear the current axis
+    ax.clear()
 
 
 def create_and_save_boxplot_for_macro_avgs(df, model_names, metric_name, metric_cols, title, x_label, y_label,
@@ -53,6 +54,8 @@ def create_and_save_boxplot_for_macro_avgs(df, model_names, metric_name, metric_
     plt.tight_layout()
     plt.savefig(os.path.join('figures', filename), format="pdf", bbox_inches="tight")
     plt.show()
+    # Clear the current axis
+    ax.clear()
 
 
 model_names = list(model_paths.keys())

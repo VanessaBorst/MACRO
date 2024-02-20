@@ -287,9 +287,13 @@ def min_max_scaling(path):
     print(f"Valid: {len(file_list)} Invalid: {len(invalid_files)}")
 
 
-def normalize(path):
-    if not os.path.exists(os.path.join(path, "normalized")):
-        os.makedirs(os.path.join(path, "normalized"))
+def normalize(path, drop_invalid_records = False):
+    def is_close_to_target(value, target, tolerance=1e-10):
+        return abs(value - target) < tolerance
+
+    folder_name = "normalized" if not drop_invalid_records else "normalized_drop_invalid"
+    if not os.path.exists(os.path.join(path, folder_name)):
+        os.makedirs(os.path.join(path, folder_name))
 
     for file in os.listdir(path):
         if ".pk" not in file:
@@ -299,8 +303,34 @@ def normalize(path):
         # Normalize with mean normalization
         # df.mean() and df.std() operate on all columns, i.e. leads, separately
         # df - df.mean(): For each col, the mean of the col is subtracted from each element in the respective col
-        df = (df - df.mean()) / df.std()
-        pk.dump((df, meta), open(os.path.join(path, "normalized", file), "wb"))
+        df_normalized = (df - df.mean()) / df.std()
+
+        # Verification:
+        record_is_fine = True
+        ill_leads_idx = set([])
+        for i in range(0, 12):
+            column = df_normalized[df_normalized.columns[i]]
+            if not is_close_to_target(column.mean(), 0.0):
+                record_is_fine = False
+                ill_leads_idx.add(i)
+                # print(f"Lead {i}: Mean = {column.mean()} for file {file}")
+            if not is_close_to_target(column.std(),1.0):
+                record_is_fine = False
+                ill_leads_idx.add(i)
+                # print(f"Lead {i}: Std = {column.std()} for file {file}")
+            # print(f"Lead {i}: Mean = {column.mean()}, Std = {column.std()}")
+
+        if record_is_fine:
+            pk.dump((df_normalized, meta), open(os.path.join(path, folder_name, file), "wb"))
+        else:
+            print(f"Record {file} is not fine. Only some leads could be normalized correctly. "
+                  f"The leads {ill_leads_idx} should be checked.")
+            if not drop_invalid_records:
+                # Dump the normalized df to new pk file but keep the original leads where the normalization failed
+                for lead in ill_leads_idx:
+                    df_normalized[df.columns[lead]] = df[df.columns[lead]]
+                pk.dump((df_normalized, meta), open(os.path.join(path, folder_name, file), "wb"))
+
 
 
 def pad_or_truncate(path, seq_len, seconds=None, pad_halfs=False):
@@ -310,7 +340,7 @@ def pad_or_truncate(path, seq_len, seconds=None, pad_halfs=False):
         - cuts records that exceed seq_len from both sides and only uses values in the middle
     """
 
-    folder_name = f"eq_len_{seq_len}" if seconds is None else f"eq_len_{desired_len_in_seconds}s"
+    folder_name = f"eq_len_{seq_len}" if seconds is None else f"eq_len_{seconds}s"
     folder_name = folder_name + "_pad_halfs" if pad_halfs else folder_name
     if not os.path.exists(os.path.join(path, folder_name)):
         os.makedirs(os.path.join(path, folder_name))
@@ -389,15 +419,15 @@ if __name__ == "__main__":
     # src_path = "data/CinC_CPSC/test/preprocessed/4ms/"
     # clean_meta(src_path)
 
-    # #  Uncomment for applying further preprocessing like normalization
-    # src_path = "data/CinC_CPSC/train/preprocessed/no_sampling/"
-    # #normalize(src_path)
-    # #show(src_path + "normalized")
+    #  Uncomment for applying further preprocessing like normalization
+    src_path = "data/CinC_CPSC/train/preprocessed/4ms/"
+    normalize(src_path, drop_invalid_records=True)
+    # show(src_path + "normalized")
     # min_max_scaling(path=src_path)
     # show(src_path + "minmax")
-    # src_path = "data/CinC_CPSC/test/preprocessed/no_sampling/"
-    # #normalize(src_path)
-    # #show(src_path + "normalized")
+    src_path = "data/CinC_CPSC/test/preprocessed/4ms/"
+    normalize(src_path, drop_invalid_records=True)
+    # show(src_path + "normalized")
     # min_max_scaling(path=src_path)
     # show(src_path + "minmax")
 
@@ -413,16 +443,16 @@ if __name__ == "__main__":
     #     pad_or_truncate(path=src_path, seq_len=seq_len, seconds=desired_len_in_seconds)
 
     # 4ms = 250Hz
-    # src_path = "data/CinC_CPSC/train/preprocessed/4ms/"
-    # for desired_len_in_seconds in [60]:     # [10,15,30,60]:
-    #     seq_len = _get_seq_len(hz=250, desired_seconds=desired_len_in_seconds)
-    #     pad_or_truncate(path=src_path, seq_len=seq_len, seconds=desired_len_in_seconds, pad_halfs=True)
-    #
-    # src_path = "data/CinC_CPSC/test/preprocessed/4ms/"
-    # for desired_len_in_seconds in [60]:     # [10,15,30,60]:
-    #     seq_len = _get_seq_len(hz=250, desired_seconds=desired_len_in_seconds)
-    #     pad_or_truncate(path=src_path, seq_len=seq_len, seconds=desired_len_in_seconds, pad_halfs=True)
+    src_path = "data/CinC_CPSC/train/preprocessed/4ms/normalized_drop_invalid/"
+    for desired_len_in_seconds in [60]:     # [10,15,30,60]:
+        seq_len = _get_seq_len(hz=250, desired_seconds=desired_len_in_seconds)
+        pad_or_truncate(path=src_path, seq_len=seq_len, seconds=desired_len_in_seconds, pad_halfs=False)
 
-    show("/home/vab30xh/projects/2023-macro-paper-3.10/data/CinC_CPSC/cross_valid/250Hz/60s_pad_halfs")
+    src_path = "data/CinC_CPSC/test/preprocessed/4ms/normalized_drop_invalid/"
+    for desired_len_in_seconds in [60]:     # [10,15,30,60]:
+        seq_len = _get_seq_len(hz=250, desired_seconds=desired_len_in_seconds)
+        pad_or_truncate(path=src_path, seq_len=seq_len, seconds=desired_len_in_seconds, pad_halfs=False)
 
+    # show("data/CinC_CPSC/train/preprocessed/4ms/normalized/eq_len_60s")
+    # show("data/CinC_CPSC/cross_valid/250Hz/normalized/60s/")
     print("Finished")

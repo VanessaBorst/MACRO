@@ -211,7 +211,8 @@ class ConfigParser:
         return self._use_tune
 
     def _do_some_sanity_checks(self):
-        if self.config["loss"]["type"] == "BCE_with_logits" or self.config["loss"]["type"] == "balanced_BCE_with_logits":
+        if self.config["loss"]["type"] == "BCE_with_logits" or self.config["loss"]["type"] == "balanced_BCE_with_logits"\
+                or self.config["loss"]["type"] == "focal_binary_cross_entropy_with_logits":
             assert self.config["arch"]["args"]["multi_label_training"] \
                    and not self.config["arch"]["args"]["apply_final_activation"] \
                    and not self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \

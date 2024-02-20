@@ -20,13 +20,64 @@ def multi_label_soft_margin(output, target, class_weights):
 #     loss = BCELoss()
 #     return loss(output, target.float())
 
+def focal_binary_cross_entropy_with_logits(output, target, gamma=2, beta=0.25):
+    num_label = target.size(1)
+    l = output.reshape(-1)
+    t = target.reshape(-1)
+    p = torch.sigmoid(l)
+    p = torch.where(t >= 0.5, p, 1 - p)
+    logp = - torch.log(torch.clamp(p, 1e-4, 1 - 1e-4))
+    loss = beta * logp * ((1 - p) ** gamma)
+    loss = num_label * loss.mean()
+    return loss
+
+
+def focal_loss(target, output, alpha=0.25, gamma=2):
+    """
+    Compute the focal loss between `logits` and the ground truth `labels`.
+    Based on https://github.com/c0nn3r/RetinaNet/blob/master/focal_loss.py
+
+    Focal loss = -alpha_t * (1-pt)^gamma * log(pt)
+    where pt is the probability of being classified to the true class.
+    pt = p (if true class), otherwise pt = 1 - p. p = sigmoid(logit).
+
+    Args:
+        target: A float32 tensor of size [batch, num_classes].
+        logits: A float32 tensor of size [batch, num_classes].
+        alpha: A float32 tensor of size [batch_size] specifying per-example weight for balanced cross entropy.
+        gamma: A float32 scalar modulating loss from hard and easy examples.
+
+    Returns:
+        focal_loss: A float32 scalar representing normalized total loss.
+    """
+
+    logits = output.float()
+    cross_entropy = F.binary_cross_entropy_with_logits(logits, target.float())
+
+    # A numerically stable implementation of modulator.
+    if gamma == 0.0:
+        modulator = 1.0
+    else:
+        modulator = torch.exp(-gamma * target * logits - gamma * torch.log1p(torch.exp(-1.0 * logits)))
+
+    loss = modulator * cross_entropy
+
+    weighted_loss = alpha * loss
+    focal_loss = torch.sum(weighted_loss)
+
+    # Normalize by the total number of positive samples.
+    focal_loss /= torch.sum(target)
+
+    return focal_loss
+
+
 # This contains Sigmoid itself
 def BCE_with_logits(output, target):
     loss = BCEWithLogitsLoss()
     return loss(output, target.float())
 
 
-def multi_branch_BCE_with_logits(output, target, single_lead_outputs , lambda_balance):
+def multi_branch_BCE_with_logits(output, target, single_lead_outputs, lambda_balance):
     loss_fn = BCEWithLogitsLoss()
     # Calculate loss for each branch
     sum_single_branch_losses = 0
@@ -95,7 +146,6 @@ def balanced_cross_entropy(output, target, class_weights, device):
     """
     class_weights_tensor = torch.tensor(class_weights).to(device).float()
     return F.cross_entropy(output, target, class_weights_tensor)
-
 
 # Balanced cross entropy: Usually you increase the weight for minority classes, so that their loss also increases and
 # forces the model to learn these samples. This could be done by e.g. the inverse class count (class frequency).:

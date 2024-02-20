@@ -7,6 +7,7 @@ from pathlib import Path
 import torch
 
 import global_config
+from Ridge_regression import train_ridge_model
 from logger import update_logging_setup_for_tune_or_cross_valid
 
 from retrieve_detached_cross_fold_tensors import prepare_model_for_inference, load_config_and_setup_paths, \
@@ -42,9 +43,30 @@ def determine_final_model_output(det_outputs, det_single_lead_outputs, strategy=
                 # Build a simple majority vote for the single lead outputs and the final model output
                 # For this, convert the logits to predictions for each single lead
                 # and then take the majority vote
-                pass
+                all_predictions = get_all_binary_predictions(det_outputs, det_single_lead_outputs)
+                # Calculate the majority vote
+                majority_vote, _ = torch.mode(all_predictions, dim=1)
+                return majority_vote
+
+                # Notes: This approach does not seem to work well for mintory classes like STE.
+                # Example:
+                # STE_class_labels = det_targets[:, -2]
+                # STE_label_entries_with_one = torch.where(STE_class_labels==1) liefert
+                # tensor([9, 19, 38, 64, 70, 78, 105, 114, 134, 149, 164, 203, 221, 260, 383, 511, 579, 603, 607, 610])
+                # ABER:
+                # Für das erste STE Sample mit Num 9:
+                # single_branch_probs[9][7] => [0.0062, 0.0008, 0.0289, 0.0005, 0.0260, 0.1655, 0.3347, 0.4444, 0.0011]
+                # multibranch_probs[9][7] => 0.8440
+
             case "confidence_weighted_majority_vote":
                 # Build a confidence weighted majority vote for the single lead outputs and the final model output
+                pass
+            case "LASSO_regression":
+                # Train a LASSO model to predict the final model output based on the single lead and final outputs
+                # Check if the LASSO model is already trained
+                # PASS
+                # Otherwise, train the LASSO model
+
                 pass
             case None:
                 # Default: No strategy given, just use the final model output for predictions
@@ -53,6 +75,35 @@ def determine_final_model_output(det_outputs, det_single_lead_outputs, strategy=
     else:
         # Default: No multi-branched model, just use the final model output for predictions
         return _convert_logits_to_prediction(det_outputs)
+
+
+def get_all_binary_predictions(det_outputs, det_single_lead_outputs):
+    # Shape: (num_samples, 1, num_classes)
+    multibranch_prediction = _convert_logits_to_prediction(det_outputs).unsqueeze(1)
+
+    # Shape: (num_samples, 12, num_classes)
+    single_branch_predictions = [_convert_logits_to_prediction(det_single_lead_output)
+                                 for det_single_lead_output in det_single_lead_outputs]
+    single_branch_predictions = torch.stack(single_branch_predictions, dim=0)
+
+    # Shape: (num_samples, 13, num_classes)
+    all_predictions = torch.cat([single_branch_predictions, multibranch_prediction], dim=1)
+    return all_predictions
+
+
+def get_all_predictions_as_probs(det_outputs, det_single_lead_outputs):
+    # Shape: (num_samples, 1, num_classes)
+    multibranch_prediction = torch.sigmoid(det_outputs).unsqueeze(1)
+
+    # Shape: (num_samples, 12, num_classes)
+    single_branch_predictions = [torch.sigmoid(det_single_lead_output)
+                                 for det_single_lead_output in det_single_lead_outputs]
+    single_branch_predictions = torch.stack(single_branch_predictions, dim=0)
+
+    # Shape: (num_samples, 13, num_classes)
+    all_predictions = torch.cat([single_branch_predictions, multibranch_prediction], dim=1)
+    return all_predictions
+
 
 def run_evaluation_on_given_fold(config,
                                  dataset,
@@ -72,7 +123,7 @@ def run_evaluation_on_given_fold(config,
             "Single label metrics haven't been checked after the Python update! Do not use them!")
         import evaluation.single_label_metrics as module_metric
 
-    logger = config.get_logger('run_inference_on_fold_' + str(k_fold) + f'_{data_type}')
+    logger = config.get_logger('run_evaluation_on_fold_' + str(k_fold) + f'_{data_type}')
     device, model = prepare_model_for_inference(config, logger)
 
     class_labels = dataset.class_labels
@@ -114,9 +165,6 @@ def run_evaluation_on_given_fold(config,
     # Metrics of interest: Subset Accuracy, ROC AUC
     # F1, ROC AUC, Accuracy
     # Eventually: Precision, Recall
-
-
-
 
     # ------------ ROC Plots can be created here------------------------------------
 
@@ -247,11 +295,126 @@ def run_evaluation_on_cross_fold_data(main_path, strategy=None):
     print("Finished additional run of cross-fold-validation to do the evaluation")
 
 
+def train_ridge_models_on_cross_fold_data(main_path):
+    config = load_config_and_setup_paths(main_path, sub_dir="Ridge Regression")
+    assert config['arch']['type'] == 'FinalModelMultiBranch', \
+        "The ridge regression model can only be trained for multi-branch models!"
+
+    base_config, base_log_dir, base_save_dir, data_dir, dataset, fold_data, total_num_folds = setup_cross_fold(config)
+
+    # Save the results of each run
+    class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics = \
+        prepare_result_data_structures(total_num_folds)
+
+    print("Starting with " + str(total_num_folds) + "-fold cross validation for LASSO training")
+    valid_fold_index = total_num_folds - 2
+    test_fold_index = total_num_folds - 1
+
+    for k in range(total_num_folds):
+        print("Starting fold " + str(k + 1))
+
+        # Adapt the log and save paths for the current fold
+        config.save_dir = Path(os.path.join(base_save_dir, "Fold_" + str(k + 1)))
+        config.log_dir = Path(os.path.join(base_log_dir, "Fold_" + str(k + 1)))
+        ensure_dir(config.save_dir)
+        ensure_dir(config.log_dir)
+        update_logging_setup_for_tune_or_cross_valid(config.log_dir)
+
+        # Load the detached outputs to train the LASSO model
+        detached_storage_path = os.path.join(config.save_dir.parent.parent, "output_logging", "Fold_" + str(k + 1))
+        with open(os.path.join(detached_storage_path, f"train_det_outputs.p"), 'rb') as file:
+            det_outputs_train = pickle.load(file)
+        with open(os.path.join(detached_storage_path, f"train_det_targets.p"), 'rb') as file:
+            det_targets_train = pickle.load(file)
+        with open(os.path.join(detached_storage_path, f"train_det_single_lead_outputs.p"), 'rb') as file:
+            det_single_lead_outputs_train = pickle.load(file)
+        with open(os.path.join(detached_storage_path, "valid_det_outputs.p"), 'rb') as file:
+            det_outputs_valid = pickle.load(file)
+        with open(os.path.join(detached_storage_path, "valid_det_targets.p"), 'rb') as file:
+            det_targets_valid = pickle.load(file)
+        with open(os.path.join(detached_storage_path, "valid_det_single_lead_outputs.p"), 'rb') as file:
+            det_single_lead_outputs_valid = pickle.load(file)
+        with open(os.path.join(detached_storage_path, "test_det_outputs.p"), 'rb') as file:
+            det_outputs_test = pickle.load(file)
+        with open(os.path.join(detached_storage_path, "test_det_targets.p"), 'rb') as file:
+            det_targets_test = pickle.load(file)
+        with open(os.path.join(detached_storage_path, "test_det_single_lead_outputs.p"), 'rb') as file:
+            det_single_lead_outputs_test = pickle.load(file)
+
+        # Train the LASSO model
+        predicted_probs_train = get_all_predictions_as_probs(det_outputs_train, det_single_lead_outputs_train)
+        predicted_probs_valid = get_all_predictions_as_probs(det_outputs_valid, det_single_lead_outputs_valid)
+        predicted_probs_test = get_all_predictions_as_probs(det_outputs_test, det_single_lead_outputs_test)
+
+        fold_eval_class_wise, fold_eval_single_metrics = train_ridge_model(X_train=predicted_probs_train,
+                                                                           X_valid=predicted_probs_valid,
+                                                                           X_test=predicted_probs_test,
+                                                                           # Ground Truth
+                                                                           y_train=det_targets_train,
+                                                                           y_valid=det_targets_valid,
+                                                                           y_test=det_targets_test,
+                                                                           # Save Path
+                                                                           save_path=config.save_dir)
+
+        # Class-Wise Metrics
+        test_results_class_wise.loc[(folds[k], fold_eval_class_wise.index), fold_eval_class_wise.columns] = \
+            fold_eval_class_wise.values
+        # Single Metrics
+        pd_series = fold_eval_single_metrics.loc['value']
+        pd_series.name = folds[k]
+        test_results_single_metrics = test_results_single_metrics.append(pd_series)
+
+        # Update the indices and reset the config (including resume!)
+        valid_fold_index = (valid_fold_index + 1) % total_num_folds
+        test_fold_index = (test_fold_index + 1) % total_num_folds
+        config = copy.deepcopy(base_config)
+
+    # Summarize the results of the cross validation and write everything to file
+    # --------------------------- Test Class-Wise Metrics ---------------------------
+    iterables_summary = [["mean", "median"], class_wise_metrics]
+    multi_index = pd.MultiIndex.from_product(iterables_summary, names=["merging", "metric"])
+    test_results_class_wise_summary = pd.DataFrame(
+        columns=['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+                 'macro avg', 'weighted avg'], index=multi_index)
+    for metric in class_wise_metrics:
+        test_results_class_wise_summary.loc[('mean', metric)] = test_results_class_wise.xs(metric, level=1).mean()
+        test_results_class_wise_summary.loc[('median', metric)] = test_results_class_wise.xs(metric,
+                                                                                             level=1).median()
+
+    path = os.path.join(base_save_dir, "test_results_class_wise.p")
+    with open(path, 'wb') as file:
+        pickle.dump(test_results_class_wise, file)
+    path = os.path.join(base_save_dir, "test_results_class_wise_summary.p")
+    with open(path, 'wb') as file:
+        pickle.dump(test_results_class_wise_summary, file)
+
+    # --------------------------- Test Single Metrics ---------------------------
+    test_results_single_metrics.loc['mean'] = test_results_single_metrics.mean()
+    test_results_single_metrics.loc['median'] = test_results_single_metrics[:][:-1].median()
+
+    path = os.path.join(base_save_dir, "test_results_single_metrics.p")
+    with open(path, 'wb') as file:
+        pickle.dump(test_results_single_metrics, file)
+
+    #  --------------------------- Omit Train Result ---------------------------
+
+    # --------------------------- Test Metrics To Latex---------------------------
+    with open(os.path.join(base_save_dir, 'cross_validation_results.tex'), 'w') as file:
+        file.write("Class-Wise Summary:\n\n")
+        test_results_class_wise_summary.to_latex(buf=file, index=False, float_format="{:0.3f}".format,
+                                                 escape=False)
+        file.write("\n\n\nSingle Metrics:\n\n")
+        test_results_single_metrics.to_latex(buf=file, index=False, float_format="{:0.3f}".format,
+                                             escape=False)
+    print("Finished additional run of cross-fold-validation to train ridge regression models")
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='MACRO Paper: Strategy-based Evaluation')
     parser.add_argument('-p', '--path', default=None, type=str,
                         help='main path to CV runs(default: None)')
     parser.add_argument('--strategy', default=None, type=str,
-                        help='strategy to use for threshold optimization (default: None)')
+                        help='strategy to use for final model prediction (default: None)')
     args = parser.parse_args()
-    run_evaluation_on_cross_fold_data(args.path, args.strategy)
+    # run_evaluation_on_cross_fold_data(args.path, args.strategy)
+    train_ridge_models_on_cross_fold_data(args.path)

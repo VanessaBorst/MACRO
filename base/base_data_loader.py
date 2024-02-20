@@ -93,6 +93,9 @@ class BaseDataLoader(DataLoader):
                 else:
                     path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
                                     f"seed_{global_config.SEED}")
+
+                if "drop_invalid" in dataset._input_dir:
+                    path = os.path.join(path, "drop_invalid")
                 file_name = os.path.join(path, "cv_valid_" + str(fold_id + 1) + ".txt")
                 ensure_dir(path)
                 _consistency_check_data_split_cv(file_name, desired_ids=valid_idx)
@@ -121,6 +124,8 @@ class BaseDataLoader(DataLoader):
                     else:
                         path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
                                             f"seed_{global_config.SEED}")
+                    if "drop_invalid" in dataset._input_dir:
+                        path = os.path.join(path, "drop_invalid")
                     file_name = os.path.join(path, "cv_test_" + str(fold_id + 1) + ".txt")
                     ensure_dir(path)
                     _consistency_check_data_split_cv(file_name, desired_ids=test_idx)

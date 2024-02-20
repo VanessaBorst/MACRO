@@ -1,6 +1,6 @@
 {
     "name": "BaselineModel_CV",
-    "run_details": "_250Hz_60s",
+    "run_details": "_250Hz_60s_focal_loss_new",
     "n_gpu": 1,
     "arch": {
         "type": "BaselineModel",
@@ -36,7 +36,7 @@
         }
     },
     "loss": {
-        "type": "BCE_with_logits",
+        "type": "focal_loss",
         "add_args": {}
     },
     "metrics": {

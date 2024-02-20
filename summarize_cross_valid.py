@@ -2,18 +2,11 @@ import os
 import pickle
 import pandas as pd
 
-# 'savedVM_v2/models/FinalModel/cross_vals/cross_validation_rerun_withFC_0.3_32_16'
-# 'savedVM_v2/models/FinalModel/cross_vals/cross_validation_rerun_withFC_0.3_32_16_finetune_bayesian'
-# 'savedVM_v2/models/FinalModel/cross_vals/cross_validation_rerun_noFC_0.2_24_8'
-# 'savedVM_v2/models/FinalModel/cross_vals/cross_validation_rerun_withFC_0.2_32_16_finetune_BO'
 
-# 'savedVM_v2/models/FinalModel/cross_vals_sqrtT/final_cross_validation_sqrtT'
-# 'savedVM_v2/models/FinalModel/cross_vals_sqrtT/cross_validation_withFC_0.4_24_32_finetune_BO'
-# path = 'savedVM_v2/models/FinalModel/cross_vals/cross_validation_rerun_withFC_0.3_32_16_finetune_bayesian'
-# path = 'savedVM/models/Multibranch_MACRO_CV/0206_122152_ml_bs64noconvRedBlock_0.4_8_false_0.4_8'
-# path = 'savedVM/models/BaselineModel_CV/0116_145000_ml_bs64_250Hz_60s/threshold_tuning_manual'
-path = 'savedVM/models/Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24/threshold_tuning_bayesianOptimization'
-# path="savedVM/models/BaselineModel_CV/0207_164052_ml_bs64_250Hz_60s"
+#path = 'savedVM/models/Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24/threshold_tuning_bayesianOptimization'
+# path = 'savedVM/models/Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24/Ridge Regression'
+path = "savedVM/models/BaselineModel_CV/0219_181010_ml_bs64_250Hz_60s_Focal_Loss_2_0.25"
+
 thresholds_active=False
 include_weighted_avg=True
 include_at_least_weighted_F1 = True
