@@ -12,24 +12,28 @@ from torchmetrics import AUROC, Accuracy
 # Assuming X contains the sigmoid probabilities and y contains the target labels
 # X.shape should be (num_samples, 13, num_classes)
 # y.shape should be (num_samples, num_classes)
-def train_ridge_model(X_train, X_valid, X_test, y_train, y_valid, y_test, save_path):
+def train_ML_model(X_train, X_valid, X_test, y_train, y_valid, y_test, save_path, strategy=None):
     # Reshape X to (num_samples, 13 * num_classes)
     X_train = X_train.reshape((X_train.shape[0], -1))
     X_valid = X_valid.reshape((X_valid.shape[0], -1))
     X_test = X_test.reshape((X_test.shape[0], -1))
 
-    # Optimizing the regularization strength alpha based on the validation set
-    best_alpha = _optimize_alpha(X_train, X_valid, y_train, y_valid)
+    match strategy:
+        case "Ridge_Regression":
+            # Optimizing the regularization strength alpha based on the validation set
+            best_alpha = _optimize_ridge_alpha(X_train, X_valid, y_train, y_valid)
 
-    # Initialize Ridge regression model with the best alpha
-    ridge_model = Ridge(alpha=best_alpha)
+            # Initialize Ridge regression model with the best alpha
+            ridge_model = Ridge(alpha=best_alpha)
 
-    # Train the model on the training set
-    ridge_model.fit(X_train, y_train)
+            # Train the model on the training set
+            ridge_model.fit(X_train, y_train)
 
-    # Make predictions on the test set
-    y_pred = ridge_model.predict(X_test)
-    y_pred_binary = np.round(y_pred)
+            # Make predictions on the test set
+            y_pred = ridge_model.predict(X_test)
+            y_pred_binary = np.round(y_pred)
+        case _:
+            raise ValueError("Invalid strategy")
 
     # Evaluate the performance of the model
     eval_dict = classification_report(y_test, y_pred_binary,
@@ -40,7 +44,7 @@ def train_ridge_model(X_train, X_valid, X_test, y_train, y_valid, y_test, save_p
     # TODO check if this really is correct
     # Values need to be within [0,1] because otherwise, torchmetrics will apply a Sigmoid function!
     y_pred_for_torchmetrics = np.clip(y_pred, 0, 1)
-    torch_roc_auc = AUROC(task='multilabel',num_labels=9, average=None)
+    torch_roc_auc = AUROC(task='multilabel', num_labels=9, average=None)
     torch_roc_auc_scores = torch_roc_auc(preds=torch.tensor(y_pred_for_torchmetrics), target=y_test)
     macro_torch_roc_auc = AUROC(task='multilabel', num_labels=9, average="macro")
     macro_torch_roc_auc_score = macro_torch_roc_auc(preds=torch.tensor(y_pred_for_torchmetrics), target=y_test)
@@ -64,8 +68,9 @@ def train_ridge_model(X_train, X_valid, X_test, y_train, y_valid, y_test, save_p
         ['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'macro avg', 'weighted avg']]])
 
     # Append the roc_auc and acc scores to the dataframe
-    df_class_wise_results.loc["torch_roc_auc"] = torch.cat((torch_roc_auc_scores,macro_torch_roc_auc_score.unsqueeze(0),
-                                                            weighted_torch_roc_auc_score.unsqueeze(0))).numpy()
+    df_class_wise_results.loc["torch_roc_auc"] = torch.cat(
+        (torch_roc_auc_scores, macro_torch_roc_auc_score.unsqueeze(0),
+         weighted_torch_roc_auc_score.unsqueeze(0))).numpy()
 
     df_class_wise_results.loc["torch_accuracy"] = torch.cat(
         (torch_acc_scores, macro_torch_acc_score.unsqueeze(0),
@@ -97,7 +102,7 @@ def train_ridge_model(X_train, X_valid, X_test, y_train, y_valid, y_test, save_p
     return df_class_wise_results, df_single_metric_results
 
 
-def _optimize_alpha(X_train, X_valid, y_train, y_valid):
+def _optimize_ridge_alpha(X_train, X_valid, y_train, y_valid):
     # List of alpha values to try
     alpha_values = [0.1, 1.0, 10.0, 100.0]  # alphas = np.logspace(-6, 6, 13)
 

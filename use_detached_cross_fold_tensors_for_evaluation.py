@@ -7,7 +7,7 @@ from pathlib import Path
 import torch
 
 import global_config
-from Ridge_regression import train_ridge_model
+from Ridge_regression import train_ridge_model, train_ML_model
 from logger import update_logging_setup_for_tune_or_cross_valid
 
 from retrieve_detached_cross_fold_tensors import prepare_model_for_inference, load_config_and_setup_paths, \
@@ -92,6 +92,20 @@ def get_all_binary_predictions(det_outputs, det_single_lead_outputs):
 
 
 def get_all_predictions_as_probs(det_outputs, det_single_lead_outputs):
+    # Shape: (num_samples, 1, num_classes)
+    multibranch_prediction = torch.sigmoid(det_outputs).unsqueeze(1)
+
+    # Shape: (num_samples, 12, num_classes)
+    single_branch_predictions = [torch.sigmoid(det_single_lead_output)
+                                 for det_single_lead_output in det_single_lead_outputs]
+    single_branch_predictions = torch.stack(single_branch_predictions, dim=0)
+
+    # Shape: (num_samples, 13, num_classes)
+    all_predictions = torch.cat([single_branch_predictions, multibranch_prediction], dim=1)
+    return all_predictions
+
+
+def get_all_predictions_as_logits(det_outputs, det_single_lead_outputs):
     # Shape: (num_samples, 1, num_classes)
     multibranch_prediction = torch.sigmoid(det_outputs).unsqueeze(1)
 
@@ -298,10 +312,13 @@ def run_evaluation_on_cross_fold_data(main_path, strategy=None):
     print("Finished additional run of cross-fold-validation to do the evaluation")
 
 
-def train_ridge_models_on_cross_fold_data(main_path):
-    config = load_config_and_setup_paths(main_path, sub_dir="Ridge Regression")
+def train_ML_models_on_cross_fold_data(main_path, strategy=None, use_logits=False):
+    assert strategy in ["ridge"], "The given strategy is not supported for training ML models!"
+    strategy_name = strategy if not use_logits else strategy + " with logits"
+
+    config = load_config_and_setup_paths(main_path, sub_dir=strategy_name)
     assert config['arch']['type'] == 'FinalModelMultiBranch', \
-        "The ridge regression model can only be trained for multi-branch models!"
+        "The ML models can only be trained for multi-branch models!"
 
     base_config, base_log_dir, base_save_dir, data_dir, dataset, fold_data, total_num_folds = setup_cross_fold(config)
 
@@ -309,7 +326,9 @@ def train_ridge_models_on_cross_fold_data(main_path):
     class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics = \
         prepare_result_data_structures(total_num_folds)
 
-    print("Starting with " + str(total_num_folds) + "-fold cross validation for LASSO training")
+    print(f"Starting with {total_num_folds}-fold cross validation for {strategy_name} classifier")
+    if use_logits:
+        print("Using the raw logits for the training of the ML models")
     valid_fold_index = total_num_folds - 2
     test_fold_index = total_num_folds - 1
 
@@ -344,20 +363,23 @@ def train_ridge_models_on_cross_fold_data(main_path):
         with open(os.path.join(detached_storage_path, "test_det_single_lead_outputs.p"), 'rb') as file:
             det_single_lead_outputs_test = pickle.load(file)
 
-        # Train the LASSO model
-        predicted_probs_train = get_all_predictions_as_probs(det_outputs_train, det_single_lead_outputs_train)
-        predicted_probs_valid = get_all_predictions_as_probs(det_outputs_valid, det_single_lead_outputs_valid)
-        predicted_probs_test = get_all_predictions_as_probs(det_outputs_test, det_single_lead_outputs_test)
+        # Train the ML models
+        predicted_train = get_all_predictions_as_probs(det_outputs_train, det_single_lead_outputs_train) \
+            if not use_logits else get_all_predictions_as_logits(det_outputs_train, det_single_lead_outputs_train)
+        predicted_valid = get_all_predictions_as_probs(det_outputs_valid, det_single_lead_outputs_valid) \
+            if not use_logits else get_all_predictions_as_logits(det_outputs_valid, det_single_lead_outputs_valid)
+        predicted_test = get_all_predictions_as_probs(det_outputs_test, det_single_lead_outputs_test) \
+            if not use_logits else get_all_predictions_as_logits(det_outputs_test, det_single_lead_outputs_test)
 
-        fold_eval_class_wise, fold_eval_single_metrics = train_ridge_model(X_train=predicted_probs_train,
-                                                                           X_valid=predicted_probs_valid,
-                                                                           X_test=predicted_probs_test,
-                                                                           # Ground Truth
-                                                                           y_train=det_targets_train,
-                                                                           y_valid=det_targets_valid,
-                                                                           y_test=det_targets_test,
-                                                                           # Save Path
-                                                                           save_path=config.save_dir)
+        fold_eval_class_wise, fold_eval_single_metrics = train_ML_model(X_train=predicted_train,
+                                                                        X_valid=predicted_valid,
+                                                                        X_test=predicted_test,
+                                                                        # Ground Truth
+                                                                        y_train=det_targets_train,
+                                                                        y_valid=det_targets_valid,
+                                                                        y_test=det_targets_test,
+                                                                        # Save Path
+                                                                        save_path=config.save_dir)
 
         # Class-Wise Metrics
         test_results_class_wise.loc[(folds[k], fold_eval_class_wise.index), fold_eval_class_wise.columns] = \
@@ -420,4 +442,4 @@ if __name__ == '__main__':
                         help='strategy to use for final model prediction (default: None)')
     args = parser.parse_args()
     # run_evaluation_on_cross_fold_data(args.path, args.strategy)
-    train_ridge_models_on_cross_fold_data(args.path)
+    train_ML_models_on_cross_fold_data(args.path, args.strategy)
