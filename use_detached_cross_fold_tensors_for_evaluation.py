@@ -7,7 +7,7 @@ from pathlib import Path
 import torch
 
 import global_config
-from Ridge_regression import train_ridge_model, train_ML_model
+from ML_models_for_multibranch_ensemble import train_ML_model
 from logger import update_logging_setup_for_tune_or_cross_valid
 
 from retrieve_detached_cross_fold_tensors import prepare_model_for_inference, load_config_and_setup_paths, \
@@ -106,17 +106,7 @@ def get_all_predictions_as_probs(det_outputs, det_single_lead_outputs):
 
 
 def get_all_predictions_as_logits(det_outputs, det_single_lead_outputs):
-    # Shape: (num_samples, 1, num_classes)
-    multibranch_prediction = torch.sigmoid(det_outputs).unsqueeze(1)
-
-    # Shape: (num_samples, 12, num_classes)
-    single_branch_predictions = [torch.sigmoid(det_single_lead_output)
-                                 for det_single_lead_output in det_single_lead_outputs]
-    single_branch_predictions = torch.stack(single_branch_predictions, dim=0)
-
-    # Shape: (num_samples, 13, num_classes)
-    all_predictions = torch.cat([single_branch_predictions, multibranch_prediction], dim=1)
-    return all_predictions
+    return torch.cat([det_outputs.unsqueeze(1),det_single_lead_outputs], dim=1)
 
 
 def run_evaluation_on_given_fold(config,
@@ -313,7 +303,7 @@ def run_evaluation_on_cross_fold_data(main_path, strategy=None):
 
 
 def train_ML_models_on_cross_fold_data(main_path, strategy=None, use_logits=False):
-    assert strategy in ["ridge"], "The given strategy is not supported for training ML models!"
+    assert strategy in ["ridge", "ridgev2", "decision_tree"], "The given strategy is not supported for training ML models!"
     strategy_name = strategy if not use_logits else strategy + " with logits"
 
     config = load_config_and_setup_paths(main_path, sub_dir=strategy_name)
@@ -379,7 +369,9 @@ def train_ML_models_on_cross_fold_data(main_path, strategy=None, use_logits=Fals
                                                                         y_valid=det_targets_valid,
                                                                         y_test=det_targets_test,
                                                                         # Save Path
-                                                                        save_path=config.save_dir)
+                                                                        save_path=config.save_dir,
+                                                                        # Stratgey
+                                                                        strategy=strategy)
 
         # Class-Wise Metrics
         test_results_class_wise.loc[(folds[k], fold_eval_class_wise.index), fold_eval_class_wise.columns] = \
@@ -440,6 +432,8 @@ if __name__ == '__main__':
                         help='main path to CV runs(default: None)')
     parser.add_argument('--strategy', default=None, type=str,
                         help='strategy to use for final model prediction (default: None)')
+    parser.add_argument('--use_logits', action='store_true',
+                        help='Use the raw logits for the training of the ML models')
     args = parser.parse_args()
     # run_evaluation_on_cross_fold_data(args.path, args.strategy)
-    train_ML_models_on_cross_fold_data(args.path, args.strategy)
+    train_ML_models_on_cross_fold_data(args.path, args.strategy, args.use_logits)

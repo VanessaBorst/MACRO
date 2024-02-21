@@ -1,13 +1,23 @@
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import Ridge, RidgeClassifier, LogisticRegression
 from sklearn.metrics import classification_report, f1_score, accuracy_score
 import os
 import pickle
 import torch
-
+from sklearn.multioutput import MultiOutputClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.utils.extmath import softmax
 from torchmetrics import AUROC, Accuracy
 
+
+# def predict_proba_ridge(classifier, X):
+#     # TODO This is not correct yet, cf https://stackoverflow.com/questions/66334612/plotting-roc-curve-for-ridgeclassifier-in-python
+#     # From https://stackoverflow.com/questions/22538080/scikit-learn-ridge-classifier-extracting-class-probabilities
+#     d = classifier.decision_function(X)
+#     if len(d.shape) == 1:
+#         d = np.c_[-d, d]
+#     return softmax(d)
 
 # Assuming X contains the sigmoid probabilities and y contains the target labels
 # X.shape should be (num_samples, 13, num_classes)
@@ -19,47 +29,90 @@ def train_ML_model(X_train, X_valid, X_test, y_train, y_valid, y_test, save_path
     X_test = X_test.reshape((X_test.shape[0], -1))
 
     match strategy:
-        case "Ridge_Regression":
-            # Optimizing the regularization strength alpha based on the validation set
-            best_alpha = _optimize_ridge_alpha(X_train, X_valid, y_train, y_valid)
+        case "decision_tree":
+            # Fit one decision tree classifier per target
 
-            # Initialize Ridge regression model with the best alpha
-            ridge_model = Ridge(alpha=best_alpha)
+            multi_output_classifier = MultiOutputClassifier(DecisionTreeClassifier())
 
             # Train the model on the training set
-            ridge_model.fit(X_train, y_train)
+            multi_output_classifier.fit(X_train, y_train)
 
             # Make predictions on the test set
-            y_pred = ridge_model.predict(X_test)
-            y_pred_binary = np.round(y_pred)
+            y_pred = multi_output_classifier.predict(X_test)
+            # Shape: List of len num_classes, each element is a 2D array of shape (num_samples, 2)
+            # with the probabilities for the negative and positive class, respectively (classes_ is [0, 1])
+            all_probs = multi_output_classifier.predict_proba(X_test)
+            y_pred_prob = []
+            for classifier_probs in all_probs:
+                pos_class_probs = classifier_probs[:, 1]
+                y_pred_prob.append(pos_class_probs)
+            y_pred_prob = np.stack(y_pred_prob, axis=1)
+
+        case "ridgev2":
+            # Fit one ridge classifier per target
+            # Replace Ridge with LogisiticRegression since it supports predict_proba
+            # Should be the same optimization problem as Ridge according to
+            # https://stackoverflow.com/questions/66334612/plotting-roc-curve-for-ridgeclassifier-in-python
+            multi_output_classifier = MultiOutputClassifier(LogisticRegression(penalty='l2'))
+
+            # Train the model on the training set
+            multi_output_classifier.fit(X_train, y_train)
+
+            # Make predictions on the test set
+            y_pred = multi_output_classifier.predict(X_test)
+            # Shape: List of len num_classes, each element is a 2D array of shape (num_samples, 2)
+            # with the probabilities for the negative and positive class, respectively (classes_ is [0, 1])
+            all_probs = multi_output_classifier.predict_proba(X_test)
+            y_pred_prob = []
+            for classifier_probs in all_probs:
+                pos_class_probs = classifier_probs[:, 1]
+                y_pred_prob.append(pos_class_probs)
+            y_pred_prob = np.stack(y_pred_prob, axis=1)
+
+        case "ridge":
+
+            #Fit one ridge classifier per target
+            multi_output_ridge = MultiOutputClassifier(RidgeClassifier())
+
+            # TODO: Fine Tune alpha individually for each label
+            # Optimizing the regularization strength alpha based on the validation set
+            # best_alpha = _optimize_ridge_alpha(X_train, X_valid, y_train, y_valid)
+            # Initialize Ridge regression model with the best alpha
+            # ridge_model = Ridge(alpha=best_alpha)
+
+            # Train the model on the training set
+            multi_output_ridge.fit(X_train, y_train)
+
+            # Make predictions on the test set
+            y_pred = multi_output_ridge.predict(X_test)
+
+            # Problem: Ridge classifier has no predict_proba method, so we cannot calculate the roc_auc score
         case _:
             raise ValueError("Invalid strategy")
 
     # Evaluate the performance of the model
-    eval_dict = classification_report(y_test, y_pred_binary,
+    eval_dict = classification_report(y_test, y_pred,
                                       target_names=["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"],
                                       output_dict=True)
     df_sklearn_summary = pd.DataFrame.from_dict(eval_dict)
 
-    # TODO check if this really is correct
     # Values need to be within [0,1] because otherwise, torchmetrics will apply a Sigmoid function!
-    y_pred_for_torchmetrics = np.clip(y_pred, 0, 1)
     torch_roc_auc = AUROC(task='multilabel', num_labels=9, average=None)
-    torch_roc_auc_scores = torch_roc_auc(preds=torch.tensor(y_pred_for_torchmetrics), target=y_test)
+    torch_roc_auc_scores = torch_roc_auc(preds=torch.tensor(y_pred_prob), target=y_test)
     macro_torch_roc_auc = AUROC(task='multilabel', num_labels=9, average="macro")
-    macro_torch_roc_auc_score = macro_torch_roc_auc(preds=torch.tensor(y_pred_for_torchmetrics), target=y_test)
+    macro_torch_roc_auc_score = macro_torch_roc_auc(preds=torch.tensor(y_pred_prob), target=y_test)
     weighted_torch_roc_auc = AUROC(task='multilabel', num_labels=9, average="weighted")
-    weighted_torch_roc_auc_score = weighted_torch_roc_auc(preds=torch.tensor(y_pred_for_torchmetrics), target=y_test)
+    weighted_torch_roc_auc_score = weighted_torch_roc_auc(preds=torch.tensor(y_pred_prob), target=y_test)
 
     torch_acc = Accuracy(task='multilabel', num_labels=9, average=None)
-    torch_acc_scores = torch_acc(preds=torch.tensor(y_pred_for_torchmetrics), target=y_test)
+    torch_acc_scores = torch_acc(preds=torch.tensor(y_pred_prob), target=y_test)
     macro_torch_acc = AUROC(task='multilabel', num_labels=9, average="macro")
-    macro_torch_acc_score = macro_torch_acc(preds=torch.tensor(y_pred_for_torchmetrics), target=y_test)
+    macro_torch_acc_score = macro_torch_acc(preds=torch.tensor(y_pred_prob), target=y_test)
     weighted_torch_acc = AUROC(task='multilabel', num_labels=9, average="weighted")
-    weighted_torch_acc_score = weighted_torch_acc(preds=torch.tensor(y_pred_for_torchmetrics), target=y_test)
+    weighted_torch_acc_score = weighted_torch_acc(preds=torch.tensor(y_pred_prob), target=y_test)
 
-    # 'class_wise_torch_accuracy
-    subset_acc = accuracy_score(y_true=y_test, y_pred=y_pred_binary)
+    # Class_wise_torch_accuracy
+    subset_acc = accuracy_score(y_true=y_test, y_pred=y_pred)
 
     # Save the evaluation results to a file
     df_class_wise_results = pd.DataFrame(
@@ -97,7 +150,7 @@ def train_ML_model(X_train, X_valid, X_test, y_train, y_valid, y_test, save_path
         file.write(f"\n\n\n\n")
         df_single_metric_results.to_latex(buf=file, index=True, bold_rows=True, float_format="{:0.3f}".format)
         # file.write(f"Subset Accuracy: {subset_acc:.3f}\n")
-        file.write(f"\n\n\nBest Alpha: {best_alpha}\n")
+        # file.write(f"\n\n\nBest Alpha: {best_alpha}\n")
 
     return df_class_wise_results, df_single_metric_results
 
