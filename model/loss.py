@@ -2,6 +2,8 @@ import torch
 import torch.nn.functional as F
 from torch.nn import BCELoss, BCEWithLogitsLoss, MultiLabelSoftMarginLoss
 
+from loss.asymmetric_loss import AsymmetricLoss, AsymmetricLossOptimized
+
 
 # ------------------------- Multi-Label Classification Loss Function -------------------------
 def balanced_BCE(output, target, class_weights):
@@ -20,6 +22,7 @@ def multi_label_soft_margin(output, target, class_weights):
 #     loss = BCELoss()
 #     return loss(output, target.float())
 
+# Code from https://www.kaggle.com/code/thedrcat/focal-multilabel-loss-in-pytorch-explained
 def focal_binary_cross_entropy_with_logits(output, target, gamma=2, beta=0.25):
     num_label = target.size(1)
     l = output.reshape(-1)
@@ -32,43 +35,9 @@ def focal_binary_cross_entropy_with_logits(output, target, gamma=2, beta=0.25):
     return loss
 
 
-def focal_loss(target, output, alpha=0.25, gamma=2):
-    """
-    Compute the focal loss between `logits` and the ground truth `labels`.
-    Based on https://github.com/c0nn3r/RetinaNet/blob/master/focal_loss.py
-
-    Focal loss = -alpha_t * (1-pt)^gamma * log(pt)
-    where pt is the probability of being classified to the true class.
-    pt = p (if true class), otherwise pt = 1 - p. p = sigmoid(logit).
-
-    Args:
-        target: A float32 tensor of size [batch, num_classes].
-        logits: A float32 tensor of size [batch, num_classes].
-        alpha: A float32 tensor of size [batch_size] specifying per-example weight for balanced cross entropy.
-        gamma: A float32 scalar modulating loss from hard and easy examples.
-
-    Returns:
-        focal_loss: A float32 scalar representing normalized total loss.
-    """
-
-    logits = output.float()
-    cross_entropy = F.binary_cross_entropy_with_logits(logits, target.float())
-
-    # A numerically stable implementation of modulator.
-    if gamma == 0.0:
-        modulator = 1.0
-    else:
-        modulator = torch.exp(-gamma * target * logits - gamma * torch.log1p(torch.exp(-1.0 * logits)))
-
-    loss = modulator * cross_entropy
-
-    weighted_loss = alpha * loss
-    focal_loss = torch.sum(weighted_loss)
-
-    # Normalize by the total number of positive samples.
-    focal_loss /= torch.sum(target)
-
-    return focal_loss
+def asymmetric_loss(output, target, gamma_neg=4, gamma_pos=1, clip=0.05, eps=1e-8, disable_torch_grad_focal_loss=True):
+    loss = AsymmetricLossOptimized(gamma_neg, gamma_pos, clip, eps, disable_torch_grad_focal_loss)
+    return loss(output, target)
 
 
 # This contains Sigmoid itself

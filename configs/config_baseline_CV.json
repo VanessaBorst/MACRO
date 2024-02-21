@@ -1,6 +1,6 @@
 {
-    "name": "BaselineModel_CV",
-    "run_details": "_250Hz_60s_focal_loss_new",
+    "name": "BaselineModel_CV_AsymmetricLoss",
+    "run_details": "_250Hz_60s_asymmetric_loss_2_0_0.2",
     "n_gpu": 1,
     "arch": {
         "type": "BaselineModel",
@@ -36,8 +36,12 @@
         }
     },
     "loss": {
-        "type": "focal_loss",
-        "add_args": {}
+        "type": "asymmetric_loss",
+        "add_args": {
+            "gamma_neg": 2,
+            "gamma_pos": 0,
+            "clip": 0.2
+        }
     },
     "metrics": {
         "ml": {

@@ -96,6 +96,9 @@ class ECGTrainer(BaseTrainer):
             "valid_pos_weights": val_pos_weights,
             "valid_class_weights": val_class_weights,
             "lambda_balance": config["loss"]["add_args"].get("lambda_balance", 1),
+            "gamma_neg": config["loss"]["add_args"].get("gamma_neg", 4),
+            "gamma_pos": config["loss"]["add_args"].get("gamma_pos", 1),
+            "clip": config["loss"]["add_args"].get("clip", 0.05),
         }
 
         # confusion matrices

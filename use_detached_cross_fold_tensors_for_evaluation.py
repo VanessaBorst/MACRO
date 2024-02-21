@@ -144,7 +144,10 @@ def run_evaluation_on_given_fold(config,
         #     multi_label_training=multi_label_training,
         #     mode='test',
         #     cross_valid_active=True),
-        "lambda_balance": config["loss"]["add_args"].get("lambda_balance", 1)
+        "lambda_balance": config["loss"]["add_args"].get("lambda_balance", 1),
+        "gamma_neg": config["loss"]["add_args"].get("gamma_neg", 4),
+        "gamma_pos": config["loss"]["add_args"].get("gamma_pos", 1),
+        "clip": config["loss"]["add_args"].get("clip", 0.05),
     }
 
     # Load the tensors for further evaluation
