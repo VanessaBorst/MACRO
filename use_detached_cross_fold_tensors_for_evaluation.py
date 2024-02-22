@@ -106,7 +106,7 @@ def get_all_predictions_as_probs(det_outputs, det_single_lead_outputs):
 
 
 def get_all_predictions_as_logits(det_outputs, det_single_lead_outputs):
-    return torch.cat([det_outputs.unsqueeze(1),det_single_lead_outputs], dim=1)
+    return torch.cat([det_single_lead_outputs,det_outputs.unsqueeze(1)], dim=1)
 
 
 def run_evaluation_on_given_fold(config,
@@ -302,9 +302,10 @@ def run_evaluation_on_cross_fold_data(main_path, strategy=None):
     print("Finished additional run of cross-fold-validation to do the evaluation")
 
 
-def train_ML_models_on_cross_fold_data(main_path, strategy=None, use_logits=False):
+def train_ML_models_on_cross_fold_data(main_path, strategy=None, use_logits=False, individual_features=False):
     assert strategy in ["ridge", "ridgev2", "decision_tree"], "The given strategy is not supported for training ML models!"
     strategy_name = strategy if not use_logits else strategy + " with logits"
+    strategy_name = strategy_name + "_individual_features" if individual_features else strategy_name
 
     config = load_config_and_setup_paths(main_path, sub_dir=strategy_name)
     assert config['arch']['type'] == 'FinalModelMultiBranch', \
@@ -371,7 +372,8 @@ def train_ML_models_on_cross_fold_data(main_path, strategy=None, use_logits=Fals
                                                                         # Save Path
                                                                         save_path=config.save_dir,
                                                                         # Stratgey
-                                                                        strategy=strategy)
+                                                                        strategy=strategy,
+                                                                        individual_features=individual_features)
 
         # Class-Wise Metrics
         test_results_class_wise.loc[(folds[k], fold_eval_class_wise.index), fold_eval_class_wise.columns] = \
@@ -423,7 +425,7 @@ def train_ML_models_on_cross_fold_data(main_path, strategy=None, use_logits=Fals
         file.write("\n\n\nSingle Metrics:\n\n")
         test_results_single_metrics.to_latex(buf=file, index=False, float_format="{:0.3f}".format,
                                              escape=False)
-    print("Finished additional run of cross-fold-validation to train ridge regression models")
+    print(f"Finished additional run of cross-fold-validation to train {strategy_name} models")
 
 
 if __name__ == '__main__':
@@ -434,6 +436,8 @@ if __name__ == '__main__':
                         help='strategy to use for final model prediction (default: None)')
     parser.add_argument('--use_logits', action='store_true',
                         help='Use the raw logits for the training of the ML models')
+    parser.add_argument('--individual_features', action='store_true',
+                        help='Use the raw logits for the training of the ML models')
     args = parser.parse_args()
     # run_evaluation_on_cross_fold_data(args.path, args.strategy)
-    train_ML_models_on_cross_fold_data(args.path, args.strategy, args.use_logits)
+    train_ML_models_on_cross_fold_data(args.path, args.strategy, args.use_logits, args.individual_features)

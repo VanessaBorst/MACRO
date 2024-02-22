@@ -19,76 +19,92 @@ from torchmetrics import AUROC, Accuracy
 #         d = np.c_[-d, d]
 #     return softmax(d)
 
-# Assuming X contains the sigmoid probabilities and y contains the target labels
+# Assuming X contains the sigmoid probabilities or logits and y contains the target labels
 # X.shape should be (num_samples, 13, num_classes)
+# => Here: X is a stack of BranchNets outputs followed by the Multibranch output
 # y.shape should be (num_samples, num_classes)
-def train_ML_model(X_train, X_valid, X_test, y_train, y_valid, y_test, save_path, strategy=None):
-    # Reshape X to (num_samples, 13 * num_classes)
-    X_train = X_train.reshape((X_train.shape[0], -1))
-    X_valid = X_valid.reshape((X_valid.shape[0], -1))
-    X_test = X_test.reshape((X_test.shape[0], -1))
+def train_ML_model(X_train, X_valid, X_test, y_train, y_valid, y_test, save_path,
+                   strategy=None, individual_features=False):
+    # TODO: Use valid for fine-tuning or fuse with train
+    if not individual_features:
+        # Reshape X to (num_samples, 13 * num_classes)
+        X_train_all = X_train.reshape((X_train.shape[0], -1))
+        X_valid_all = X_valid.reshape((X_valid.shape[0], -1))
+        X_test_all = X_test.reshape((X_test.shape[0], -1))
 
-    match strategy:
-        case "decision_tree":
-            # Fit one decision tree classifier per target
+    num_classes = y_train.shape[1]
+    y_preds = []
+    y_pred_probs = []
+    if strategy == "decision_tree":
+        if individual_features:
+            df_feature_importance = pd.DataFrame(columns=[f"branchNet_{i + 1}" for i in range(12)] + (["multibranch"]))
+            df_feature_importance_wo_multibranch = pd.DataFrame(columns=[f"branchNet_{i + 1}" for i in range(12)])
+        else:
+            column_names = [f"BrN{branchnet + 1}_c{class_idx + 1}" for branchnet in range(12) for class_idx in range(9)] \
+                           + [f"MuB_c{class_idx + 1}" for class_idx in range(9)]
+            df_feature_importance = pd.DataFrame(columns=column_names)
+    for class_index in range(0, num_classes):
 
-            multi_output_classifier = MultiOutputClassifier(DecisionTreeClassifier())
+        # Fit one decision tree classifier per target
+        match strategy:
+            case "decision_tree":
+                classifier = DecisionTreeClassifier()
+            case "ridgev2":
+                # Fit one ridge classifier per target
+                # Replace Ridge with LogisiticRegression since it supports predict_proba
+                # Should be the same optimization problem as Ridge according to
+                # https://stackoverflow.com/questions/66334612/plotting-roc-curve-for-ridgeclassifier-in-python
+                classifier = LogisticRegression(penalty='l2')
+            case "ridge":
+                classifier = RidgeClassifier()
+            case _:
+                raise ValueError("Invalid strategy")
 
-            # Train the model on the training set
-            multi_output_classifier.fit(X_train, y_train)
+        # Train the model on the training set
+        if individual_features:
+            # Use only the features of the current class
+            classifier.fit(X_train[:, :, class_index], y_train[:, class_index])
 
-            # Make predictions on the test set
-            y_pred = multi_output_classifier.predict(X_test)
-            # Shape: List of len num_classes, each element is a 2D array of shape (num_samples, 2)
+            y_pred = classifier.predict(X_test[:, :, class_index])
+            # Shape: 2D array of shape (num_samples, 2)
             # with the probabilities for the negative and positive class, respectively (classes_ is [0, 1])
-            all_probs = multi_output_classifier.predict_proba(X_test)
-            y_pred_prob = []
-            for classifier_probs in all_probs:
-                pos_class_probs = classifier_probs[:, 1]
-                y_pred_prob.append(pos_class_probs)
-            y_pred_prob = np.stack(y_pred_prob, axis=1)
+            y_pred_prob = classifier.predict_proba(X_test[:, :, class_index])[:, 1]
 
-        case "ridgev2":
-            # Fit one ridge classifier per target
-            # Replace Ridge with LogisiticRegression since it supports predict_proba
-            # Should be the same optimization problem as Ridge according to
-            # https://stackoverflow.com/questions/66334612/plotting-roc-curve-for-ridgeclassifier-in-python
-            multi_output_classifier = MultiOutputClassifier(LogisticRegression(penalty='l2'))
+            if strategy == "decision_tree":
+                reduced_classifier = DecisionTreeClassifier()
+                # Repeat the same without the multibranch output for feature importance analysis
+                reduced_classifier.fit(X_train[:, :12, class_index], y_train[:, class_index])
+                # y_pred_wo_multibranch = reduced_classifier.predict(X_test[:, :12, class_index])
+                df_feature_importance_wo_multibranch.loc[f"class_{class_index}"] = reduced_classifier.feature_importances_
 
-            # Train the model on the training set
-            multi_output_classifier.fit(X_train, y_train)
 
-            # Make predictions on the test set
-            y_pred = multi_output_classifier.predict(X_test)
-            # Shape: List of len num_classes, each element is a 2D array of shape (num_samples, 2)
-            # with the probabilities for the negative and positive class, respectively (classes_ is [0, 1])
-            all_probs = multi_output_classifier.predict_proba(X_test)
-            y_pred_prob = []
-            for classifier_probs in all_probs:
-                pos_class_probs = classifier_probs[:, 1]
-                y_pred_prob.append(pos_class_probs)
-            y_pred_prob = np.stack(y_pred_prob, axis=1)
+        else:
+            # Use all features (across all classes)
+            classifier.fit(X_train_all, y_train[:, class_index])
+            y_pred = classifier.predict(X_test_all)
+            y_pred_prob = classifier.predict_proba(X_test_all)[:, 1]
 
-        case "ridge":
+        y_preds.append(y_pred)
+        y_pred_probs.append(y_pred_prob)
 
-            #Fit one ridge classifier per target
-            multi_output_ridge = MultiOutputClassifier(RidgeClassifier())
+        if strategy == "decision_tree":
+            df_feature_importance.loc[f"class_{class_index}"] = classifier.feature_importances_
 
-            # TODO: Fine Tune alpha individually for each label
-            # Optimizing the regularization strength alpha based on the validation set
-            # best_alpha = _optimize_ridge_alpha(X_train, X_valid, y_train, y_valid)
-            # Initialize Ridge regression model with the best alpha
-            # ridge_model = Ridge(alpha=best_alpha)
+    # Stack the predictions and prediction probabilities
+    y_pred = np.stack(y_preds, axis=1)
+    y_pred_probs = np.stack(y_pred_probs, axis=1)
 
-            # Train the model on the training set
-            multi_output_ridge.fit(X_train, y_train)
+    if strategy == "decision_tree":
+        with open(os.path.join(save_path, 'feature_importance.p'), 'wb') as file:
+            pickle.dump(df_feature_importance, file)
+        # Also store it more human-readable as csv
+        df_feature_importance.to_csv(os.path.join(save_path, 'feature_importance.csv'))
 
-            # Make predictions on the test set
-            y_pred = multi_output_ridge.predict(X_test)
-
-            # Problem: Ridge classifier has no predict_proba method, so we cannot calculate the roc_auc score
-        case _:
-            raise ValueError("Invalid strategy")
+        if individual_features:
+            with open(os.path.join(save_path, 'feature_importance_wo_multibranch.p'), 'wb') as file:
+                pickle.dump(df_feature_importance_wo_multibranch, file)
+            # Also store it more human-readable as csv
+            df_feature_importance_wo_multibranch.to_csv(os.path.join(save_path, 'feature_importance_wo_multibranch.csv'))
 
     # Evaluate the performance of the model
     eval_dict = classification_report(y_test, y_pred,
@@ -98,18 +114,18 @@ def train_ML_model(X_train, X_valid, X_test, y_train, y_valid, y_test, save_path
 
     # Values need to be within [0,1] because otherwise, torchmetrics will apply a Sigmoid function!
     torch_roc_auc = AUROC(task='multilabel', num_labels=9, average=None)
-    torch_roc_auc_scores = torch_roc_auc(preds=torch.tensor(y_pred_prob), target=y_test)
+    torch_roc_auc_scores = torch_roc_auc(preds=torch.tensor(y_pred_probs), target=y_test)
     macro_torch_roc_auc = AUROC(task='multilabel', num_labels=9, average="macro")
-    macro_torch_roc_auc_score = macro_torch_roc_auc(preds=torch.tensor(y_pred_prob), target=y_test)
+    macro_torch_roc_auc_score = macro_torch_roc_auc(preds=torch.tensor(y_pred_probs), target=y_test)
     weighted_torch_roc_auc = AUROC(task='multilabel', num_labels=9, average="weighted")
-    weighted_torch_roc_auc_score = weighted_torch_roc_auc(preds=torch.tensor(y_pred_prob), target=y_test)
+    weighted_torch_roc_auc_score = weighted_torch_roc_auc(preds=torch.tensor(y_pred_probs), target=y_test)
 
     torch_acc = Accuracy(task='multilabel', num_labels=9, average=None)
-    torch_acc_scores = torch_acc(preds=torch.tensor(y_pred_prob), target=y_test)
+    torch_acc_scores = torch_acc(preds=torch.tensor(y_pred_probs), target=y_test)
     macro_torch_acc = AUROC(task='multilabel', num_labels=9, average="macro")
-    macro_torch_acc_score = macro_torch_acc(preds=torch.tensor(y_pred_prob), target=y_test)
+    macro_torch_acc_score = macro_torch_acc(preds=torch.tensor(y_pred_probs), target=y_test)
     weighted_torch_acc = AUROC(task='multilabel', num_labels=9, average="weighted")
-    weighted_torch_acc_score = weighted_torch_acc(preds=torch.tensor(y_pred_prob), target=y_test)
+    weighted_torch_acc_score = weighted_torch_acc(preds=torch.tensor(y_pred_probs), target=y_test)
 
     # Class_wise_torch_accuracy
     subset_acc = accuracy_score(y_true=y_test, y_pred=y_pred)
