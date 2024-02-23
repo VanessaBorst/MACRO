@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.linear_model import Ridge, RidgeClassifier, LogisticRegression
 from sklearn.metrics import classification_report, f1_score, accuracy_score
 import os
@@ -9,6 +10,8 @@ from sklearn.multioutput import MultiOutputClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.utils.extmath import softmax
 from torchmetrics import AUROC, Accuracy
+
+from utils import ensure_dir
 
 
 # def predict_proba_ridge(classifier, X):
@@ -23,88 +26,14 @@ from torchmetrics import AUROC, Accuracy
 # X.shape should be (num_samples, 13, num_classes)
 # => Here: X is a stack of BranchNets outputs followed by the Multibranch output
 # y.shape should be (num_samples, num_classes)
-def train_ML_model(X_train, X_valid, X_test, y_train, y_valid, y_test, save_path,
-                   strategy=None, individual_features=False):
-    # TODO: Use valid for fine-tuning or fuse with train
-    if not individual_features:
-        # Reshape X to (num_samples, 13 * num_classes)
-        X_train_all = X_train.reshape((X_train.shape[0], -1))
-        X_valid_all = X_valid.reshape((X_valid.shape[0], -1))
-        X_test_all = X_test.reshape((X_test.shape[0], -1))
 
-    num_classes = y_train.shape[1]
-    y_preds = []
-    y_pred_probs = []
-    if strategy == "decision_tree":
-        if individual_features:
-            df_feature_importance = pd.DataFrame(columns=[f"branchNet_{i + 1}" for i in range(12)] + (["multibranch"]))
-            df_feature_importance_wo_multibranch = pd.DataFrame(columns=[f"branchNet_{i + 1}" for i in range(12)])
-        else:
-            column_names = [f"BrN{branchnet + 1}_c{class_idx + 1}" for branchnet in range(12) for class_idx in range(9)] \
-                           + [f"MuB_c{class_idx + 1}" for class_idx in range(9)]
-            df_feature_importance = pd.DataFrame(columns=column_names)
-    for class_index in range(0, num_classes):
-
-        # Fit one decision tree classifier per target
-        match strategy:
-            case "decision_tree":
-                classifier = DecisionTreeClassifier()
-            case "ridgev2":
-                # Fit one ridge classifier per target
-                # Replace Ridge with LogisiticRegression since it supports predict_proba
-                # Should be the same optimization problem as Ridge according to
-                # https://stackoverflow.com/questions/66334612/plotting-roc-curve-for-ridgeclassifier-in-python
-                classifier = LogisticRegression(penalty='l2')
-            case "ridge":
-                classifier = RidgeClassifier()
-            case _:
-                raise ValueError("Invalid strategy")
-
-        # Train the model on the training set
-        if individual_features:
-            # Use only the features of the current class
-            classifier.fit(X_train[:, :, class_index], y_train[:, class_index])
-
-            y_pred = classifier.predict(X_test[:, :, class_index])
-            # Shape: 2D array of shape (num_samples, 2)
-            # with the probabilities for the negative and positive class, respectively (classes_ is [0, 1])
-            y_pred_prob = classifier.predict_proba(X_test[:, :, class_index])[:, 1]
-
-            if strategy == "decision_tree":
-                reduced_classifier = DecisionTreeClassifier()
-                # Repeat the same without the multibranch output for feature importance analysis
-                reduced_classifier.fit(X_train[:, :12, class_index], y_train[:, class_index])
-                # y_pred_wo_multibranch = reduced_classifier.predict(X_test[:, :12, class_index])
-                df_feature_importance_wo_multibranch.loc[f"class_{class_index}"] = reduced_classifier.feature_importances_
+def _get_class_name_by_index(class_index):
+    return ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"][class_index]
 
 
-        else:
-            # Use all features (across all classes)
-            classifier.fit(X_train_all, y_train[:, class_index])
-            y_pred = classifier.predict(X_test_all)
-            y_pred_prob = classifier.predict_proba(X_test_all)[:, 1]
-
-        y_preds.append(y_pred)
-        y_pred_probs.append(y_pred_prob)
-
-        if strategy == "decision_tree":
-            df_feature_importance.loc[f"class_{class_index}"] = classifier.feature_importances_
-
-    # Stack the predictions and prediction probabilities
-    y_pred = np.stack(y_preds, axis=1)
-    y_pred_probs = np.stack(y_pred_probs, axis=1)
-
-    if strategy == "decision_tree":
-        with open(os.path.join(save_path, 'feature_importance.p'), 'wb') as file:
-            pickle.dump(df_feature_importance, file)
-        # Also store it more human-readable as csv
-        df_feature_importance.to_csv(os.path.join(save_path, 'feature_importance.csv'))
-
-        if individual_features:
-            with open(os.path.join(save_path, 'feature_importance_wo_multibranch.p'), 'wb') as file:
-                pickle.dump(df_feature_importance_wo_multibranch, file)
-            # Also store it more human-readable as csv
-            df_feature_importance_wo_multibranch.to_csv(os.path.join(save_path, 'feature_importance_wo_multibranch.csv'))
+def _evaluate_ML_model(y_pred, y_pred_probs, y_test, save_path, path_suffix=None):
+    save_path = os.path.join(save_path, path_suffix) if path_suffix is not None else save_path
+    ensure_dir(save_path)
 
     # Evaluate the performance of the model
     eval_dict = classification_report(y_test, y_pred,
@@ -165,8 +94,137 @@ def train_ML_model(X_train, X_valid, X_test, y_train, y_valid, y_test, save_path
         df_class_wise_results.to_latex(buf=file, index=True, bold_rows=True, float_format="{:0.3f}".format)
         file.write(f"\n\n\n\n")
         df_single_metric_results.to_latex(buf=file, index=True, bold_rows=True, float_format="{:0.3f}".format)
-        # file.write(f"Subset Accuracy: {subset_acc:.3f}\n")
-        # file.write(f"\n\n\nBest Alpha: {best_alpha}\n")
+
+    return df_class_wise_results, df_single_metric_results
+
+
+def train_ML_model(X_train, X_valid, X_test, y_train, y_valid, y_test, save_path,
+                   strategy=None, individual_features=False, reduced_individual_features=False):
+    num_classes = y_train.shape[1]
+    y_preds = []
+    y_pred_probs = []
+
+    # -------------------------------- ONLY NEEDED FOR DECISION TREE ------------------------------
+    if strategy == "decision_tree":
+        if individual_features:
+            if not reduced_individual_features:
+                df_feature_importance = pd.DataFrame(columns=[f"branchNet_{i + 1}" for i in range(12)] + (["multibranch"]))
+            else:
+                df_feature_importance_wo_multibranch = pd.DataFrame(columns=[f"branchNet_{i + 1}" for i in range(12)])
+
+            y_preds_wo_multibranch = []
+            y_pred_probs_wo_multibranch = []
+        else:
+            column_names = [f"BrN{branchnet + 1}_c{_get_class_name_by_index(class_idx)}"
+                            for branchnet in range(12)
+                            for class_idx in range(9)] \
+                           + [f"MuB_c{_get_class_name_by_index(class_idx)}" for class_idx in range(9)]
+            df_feature_importance = pd.DataFrame(columns=column_names)
+
+    # -------------------------------- END ONLY NEEDED FOR DECISION TREE ------------------------------
+
+    for class_index in range(0, num_classes):
+        # Fit one decision tree classifier per target
+        match strategy:
+            case "decision_tree":
+                classifier = DecisionTreeClassifier()
+            case "ridge":
+                # Fit one ridge classifier per target
+                # Replace Ridge with LogisiticRegression since it supports predict_proba
+                # Should be the same optimization problem as Ridge according to
+                # https://stackoverflow.com/questions/66334612/plotting-roc-curve-for-ridgeclassifier-in-python
+                classifier = LogisticRegression(penalty='l2')
+            case "lasso":
+                classifier = LogisticRegression(penalty='l1')
+            case "gradient_boosting":
+                classifier = GradientBoostingClassifier()
+            case "elastic_net":
+                # From https://stats.stackexchange.com/questions/304931/can-scikit-learns-elasticnetcv-be-used-for-classification-problems
+                classifier = LogisticRegression(penalty='elasticnet', solver='saga', l1_ratio=0.5)
+            case _:
+                raise ValueError("Invalid strategy")
+
+        if individual_features:
+
+            # Use only the features of the current class for training
+            classifier.fit(X_train[:, :, class_index], y_train[:, class_index])
+
+            y_pred = classifier.predict(X_test[:, :, class_index])
+            # Shape: 2D array of shape (num_samples, 2)
+            # with the probabilities for the negative and positive class, respectively (classes_ is [0, 1])
+            y_pred_prob = classifier.predict_proba(X_test[:, :, class_index])[:, 1]
+
+            # -------------------------------- ONLY NEEDED FOR DECISION TREE ------------------------------
+            if strategy == "decision_tree":
+                # Repeat the same without the multibranch output for feature importance analysis
+                reduced_classifier = DecisionTreeClassifier()
+
+                reduced_classifier.fit(X_train[:, :12, class_index], y_train[:, class_index])
+                y_pred_wo_multibranch = reduced_classifier.predict(X_test[:, :12, class_index])
+                y_pred_prob_wo_multibranch = reduced_classifier.predict_proba(X_test[:, :12, class_index])[:, 1]
+
+                y_preds_wo_multibranch.append(y_pred_wo_multibranch)
+                y_pred_probs_wo_multibranch.append(y_pred_prob_wo_multibranch)
+
+                df_feature_importance_wo_multibranch.loc[f"class_{_get_class_name_by_index(class_index)}"] = \
+                    reduced_classifier.feature_importances_
+
+            # -------------------------------- END ONLY NEEDED FOR DECISION TREE ------------------------------
+
+        else:
+            # Use all features (across all classes)
+            # Reshape X to (num_samples, 13 * num_classes)
+            X_train_all = X_train.reshape((X_train.shape[0], -1))
+            X_valid_all = X_valid.reshape((X_valid.shape[0], -1))
+            X_test_all = X_test.reshape((X_test.shape[0], -1))
+
+            classifier.fit(X_train_all, y_train[:, class_index])
+            y_pred = classifier.predict(X_test_all)
+            y_pred_prob = classifier.predict_proba(X_test_all)[:, 1]
+
+        y_preds.append(y_pred)
+        y_pred_probs.append(y_pred_prob)
+
+        if strategy == "decision_tree":
+            df_feature_importance.loc[
+                f"class_{_get_class_name_by_index(class_index)}"] = classifier.feature_importances_
+
+    # Stack the predictions and prediction probabilities
+    y_preds = np.stack(y_preds, axis=1)
+    y_pred_probs = np.stack(y_pred_probs, axis=1)
+
+    # -------------------------------- ONLY NEEDED FOR DECISION TREE ------------------------------
+    if strategy == "decision_tree":
+
+        with open(os.path.join(save_path, 'feature_importance.p'), 'wb') as file:
+            pickle.dump(df_feature_importance, file)
+        # Also store it more human-readable as csv
+        df_feature_importance.to_csv(os.path.join(save_path, 'feature_importance.csv'))
+
+        if individual_features:
+            # Evaluate the performance of the model with reduced feature set
+            y_preds_wo_multibranch = np.stack(y_preds_wo_multibranch, axis=1)
+            y_pred_probs_wo_multibranch = np.stack(y_pred_probs_wo_multibranch, axis=1)
+
+            _, _ = _evaluate_ML_model(y_pred=y_preds_wo_multibranch,
+                                      y_pred_probs=y_pred_probs_wo_multibranch,
+                                      y_test=y_test,
+                                      save_path=save_path)
+            # Save the feature importance without the multibranch output
+            with open(os.path.join(save_path, 'feature_importance_wo_multibranch.p'), 'wb') as file:
+                pickle.dump(df_feature_importance_wo_multibranch, file)
+            # Also store it more human-readable as csv
+            df_feature_importance_wo_multibranch.to_csv(
+                os.path.join(save_path, 'feature_importance_wo_multibranch.csv'))
+
+    # -------------------------------- END ONLY NEEDED FOR DECISION TREE ------------------------------
+
+    # Evaluate the performance of the model
+    df_class_wise_results, df_single_metric_results = _evaluate_ML_model(y_pred=y_preds,
+                                                                         y_pred_probs=y_pred_probs,
+                                                                         y_test=y_test,
+                                                                         save_path=save_path,
+                                                                         path_suffix="reduced_features")
 
     return df_class_wise_results, df_single_metric_results
 
