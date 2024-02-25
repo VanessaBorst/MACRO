@@ -236,7 +236,8 @@ class ECGTrainer(BaseTrainer):
                     loss = self.criterion(target=target, output=output, **additional_kwargs)
                 else:
                     # Ensure that self.criterion is a function, namely multi_branch_BCE_with_logits
-                    assert callable(self.criterion) and self.criterion.__name__ == "multi_branch_BCE_with_logits", \
+                    assert callable(self.criterion) and self.criterion.__name__ \
+                           in ["multi_branch_BCE_with_logits", "multi_branch_asymmetric_loss_with_logits"], \
                         "For the multibranch network, the multibranch BCE with logits loss function has to be used!"
                     # Calculate the joint loss of each single lead branch and the overall network
                     loss = self.criterion(target=target, output=output,
@@ -420,7 +421,8 @@ class ECGTrainer(BaseTrainer):
                     loss = self.criterion(target=target, output=output, **additional_kwargs)
                 else:
                     # Ensure that self.criterion is a function, namely multi_branch_BCE_with_logits
-                    assert callable(self.criterion) and self.criterion.__name__ == "multi_branch_BCE_with_logits", \
+                    assert callable(self.criterion) and self.criterion.__name__ \
+                           in ["multi_branch_BCE_with_logits", "multi_branch_asymmetric_loss_with_logits"], \
                         "For the multibranch network, the multibranch BCE with logits loss function has to be used!"
                     # Calculate the joint loss of each single lead branch and the overall network
                     loss = self.criterion(target=target, output=output,

@@ -569,14 +569,18 @@ def fine_tune_gradient_boosting(X_train, y_train, class_index, save_path):
     # Fine-tune the hyperparameters of the GradientBoostingClassifier
     param_grid = {
         'learning_rate': [0.05, 0.1, 0.2],
-        'max_depth': [3, 4, 5],
-        'n_estimators': [100, 150, 200]
+        'max_depth': [2, 3, 4, 5],
+        'n_estimators': [100, 150, 200],
+        'min_samples_split': [2, 4, 6],
+        'min_samples_leaf': [1, 2, 3],
+        'subsample': [0.8, 0.9, 1],
+        'max_features': [None, 'sqrt', 'log2']
     }
     # Initialize the base classifier
-    base_classifier = GradientBoostingClassifier(random_state=0)
+    base_classifier = GradientBoostingClassifier(random_state=global_config.SEED)
 
     # Initialize GridSearchCV and perform grid search on the training set
-    cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=0)
+    cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=global_config.SEED)
     grid_search = GridSearchCV(estimator=base_classifier, param_grid=param_grid,
                                cv=cv, n_jobs=48, scoring='f1')
     grid_search.fit(X_train, y_train)

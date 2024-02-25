@@ -1,6 +1,6 @@
 {
     "name": "Multibranch_MACRO_CV",
-    "run_details": "convRedBlock_333_0.4_8_false_0.2_24",
+    "run_details": "convRedBlock_333_0.2_6_false_0.2_24_asymmetric_loss_2_2_0.05",
     "n_gpu": 1,
     "arch": {
         "type": "FinalModelMultiBranch",
@@ -14,8 +14,8 @@
             "conv_reduction_first_kernel_size": 3,
             "conv_reduction_second_kernel_size": 3,
             "conv_reduction_third_kernel_size": 3,
-            "branchNet_attention_dropout": 0.4,
-            "branchNet_heads": 8,
+            "branchNet_attention_dropout": 0.2,
+            "branchNet_heads": 6,
             "branchNet_reduce_channels": false,
             "multi_branch_attention_dropout": 0.2,
             "multi_branch_heads": 24
@@ -49,10 +49,13 @@
     }
   },
   "loss": {
-    "type": "multi_branch_BCE_with_logits",
-    "add_args": {
-      "lambda_balance": 1
-    }
+    "type": "multi_branch_asymmetric_loss_with_logits",
+        "add_args": {
+            "lambda_balance": 1,
+            "gamma_neg": 2,
+            "gamma_pos": 2,
+            "clip": 0.05
+        }
   },
   "metrics": {
     "ml": {

@@ -270,7 +270,8 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
                 loss = loss_fn(output=output, target=target, **additional_kwargs)
             else:
                 # Ensure that self.criterion is a function, namely multi_branch_BCE_with_logits
-                assert callable(loss_fn) and loss_fn.__name__ == "multi_branch_BCE_with_logits", \
+                assert callable(loss_fn) and loss_fn.__name__ \
+                       in ["multi_branch_BCE_with_logits", "multi_branch_asymmetric_loss_with_logits"],\
                     "For the multibranch network, the multibranch BCE with logits loss function has to be used!"
 
                 assert additional_args == ['single_lead_outputs', 'lambda_balance'], \
