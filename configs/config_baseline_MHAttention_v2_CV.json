@@ -1,5 +1,5 @@
 {
-    "name": "BaselineWithMultiHeadAttention_V2_CV",
+    "name": "BaselineWithMultiHeadAttention_V2_CV_AsymmetricLoss",
     "run_details": "_noFC_0.4_8_12_attention_type_v1_reduced_dim_entmax15_asymmetric_loss_2_2_0.05",
     "n_gpu": 1,
     "arch": {

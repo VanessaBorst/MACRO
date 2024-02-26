@@ -3,6 +3,7 @@ import pickle
 
 import seaborn as sns
 import matplotlib.pyplot as plt
+import shap
 
 import global_config
 from utils import ensure_dir
@@ -34,6 +35,19 @@ def visualize_feature_importance_on_cross_fold_data(main_path, total_num_folds):
             sns.heatmap(feature_importance, xticklabels=True, yticklabels=True, ax=ax)
             plt.show()
             plt.savefig(os.path.join(save_dir, "feature_importance.png"))
+
+            # TODO Continue here tomorrow
+            # Load the model for the current fold and visualize the SHAP values per class
+            path = os.path.join(save_dir, "best_model_AF.p")
+            with open(path, 'rb') as file:
+                clf = pickle.load(file)
+            with open(os.path.join(save_dir, "X_test_AF.p"), 'rb') as file:
+                X_test = pickle.load(file)
+            # explaining model
+            explainer = shap.TreeExplainer(clf)
+            shap_values = explainer.shap_values(X_test.numpy())
+            # shap_values of 1 for positive label
+            shap.summary_plot(shap_values, X_test.numpy())
 
 
     # All feature importance data across the folds is loaded and can be visualized now

@@ -1,5 +1,5 @@
 {
-    "name": "BaselineModelWithSkipConnectionsAndNormV2PreActivation_CV",
+    "name": "BaselineModelWithSkipConnectionsAndNormV2PreActivation_CV_AsymmetricLoss",
     "run_details": "_250Hz_60s_asymmetric_loss_2_2_0.05",
     "n_gpu": 1,
     "arch": {

@@ -11,11 +11,21 @@ from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from statsmodels.stats.multicomp import MultiComparison
 from sklearn.metrics import roc_curve, auc
 
-base_path = 'savedVM/models/'
-model_paths = {'Baseline': 'BaselineModel_CV/0116_145000_ml_bs64_250Hz_60s',
-               'Final_Model': 'FinalModel_MACRO_CV/0123_171857_ml_bs64_noFC-0.2-6-12_entmax15',
-               'Multibranch': 'Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24/ridgev2'}
+from utils import ensure_dir
+
+CONTENT = "gradient_boosting"           # Either gradient_boosting or raw_multi_branch
+assert CONTENT in ["gradient_boosting", "raw_multi_branch"], "Invalid CONTENT"
 include_acc = False
+
+base_path = 'savedVM/models/'
+if CONTENT == "raw_multi_branch":
+    model_paths = {'Baseline': 'BaselineModel_CV/0116_145000_ml_bs64_250Hz_60s',
+                   'Final_Model': 'FinalModel_MACRO_CV/0123_171857_ml_bs64_noFC-0.2-6-12_entmax15',
+                   'Multibranch': 'Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24'}
+else:
+    model_paths = {'Multibranch': 'Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24',
+                   'Multibranch_GB_all': 'Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24/ML models/gradient_boosting_BCE_final',
+                   'Multibranch_GB_reduced': 'Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24'}
 
 
 # The box extends from the Q1 to Q3 quartile values of the data, with a line at the median (Q2).
@@ -32,7 +42,9 @@ def create_and_save_boxplot_for_single_model(df, model_name, metric_name, metric
     ax.set_ylabel(metric_full_name)
     ax.set_xticklabels(x_labels, rotation=30)
     plt.tight_layout()
-    plt.savefig(os.path.join('figures', f'{model_name} - {metric_name}.pdf'), format="pdf", bbox_inches="tight")
+    save_dir = os.path.join('figures', f'{CONTENT}')
+    ensure_dir(save_dir)
+    plt.savefig(os.path.join(save_dir, f'{model_name} - {metric_name}.pdf'), format="pdf", bbox_inches="tight")
     plt.show()
     # Clear the current axis
     ax.clear()
@@ -52,7 +64,9 @@ def create_and_save_boxplot_for_macro_avgs(df, model_names, metric_name, metric_
     ax.set_ylabel(y_label)
     ax.set_xticklabels(x_labels, rotation=30)
     plt.tight_layout()
-    plt.savefig(os.path.join('figures', filename), format="pdf", bbox_inches="tight")
+    save_dir = os.path.join('figures', f'{CONTENT}')
+    ensure_dir(save_dir)
+    plt.savefig(os.path.join(save_dir, filename), format="pdf", bbox_inches="tight")
     plt.show()
     # Clear the current axis
     ax.clear()
@@ -290,7 +304,9 @@ create_and_save_boxplot_for_macro_avgs(df=df_results_macro_averages,
                                        filename='Macro_Acc_Scores.pdf')
 
 # Write result to latex
-with open(os.path.join(base_path, 'paper_cross_valid_runs_summary.tex'), 'w') as file:
+save_path = os.path.join(base_path, 'paper', f'{CONTENT}')
+ensure_dir(save_path)
+with open(os.path.join(save_path, 'paper_cross_valid_runs_summary.tex'), 'w') as file:
     df_results_paper.to_latex(buf=file, index=False, float_format="{:0.3f}".format, escape=False)
 
 print("Done")

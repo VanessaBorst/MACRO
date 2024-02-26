@@ -1,18 +1,18 @@
 #!/bin/bash
 
 # Number of parallel executions
-parallel_executions=12
+parallel_executions=5
 
 # Path to your Python script
 python_script="train_with_cv.py"
 
 # Path to your config file
-config_file="configs/config_baseline_CV.json"
+config_file="configs/config_baseline_skipPreActivation_CV.json"
 
 # Values to try for gamma_neg, gamma_pos, and clip
 gamma_neg_values=(1 2 3)
 gamma_pos_values=(0 1 2)
-clip_values=(0.05 0.1 0.2 0.3)
+clip_values=(0.05 0.1 0.2)  # 0.3)
 
 # Iterate through all combinations
 for gamma_neg in "${gamma_neg_values[@]}"; do
@@ -35,7 +35,11 @@ for gamma_neg in "${gamma_neg_values[@]}"; do
 
             # Update "run_details" line
             run_details="_${gamma_neg}_${gamma_pos}_${clip}"
+            # Baseline und BaselineWithSkipsPreAct
             sed -i "s/\"run_details\": \"_250Hz_60s_asymmetric_loss*[^\"]*\"/\"run_details\": \"_250Hz_60s_asymmetric_loss$run_details\"/" "$config_file"
+
+            # MHAttention
+            # sed -i "s/\"run_details\": \"_noFC_0.4_8_12_attention_type_v1_reduced_dim_entmax15_asymmetric_loss*[^\"]*\"/\"run_details\": \"_noFC_0.4_8_12_attention_type_v1_reduced_dim_entmax15_asymmetric_loss$run_details\"/" "$config_file"
 
             # Execute the Python script in the background
             python $python_script -c $config_file &
