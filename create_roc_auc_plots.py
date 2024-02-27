@@ -5,111 +5,42 @@ import pickle
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
-from sklearn.metrics import RocCurveDisplay, auc, roc_auc_score
-from torchmetrics.classification import BinaryROC, BinaryAUROC
+from sklearn.metrics import RocCurveDisplay, auc
 
-import global_config
 
 from utils import ensure_dir, read_json
-from torchmetrics import AUROC, Precision, Accuracy, Recall, ROC, F1Score
 
 # Needed for working with SSH Interpreter...
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
 
 
-# Create ROC curve reports similar
-# to "A pipeline and comparative study of 12 machine learning models for text classification"
+def _extract_predictions_and_target_dicts_for_gb_models(main_path, num_classes, total_num_folds, target_names):
+    # Initialize a dictionary to store predictions grouped by class
+    predictions_by_class = {class_idx: [] for class_idx in range(num_classes)}
+    targets_by_class = {class_idx: [] for class_idx in range(num_classes)}
 
-# def create_roc_curve_report_new(main_path):
-#     config = read_json(os.path.join(main_path, "config.json"))
-#     total_num_folds = config["data_loader"]["cross_valid"]["k_fold"]
-#     assert config["arch"]["args"]["multi_label_training"], \
-#         "Multi-Label Training should be enabled when running this script"
-#
-#     # Create one plot per class
-#     target_names = ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]
-#     desired_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE']
-#
-#     for i in range(len(target_names)):
-#         # Load the outputs and targets for each fold
-#         for fold in range(total_num_folds):
-#             pass
-#
-#
-#     for a in range(len(models)):
-#         model = models[a]
-#         model_name = determine_model_name(model)
-#         try:
-#             tprs = []
-#             aucs = []
-#             mean_fpr = np.linspace(0, 1, 100)
-#             i = 0
-#             fig, ax = plt.subplots()
-#             # Load the outputs and targets for each fold and plot the ROC curve
-#             for i in range(total_num_folds):
-#
-#                 fpr, tpr, thresholds = module_metric.torch_roc(output=det_outputs, target=det_targets,
-#                                                                sigmoid_probs=_param_dict["sigmoid_probs"],
-#                                                                logits=_param_dict["logits"],
-#                                                                labels=_param_dict["labels"])
-#                 roc_auc_scores = module_metric.class_wise_torch_roc_auc(output=det_outputs, target=det_targets,
-#                                                                         sigmoid_probs=_param_dict["sigmoid_probs"],
-#                                                                         logits=_param_dict["logits"],
-#                                                                         labels=_param_dict["labels"])
-#                 fpr_class_i = fpr[i].numpy()
-#                 tpr_class_i = tpr[i].numpy(
-#             for i, (train, test) in enumerate(cv.split(X, y)):
-#                 model.fit(X[train], y[train])
-#                 viz = plot_roc_curve(model, X[test], y[test],
-#                                      name='ROC fold {}'.format(i),
-#                                      alpha=0.3, lw=1, ax=ax)
-#                 interp_tpr = np.interp(mean_fpr, viz.fpr, viz.tpr)
-#                 interp_tpr[0] = 0.0
-#                 tprs.append(interp_tpr)
-#                 aucs.append(viz.roc_auc)
-#
-#             ax.plot([0, 1], [0, 1], linestyle='--', lw=2, color='r',
-#                     label='Chance', alpha=.8)
-#
-#             mean_tpr = np.mean(tprs, axis=0)
-#             mean_tpr[-1] = 1.0
-#             mean_auc = auc(mean_fpr, mean_tpr)
-#             std_auc = np.std(aucs)
-#             ax.plot(mean_fpr, mean_tpr, color='b',
-#                     label=r'Mean ROC (AUC = %0.2f $\pm$ %0.2f)' % (mean_auc, std_auc),
-#                     lw=2, alpha=.8)
-#
-#             std_tpr = np.std(tprs, axis=0)
-#             tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
-#             tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
-#             ax.fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
-#                             label=r'$\pm$ 1 std. dev.')
-#
-#             ax.set(xlim=[-0.05, 1.05], ylim=[-0.05, 1.05],
-#                    title=model_name)
-#             ax.legend(loc="lower right")
-#             plt.savefig(
-#                 "../results/plots/test/roc_%s_%0i_features_%0i_test.pdf" % (
-#                     model_name, feature_size, len(X)),
-#                 dpi=100, facecolor='w', edgecolor='b', orientation='portrait', transparent=False, bbox_inches=None,
-#                 pad_inches=0.1)
-#             print("Created %s ROC figure" % model_name)
-#             plt.close()
-#         except (AttributeError, OverflowError) as detail:
-#             print(model_name + " Failed due to ", detail)
+    for i in range(total_num_folds):
+        for class_idx in range(num_classes):
+            class_name = target_names[class_idx]
+            # Load the classifier for this class and fold
+            with open(os.path.join(main_path, "Fold_" + str(i + 1), f"best_model_{class_name}.p"), 'rb') as file:
+                classifier = pickle.load(file)
+            # Load the test set for this fold
+            with open(os.path.join(main_path, "Fold_" + str(i + 1), f"X_test_{class_name}.p"), 'rb') as file:
+                X_test = pickle.load(file)
+            with open(os.path.join(main_path, "Fold_" + str(i + 1), f"y_test_{class_name}.p"), 'rb') as file:
+                y_test = pickle.load(file)
+            # Get the predictions for the current class from the current fold
+            class_predictions = classifier.predict_proba(X_test)[:, 1]
+            predictions_by_class[class_idx].append(class_predictions)
+            # Append the targets for the current class from the current fold
+            targets_by_class[class_idx].append(y_test)
 
-def create_roc_curve_report(main_path, save_path=None):
-    config = read_json(os.path.join(main_path, "config.json"))
-    total_num_folds = config["data_loader"]["cross_valid"]["k_fold"]
-    assert config["arch"]["args"]["multi_label_training"], \
-        "Multi-Label Training should be enabled when running this script"
+    return predictions_by_class, targets_by_class
 
-    target_names = ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]
-    desired_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE']
-    num_classes = 9
 
+def _extract_predictions_and_target_dicts_for_raw_models(main_path, num_classes, total_num_folds):
     predictions_fold_wise = []
     targets_fold_wise = []
     for i in range(total_num_folds):
@@ -120,11 +51,9 @@ def create_roc_curve_report(main_path, save_path=None):
             det_targets = pickle.load(file)
         predictions_fold_wise.append(det_outputs)
         targets_fold_wise.append(det_targets)
-
     # Initialize a dictionary to store predictions grouped by class
     predictions_by_class = {class_idx: [] for class_idx in range(num_classes)}
     targets_by_class = {class_idx: [] for class_idx in range(num_classes)}
-
     # Iterate over each class
     for class_idx in range(num_classes):
         # Collect predictions for the current class from all folds
@@ -135,19 +64,44 @@ def create_roc_curve_report(main_path, save_path=None):
             # Get the targets for the current class from the current fold
             class_targets = targets_fold_wise[fold_idx][:, class_idx]
             targets_by_class[class_idx].append(class_targets)
+    return predictions_by_class, targets_by_class
 
+
+def create_roc_curve_report(main_path, save_path=None):
+    total_num_folds = 10
+    target_names = ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]
+    num_classes = len(target_names)
+
+    if "gradient_boosting" not in main_path:
+        config = read_json(os.path.join(main_path, "config.json"))
+        assert config["arch"]["args"]["multi_label_training"], \
+            "Multi-Label Training should be enabled when running this script"
+
+        preds_are_logits = True
+        predictions_by_class, targets_by_class = _extract_predictions_and_target_dicts_for_raw_models(main_path,
+                                                                                                      num_classes,
+                                                                                                      total_num_folds)
+    else:
+        preds_are_logits = False
+        predictions_by_class, targets_by_class = _extract_predictions_and_target_dicts_for_gb_models(main_path,
+                                                                                                     num_classes,
+                                                                                                     total_num_folds,
+                                                                                                     target_names)
+
+    # Required:
+    # predictions_by_class: dict with keys as class indices and values as lists of predictions for each fold
+    # targets_by_class: dict with keys as class indices and values as lists of targets for each fold
     fig, axs = plt.subplots(3, 3, figsize=(18, 18))
     axis_0 = 0
     axis_1 = 0
     line_width = 2
 
     # Create one plot per class
-    for class_idx in range(num_classes):
-        # model = models[a]
-        class_name = target_names[class_idx]
+    desired_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE']
+    for class_name in desired_order:
+        class_idx = target_names.index(class_name)
         try:
             tprs = []
-            fprs = []
             aucs = []
             mean_fpr = np.linspace(0, 1, 100)
 
@@ -165,7 +119,12 @@ def create_roc_curve_report(main_path, save_path=None):
                 #         label=f'Fold {fold_idx + 1}: AUC = %0.3f)' % au_roc_score)
 
                 y_true = targets_by_class[class_idx][fold_idx]
-                y_pred_probs = torch.sigmoid(predictions_by_class[class_idx][fold_idx])
+
+                if preds_are_logits:
+                    y_pred_probs = torch.sigmoid(predictions_by_class[class_idx][fold_idx])
+                else:
+                    y_pred_probs = predictions_by_class[class_idx][fold_idx]
+
                 viz = RocCurveDisplay.from_predictions(y_true=y_true,
                                                        y_pred=y_pred_probs,
                                                        name=f'Fold {fold_idx + 1}',
@@ -182,7 +141,9 @@ def create_roc_curve_report(main_path, save_path=None):
 
             mean_tpr = np.mean(tprs, axis=0)
             mean_tpr[-1] = 1.0
-            mean_auc = auc(mean_fpr, mean_tpr)
+            # TODO: Why does this lead to slightly different results?
+            # mean_auc = auc(mean_fpr, mean_tpr)
+            mean_auc = np.mean(aucs)
             std_auc = np.std(aucs)
             ax.plot(
                 mean_fpr,
@@ -247,5 +208,8 @@ if __name__ == '__main__':
     if args.path is not None:
         model_name = args.path.split('/')[7]
     save_dir = os.path.join('figures', 'ROC', f'{model_name}')
+    if "gradient_boosting" in args.path:
+        gradient_boosting_suffix = args.path.split('/')[-1]
+        save_dir = os.path.join(save_dir, gradient_boosting_suffix)
     ensure_dir(save_dir)
     create_roc_curve_report(main_path=args.path, save_path=save_dir)
