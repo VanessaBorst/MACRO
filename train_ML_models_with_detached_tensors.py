@@ -66,7 +66,7 @@ def get_all_predictions_as_logits(det_outputs, det_single_lead_outputs):
 
 def train_ML_models_on_cross_fold_data(main_path, strategy=None, use_logits=False, individual_features=False,
                                        reduced_individual_features=False):
-    assert strategy in ["decision_tree", "ridge", "lasso","gradient_boosting","elastic_net"], \
+    assert strategy in ["decision_tree", "ridge", "lasso","gradient_boosting","elastic_net","ada_boost"], \
         "The given strategy is not supported for training ML models!"
     assert not reduced_individual_features or individual_features, \
         "Reduced individual features can only be used if individual features are used!"
@@ -92,6 +92,13 @@ def train_ML_models_on_cross_fold_data(main_path, strategy=None, use_logits=Fals
     test_fold_index = total_num_folds - 1
 
     for k in range(total_num_folds):
+        if k in [0,1,2,3,4,5,6]:
+            # Skip
+            valid_fold_index = (valid_fold_index + 1) % total_num_folds
+            test_fold_index = (test_fold_index + 1) % total_num_folds
+            config = copy.deepcopy(base_config)
+            continue
+
         print("Starting fold " + str(k + 1))
 
         # Adapt the log and save paths for the current fold

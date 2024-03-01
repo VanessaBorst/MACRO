@@ -478,8 +478,21 @@ class FinalModelMultiBranch(BaseModel):
 
 
 if __name__ == "__main__":
-    model = FinalModelMultiBranch(multi_branch_heads=2)
-    summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "kernel_size", "num_params"],
+    model = FinalModelMultiBranch(apply_final_activation=False,
+                                  multi_label_training=True,
+                                  branchNet_discard_FC_before_MH=True,
+                                  branchNet_gru_units=12,
+                                  multi_branch_discard_FC_before_MH=True,
+                                  use_conv_reduction_block=True,
+                                  conv_reduction_first_kernel_size=3,
+                                  conv_reduction_second_kernel_size=3,
+                                  conv_reduction_third_kernel_size=3,
+                                  branchNet_attention_dropout=0.2,
+                                  branchNet_heads=6,
+                                  branchNet_reduce_channels=False,
+                                  multi_branch_attention_dropout=0.2,
+                                  multi_branch_heads=24)
+    summary(model, input_size=(2, 12, 15000), col_names=["input_size", "output_size", "kernel_size", "num_params"],
             depth=5)
 
     model_part = FinalModel(apply_final_activation=False,
