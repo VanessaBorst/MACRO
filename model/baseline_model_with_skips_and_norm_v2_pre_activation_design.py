@@ -187,28 +187,19 @@ class BaselineModelWithSkipConnectionsAndNormV2PreActivation(BaseModel):
 
 
 if __name__ == "__main__":
-    model = BaselineModelWithSkipConnectionsAndNormV2PreActivation(apply_final_activation=False,
-                                                                   multi_label_training=True, input_channel=12,
-                                                                   num_classes=9,
-                                                                   drop_out_first_conv_blocks=0.2,
-                                                                   drop_out_second_conv_blocks=0.2,
-                                                                   last_kernel_size_first_conv_blocks=24,
-                                                                   last_kernel_size_second_conv_blocks=48,
-                                                                   mid_kernel_size_first_conv_blocks=3,
-                                                                   mid_kernel_size_second_conv_blocks=3,
-                                                                   # num_first_conv_blocks=2,
-                                                                   # num_second_conv_blocks=6,
-                                                                   # out_channel_first_conv_blocks=24,
-                                                                   # out_channel_second_conv_blocks=64,
-                                                                   stride_first_conv_blocks=2,
-                                                                   stride_second_conv_blocks=2,
-                                                                   down_sample="conv",
-                                                                   vary_channels=True,
-                                                                   pos_skip="not_last",
-                                                                   norm_type="BN", norm_pos="all", norm_before_act=True
-                                                                   )
-    # 2_6_0.2_0.3_24_64_3_3_13_44_2_2_conv_23
+    model = BaselineModelWithSkipConnectionsAndNormV2PreActivation(
+        apply_final_activation=False,
+        multi_label_training=True,
+        down_sample="conv",
+        vary_channels=True,
+        pos_skip="all",
+        norm_type="BN",
+        norm_pos="all",
+        norm_before_act=True,
+        use_pre_conv=True,
+        pre_conv_kernel=16
+    )
 
-    summary(model, input_size=(2, 12, 72000), col_names=["input_size", "output_size", "num_params"])
+    summary(model, input_size=(2, 12, 15000), col_names=["input_size", "output_size", "num_params"])
 
 

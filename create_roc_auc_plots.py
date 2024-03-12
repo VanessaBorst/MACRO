@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 from sklearn.metrics import RocCurveDisplay, auc
-
+from torchmetrics import AUROC
 
 from utils import ensure_dir, read_json
 
@@ -72,6 +72,11 @@ def create_roc_curve_report(main_path, save_path=None):
     target_names = ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]
     num_classes = len(target_names)
 
+    params = {'font.size': 26,
+              'axes.labelsize': 30,
+              'axes.titlesize': 30}
+    plt.rcParams.update(params)
+
     if "gradient_boosting" not in main_path:
         config = read_json(os.path.join(main_path, "config.json"))
         assert config["arch"]["args"]["multi_label_training"], \
@@ -91,10 +96,11 @@ def create_roc_curve_report(main_path, save_path=None):
     # Required:
     # predictions_by_class: dict with keys as class indices and values as lists of predictions for each fold
     # targets_by_class: dict with keys as class indices and values as lists of targets for each fold
-    fig, axs = plt.subplots(3, 3, figsize=(18, 18))
+    fig, axs = plt.subplots(3, 3, figsize=(36, 36))
     axis_0 = 0
     axis_1 = 0
     line_width = 2
+
 
     # Create one plot per class
     desired_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE']
@@ -109,14 +115,6 @@ def create_roc_curve_report(main_path, save_path=None):
 
             # Load the outputs and targets for each fold and plot the ROC curve
             for fold_idx in range(total_num_folds):
-                # fpr, tpr, thresholds = roc(preds=predictions_by_class[class_idx][fold_idx],
-                #                            target=targets_by_class[class_idx][fold_idx])
-                #
-                # au_roc_score = au_roc(preds=predictions_by_class[class_idx][fold_idx],
-                #                       target=targets_by_class[class_idx][fold_idx])
-                #
-                # ax.plot(fpr, tpr, lw=line_width,
-                #         label=f'Fold {fold_idx + 1}: AUC = %0.3f)' % au_roc_score)
 
                 y_true = targets_by_class[class_idx][fold_idx]
 
@@ -145,6 +143,7 @@ def create_roc_curve_report(main_path, save_path=None):
             # mean_auc = auc(mean_fpr, mean_tpr)
             mean_auc = np.mean(aucs)
             std_auc = np.std(aucs)
+
             ax.plot(
                 mean_fpr,
                 mean_tpr,
@@ -170,18 +169,17 @@ def create_roc_curve_report(main_path, save_path=None):
                 xlabel="False Positive Rate",
                 ylabel="True Positive Rate"
             )
-
             ax.set(xlim=[-0.05, 1.05], ylim=[-0.05, 1.05],
-                   title=class_name)
+                   title=class_name.replace('VEB', 'PVC'))
             ax.legend(loc="lower right")
 
             extent = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
             # Pad the saved area by 25% in the x-direction and 25% in the y-direction
-            fig.savefig(f"{save_path}/roc_curves_class_{class_name}_test_set.pdf",
+            fig.savefig(f"{save_path}/roc_curves_class_{class_name.replace('VEB', 'PVC')}_test_set.pdf",
                         dpi=100, facecolor='w', edgecolor='b', orientation='portrait', transparent=False,
                         bbox_inches=extent.expanded(1.25, 1.25),
                         pad_inches=0.1)
-            print(f"Created ROC figure for {class_name}")
+            print(f"Created ROC figure for {class_name.replace('VEB', 'PVC')}")
 
             axis_1 = (axis_1 + 1) % 3
             if axis_1 == 0:

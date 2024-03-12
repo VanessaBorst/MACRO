@@ -92,13 +92,12 @@ def train_ML_models_on_cross_fold_data(main_path, strategy=None, use_logits=Fals
     test_fold_index = total_num_folds - 1
 
     for k in range(total_num_folds):
-        if k in [0,1,2,3,4,5,6]:
-            # Skip
-            valid_fold_index = (valid_fold_index + 1) % total_num_folds
-            test_fold_index = (test_fold_index + 1) % total_num_folds
-            config = copy.deepcopy(base_config)
-            continue
-
+        # if k in [0,1,2,3,4,5,6]:
+        #     # Skip
+        #     valid_fold_index = (valid_fold_index + 1) % total_num_folds
+        #     test_fold_index = (test_fold_index + 1) % total_num_folds
+        #     config = copy.deepcopy(base_config)
+        #     continue
         print("Starting fold " + str(k + 1))
 
         # Adapt the log and save paths for the current fold
@@ -204,6 +203,87 @@ def train_ML_models_on_cross_fold_data(main_path, strategy=None, use_logits=Fals
     print(f"Finished additional run of cross-fold-validation to train {strategy_name} models")
 
 
+
+def _evaluate_trained_ML_models_on_cross_fold_data(path):
+    strategy_name = path.split("/")[-1]
+    main_path = os.path.join(*path.split("/")[:-2])
+    config = load_config_and_setup_paths(main_path, sub_dir=os.path.join("ML models",strategy_name))
+
+    base_config, base_log_dir, base_save_dir, data_dir, dataset, fold_data, total_num_folds = setup_cross_fold(config)
+
+    # Save the results of each run
+    class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics = \
+        prepare_result_data_structures(total_num_folds)
+
+    valid_fold_index = total_num_folds - 2
+    test_fold_index = total_num_folds - 1
+
+    for k in range(total_num_folds):
+        # Adapt the log and save paths for the current fold
+        config.save_dir = Path(os.path.join(base_save_dir, "Fold_" + str(k + 1)))
+        config.log_dir = Path(os.path.join(base_log_dir, "Fold_" + str(k + 1)))
+        ensure_dir(config.save_dir)
+        ensure_dir(config.log_dir)
+        update_logging_setup_for_tune_or_cross_valid(config.log_dir)
+
+        # Load the fold_eval_class_wise and fold_eval_single_metrics dataframes
+        with open(os.path.join(config.save_dir, "eval_class_wise.p"), 'rb') as file:
+            fold_eval_class_wise = pickle.load(file)
+        with open(os.path.join(config.save_dir, "eval_single_metrics.p"), 'rb') as file:
+            fold_eval_single_metrics = pickle.load(file)
+
+        # Class-Wise Metrics
+        test_results_class_wise.loc[(folds[k], fold_eval_class_wise.index), fold_eval_class_wise.columns] = \
+            fold_eval_class_wise.values
+        # Single Metrics
+        pd_series = fold_eval_single_metrics.loc['value']
+        pd_series.name = folds[k]
+        test_results_single_metrics = test_results_single_metrics.append(pd_series)
+
+        # Update the indices and reset the config (including resume!)
+        valid_fold_index = (valid_fold_index + 1) % total_num_folds
+        test_fold_index = (test_fold_index + 1) % total_num_folds
+        config = copy.deepcopy(base_config)
+
+    # Summarize the results of the cross validation and write everything to file
+    # --------------------------- Test Class-Wise Metrics ---------------------------
+    iterables_summary = [["mean", "median"], class_wise_metrics]
+    multi_index = pd.MultiIndex.from_product(iterables_summary, names=["merging", "metric"])
+    test_results_class_wise_summary = pd.DataFrame(
+        columns=['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+                 'macro avg', 'weighted avg'], index=multi_index)
+    for metric in class_wise_metrics:
+        test_results_class_wise_summary.loc[('mean', metric)] = test_results_class_wise.xs(metric, level=1).mean()
+        test_results_class_wise_summary.loc[('median', metric)] = test_results_class_wise.xs(metric,
+                                                                                             level=1).median()
+
+    path = os.path.join(base_save_dir, "test_results_class_wise.p")
+    with open(path, 'wb') as file:
+        pickle.dump(test_results_class_wise, file)
+    path = os.path.join(base_save_dir, "test_results_class_wise_summary.p")
+    with open(path, 'wb') as file:
+        pickle.dump(test_results_class_wise_summary, file)
+
+    # --------------------------- Test Single Metrics ---------------------------
+    test_results_single_metrics.loc['mean'] = test_results_single_metrics.mean()
+    test_results_single_metrics.loc['median'] = test_results_single_metrics[:][:-1].median()
+
+    path = os.path.join(base_save_dir, "test_results_single_metrics.p")
+    with open(path, 'wb') as file:
+        pickle.dump(test_results_single_metrics, file)
+
+    #  --------------------------- Omit Train Result ---------------------------
+
+    # --------------------------- Test Metrics To Latex---------------------------
+    with open(os.path.join(base_save_dir, 'cross_validation_results.tex'), 'w') as file:
+        file.write("Class-Wise Summary:\n\n")
+        test_results_class_wise_summary.to_latex(buf=file, index=False, float_format="{:0.3f}".format,
+                                                 escape=False)
+        file.write("\n\n\nSingle Metrics:\n\n")
+        test_results_single_metrics.to_latex(buf=file, index=False, float_format="{:0.3f}".format,
+                                             escape=False)
+    print(f"Finished additional run of cross-fold-validation to train {strategy_name} models")
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='MACRO Paper: Strategy-based Evaluation')
     parser.add_argument('-p', '--path', default=None, type=str,
@@ -218,5 +298,6 @@ if __name__ == '__main__':
                         help='Use the reduced individual features per class for the training of the ML models '
                              'but omit the multibranch features')
     args = parser.parse_args()
+    #_evaluate_trained_ML_models_on_cross_fold_data(args.path)
     train_ML_models_on_cross_fold_data(args.path, args.strategy, args.use_logits,
                                        args.individual_features, args.reduced_individual_features)

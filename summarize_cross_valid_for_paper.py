@@ -23,7 +23,7 @@ if CONTENT == "raw_multi_branch":
                    'Final_Model': 'FinalModel_MACRO_CV/0123_171857_ml_bs64_noFC-0.2-6-12_entmax15',
                    'Multibranch': 'Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24'}
 else:
-    model_paths = {'MB': 'Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24',
+    model_paths = {# 'MB': 'Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24',
                    'MB_GB_ind_red': 'Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24/ML models/gradient_boosting_individual_features_reduced',
                    'MB_GB_ind': 'Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24/ML models/gradient_boosting_individual_features',
                    'MB_GB_all': 'Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24/ML models/gradient_boosting_BCE_final'
@@ -166,12 +166,33 @@ for model_name, model_path in model_paths.items():
     # df_F1_statistics = df_results_F1.describe().drop(columns=["Fold"])
 
     # Append another row containing the mean and std
-    df_results_F1 = pd.concat([df_results_F1, df_results_F1.describe().loc[["mean", "std"]]])
+    # Note:
+    # np.std(au_roc_scores, ddof=1) returns the sample standard deviation as in pandas dataframes, while
+    # np.std(aucs) returns slightly different results for some classes
+    # It holds: df.std(ddof=0) == np.std(df) AND df.std() and np.std(ddof=1)
+    # Pandas uses the unbiased estimator (N-1 in the denominator), whereas Numpy by default does not.
+    # cf. https://stackoverflow.com/questions/24984178/different-std-in-pandas-vs-numpy
+
+    #  = pd.concat([df_results_F1, df_results_F1.describe().loc[["mean", "std"]]])
+    series_mean_F1 = df_results_F1.mean()
+    series_std_F1 = df_results_F1.std(ddof=0)
+    df_results_F1.loc["mean"] = series_mean_F1
+    df_results_F1.loc["std"] = series_std_F1
     df_results_F1 = df_results_F1.round(3)
-    df_results_AUC = pd.concat([df_results_AUC, df_results_AUC.describe().loc[["mean", "std"]]])
+
+    # df_results_AUC = pd.concat([df_results_AUC, df_results_AUC.describe().loc[["mean", "std"]]])
+    series_mean_AUC = df_results_AUC.mean()
+    series_std_AUC = df_results_AUC.std(ddof=0)
+    df_results_AUC.loc["mean"] = series_mean_AUC
+    df_results_AUC.loc["std"] = series_std_AUC
     df_results_AUC = df_results_AUC.round(3)
+
     if include_acc:
-        df_results_acc = pd.concat([df_results_acc, df_results_acc.describe().loc[["mean", "std"]]])
+        # df_results_acc = pd.concat([df_results_acc, df_results_acc.describe().loc[["mean", "std"]]])
+        series_mean_acc = df_results_acc.mean()
+        series_std_acc = df_results_acc.std(ddof=0)
+        df_results_acc.loc["mean"] = series_mean_acc
+        df_results_acc.loc["std"] = series_std_acc
         df_results_acc = df_results_acc.round(3)
 
     # Add the average metrics across all folds to the final result dataframes

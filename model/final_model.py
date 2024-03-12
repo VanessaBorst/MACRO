@@ -353,5 +353,8 @@ if __name__ == "__main__":
         attention_type="v1",
         use_reduced_head_dims=True,
         attention_activation_function="entmax15")
+
     # print(str(model))
     summary(model, input_size=(2, 12, 15000), col_names=["input_size", "output_size", "kernel_size", "num_params"])
+    summary(model, input_size=(2, 12, 15000), col_names=["input_size", "output_size", "kernel_size", "num_params"],
+            depth=1)

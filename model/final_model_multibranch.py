@@ -492,15 +492,24 @@ if __name__ == "__main__":
                                   branchNet_reduce_channels=False,
                                   multi_branch_attention_dropout=0.2,
                                   multi_branch_heads=24)
-    summary(model, input_size=(2, 12, 15000), col_names=["input_size", "output_size", "kernel_size", "num_params"],
-            depth=5)
+    summary(model, input_size=(2, 12, 15000), col_names=["input_size", "output_size", "kernel_size", "num_params"], depth=3)
 
     model_part = FinalModel(apply_final_activation=False,
                             multi_label_training=True,
                             input_channel=1,
                             num_classes=9,
-                            gru_units=24,
-                            dropout_attention=0.3,  # MA model: 0.2,
-                            heads=2,
-                            discard_FC_before_MH=True)
-    summary(model_part, input_size=(2, 1, 72000), col_names=["input_size", "output_size", "kernel_size", "num_params"])
+                            # CNN-related parameters (almost all as in the default config)
+                            pos_skip="all",
+                            # GRU and MHA-related parameters
+                            gru_units=12,
+                            heads=6,
+                            dropout_attention=0.2,
+                            discard_FC_before_MH=True,
+                            # The following parameters are fixed for the paper
+                            attention_type="v1",
+                            use_reduced_head_dims=True,
+                            attention_activation_function="entmax15",
+                            # Multibranch-specific parameters
+                            act_as_branch_net=True,
+                            vary_channels_lighter_version=False)
+    summary(model_part, input_size=(2, 1, 15000), col_names=["input_size", "output_size", "kernel_size", "num_params"],depth=1)

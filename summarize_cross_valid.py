@@ -5,7 +5,7 @@ import pandas as pd
 
 #path = 'savedVM/models/Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24/threshold_tuning_bayesianOptimization'
 # path = 'savedVM/models/Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24/Ridge Regression'
-path = "savedVM/models/FinalModel_MACRO_CV/0225_174929_ml_bs64_noFC-0.2-6-12_entmax15_asymmetric_loss_2_2_0.05"
+path = "savedVM/models/Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24/ML models/gradient_boosting_individual_features"
 thresholds_active=False
 include_weighted_avg=True
 include_at_least_weighted_F1 = True

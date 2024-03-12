@@ -191,5 +191,14 @@ class BaselineModelWithMHAttentionV2(BaseModel):
 
 
 if __name__ == "__main__":
-    model = BaselineModelWithMHAttentionV2(apply_final_activation=True, multi_label_training=True, gru_units=12)
+    model =BaselineModelWithMHAttentionV2(
+        apply_final_activation=False,
+        multi_label_training=True,
+        dropout_attention=0.4,
+        heads=8,
+        gru_units=12,
+        discard_FC_before_MH=True,
+        attention_type="v1",
+        use_reduced_head_dims=True,
+        attention_activation_function="entmax15")
     summary(model, input_size=(2, 12, 15000), col_names=["input_size", "output_size", "num_params"])
