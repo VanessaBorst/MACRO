@@ -39,7 +39,7 @@ class BaseDataLoader(DataLoader):
 
     def __init__(self, dataset, batch_size, shuffle, validation_split=None, num_workers=1, pin_memory=False,
                  cross_valid=False, train_idx=None, valid_idx=None, test_idx=None, cv_train_mode=True,
-                 fold_id=None, total_num_folds=None, stratified_k_fold=False,
+                 fold_id=None, total_num_folds=None,
                  collate_fn=default_collate,
                  single_batch=False, worker_init_fn=seed_worker, generator=torch.Generator()):
         """
@@ -87,12 +87,8 @@ class BaseDataLoader(DataLoader):
 
                 # Write it to file for reproducibility, if not yet existing
                 # If existing, check that the split is always the same (for fixed SEED)
-                if stratified_k_fold:
-                    path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
-                                        "stratified", f"seed_{global_config.SEED}")
-                else:
-                    path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
-                                    f"seed_{global_config.SEED}")
+                path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
+                                f"seed_{global_config.SEED}")
 
                 if "drop_invalid" in dataset._input_dir:
                     path = os.path.join(path, "drop_invalid")
@@ -112,18 +108,14 @@ class BaseDataLoader(DataLoader):
                 test_sampler = SubsetRandomSampler(test_idx)
 
                 if total_num_folds is not None:
-                    # For threshold optimization and raw inference on an arbitrary data amount (train, valid OR test),
+                    # For raw inference on an arbitrary data amount (train, valid OR test),
                     # the data split is checked before and the idx can vary
                     # (For the optimization, depending on whether only the valid idx or the train +  valid idx are used)
                     # In this case, they are passed as test_idx parameter, since no training is needed
                     # Write it to file for reproducibility, if not yet existing
                     # If existing, check that the split is always the same (for fixed SEED)
-                    if stratified_k_fold:
-                        path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
-                                            "stratified", f"seed_{global_config.SEED}")
-                    else:
-                        path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
-                                            f"seed_{global_config.SEED}")
+                    path = os.path.join(get_project_root(), "cross_fold_log", f"{total_num_folds}_fold",
+                                        f"seed_{global_config.SEED}")
                     if "drop_invalid" in dataset._input_dir:
                         path = os.path.join(path, "drop_invalid")
                     file_name = os.path.join(path, "cv_test_" + str(fold_id + 1) + ".txt")

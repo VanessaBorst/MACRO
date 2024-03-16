@@ -54,3 +54,13 @@ Dann dort folgende Befehle ausführen
 
 ## Find out users on GPU server
 (echo "GPU_ID PID MEM% UTIL% UID APP" ; for GPU in 0 1 2 3 ; do for PID in $( nvidia-smi -q --id=${GPU} --display=PIDS | awk '/Process ID/{print $NF}') ; do echo -n "${GPU} ${PID} " ; nvidia-smi -q --id=${GPU} --display=UTILIZATION | grep -A4 -E '^[[:space:]]*Utilization' | awk 'NR=0{gut=0 ;mut=0} $1=="Gpu"{gut=$3} $1=="Memory"{mut=$3} END{printf "%s %s ",mut,gut}' ; ps -up ${PID} | gawk 'NR-1 {print $1,$NF}' ; done ; done) | column -t
+
+
+
+## TODOs Refactor
+- Check scripts in utils_bash (relative paths)
+- Check scripts in visualization (relative paths)
+- Unneeded params in config such as stratified k-fold
+- Folgende Params wurden entfernt, auch aus Kommentaren und co (zb Train/Paramstudy und summarize_tune_runs) löschen 
+  - discard_FC_before_MH (_noFC, _withFC)
+- Train, Test und Summarize Tune Runs aufräumen und an neue Configs anpassen

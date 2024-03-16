@@ -121,11 +121,6 @@ desired_col_order = ['branchNet_attention_dropout', 'branchNet_heads', # 'branch
 #                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs']
 
 
-# 'savedVM_v2/models/FinalModel/experiment_3_rerun_withFC'
-# 'savedVM_v2/models/FinalModel/experiment_3_rerun_noFC'
-# Old runs:
-# 'savedVM_v2/models/FinalModel/experiment_3_with_FC'
-# 'savedVM_v2/models/FinalModel/experiment_3_ohne_FC_preAct_all'
 
 # path_to_tune = 'savedVM_v2/models/FinalModel/experiment_3_rerun_noFC'
 # hyper_params = ["discard_FC_before_MH", "down_sample", "dropout_attention", "gru_units", "heads",

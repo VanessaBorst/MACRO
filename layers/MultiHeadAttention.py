@@ -28,8 +28,6 @@ class MultiHeadAttention(nn.Module):
         Number of heads.
     dropout:
         Dropout ratio to be applied as float. If None, no dropout is applied
-    discard_FC_before_MH:
-        If set to True, there is no key transformation before, so the tanh is applied within the MH attention
     attention_size:
         Number of backward elements to apply attention.
         Deactivated if ``None``. Default is ``None``.
@@ -42,7 +40,6 @@ class MultiHeadAttention(nn.Module):
                  v: int,
                  h: int,
                  dropout: float,
-                 discard_FC_before_MH: bool,
                  attention_activation_function: str = 'softmax',
                  **kwargs):
         """Initialize the Multi Head Block."""
@@ -50,18 +47,15 @@ class MultiHeadAttention(nn.Module):
 
         self._h = h
         self._k = k  # Needed for the scaled dot product attention
-        self._discard_FC_before_MH = discard_FC_before_MH
         self._attention_activation_function = attention_activation_function
 
         # Query, keys and value matrices
         self._W_q = nn.Linear(d_model, q*self._h)
-        if not self._discard_FC_before_MH:
-            self._W_k = nn.Linear(d_model, k*self._h)
-        else:
-            self._W_k = nn.Sequential(
-                nn.Linear(d_model, k*self._h),
-                nn.Tanh()
-            )
+
+        self._W_k = nn.Sequential(
+            nn.Linear(d_model, k*self._h),
+            nn.Tanh()
+        )
         self._W_v = nn.Linear(d_model, v*self._h)
 
         # Output linear function

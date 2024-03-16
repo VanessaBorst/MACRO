@@ -4,7 +4,7 @@ from torchinfo import summary
 from base import BaseModel
 from layers.BasicBlock1dWithNorm import BasicBlock1dWithNorm
 from layers.BasicBlock1dWithNormPreActivationDesign import BasicBlock1dWithNormPreactivation
-from model.baseline_model_with_MHAttention_v2 import _get_attention_module
+from layers.ContextualAttention import MultiHeadContextualAttention
 
 
 class FinalModel(BaseModel):
@@ -38,8 +38,6 @@ class FinalModel(BaseModel):
                  gru_units=12,
                  heads=3,
                  dropout_attention=0.2,
-                 discard_FC_before_MH=False,
-                 attention_type="v2",
                  use_reduced_head_dims=None,
                  attention_activation_function=None,
                  # Multibranch-specific parameters
@@ -269,14 +267,13 @@ class FinalModel(BaseModel):
             nn.Dropout(drop_out_gru)
         )
 
-        self._multi_head_contextual_attention = _get_attention_module(discard_FC_before_MH=discard_FC_before_MH,
-                                                                      dropout_attention=dropout_attention,
-                                                                      d_model=2 * gru_units,
-                                                                      heads=heads,
-                                                                      attention_type=attention_type,
-                                                                      use_reduced_head_dims=use_reduced_head_dims,
-                                                                      attention_activation_function=attention_activation_function,
-                                                                      attention_special_init=False)
+        head_dims = use_reduced_head_dims if use_reduced_head_dims is not None else False
+        attention_activation = attention_activation_function if attention_activation_function is not None else "softmax"
+        self._multi_head_contextual_attention = MultiHeadContextualAttention(d_model=2 * gru_units,
+                                                                             dropout=dropout_attention,
+                                                                             heads=heads,
+                                                                             use_reduced_head_dims=head_dims,
+                                                                             attention_activation_function=attention_activation)
 
         self._batchNorm = nn.Sequential(
             # The batch normalization layer has 24*2=48 trainable and 24*2=48 non-trainable parameters
@@ -346,11 +343,9 @@ if __name__ == "__main__":
         use_pre_activation_design=True,
         use_pre_conv=True,
         pre_conv_kernel=16,
-        discard_FC_before_MH=True,
         dropout_attention=0.2,
         heads=6,
         gru_units=12,
-        attention_type="v1",
         use_reduced_head_dims=True,
         attention_activation_function="entmax15")
 

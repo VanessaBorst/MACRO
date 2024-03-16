@@ -14,7 +14,7 @@ from ray.tune import CLIReporter, Callback
 
 import data_loader.data_loaders as module_data_loader
 import global_config
-import model.loss as module_loss
+import loss.loss as module_loss
 from logger import update_logging_setup_for_tune_or_cross_valid
 from parse_config import ConfigParser
 from trainer.ecg_trainer import ECGTrainer
@@ -28,28 +28,13 @@ os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
 
 
 def _set_seed(SEED):
-    # OLD VERSION MA
-    # np.random.seed(SEED)
-    # torch.manual_seed(SEED)
-    # # VB: Replaced by use_deterministic_algorithms, which will make more PyTorch operations behave deterministically
-    # # See https://pytorch.org/docs/stable/notes/randomness.html
-    # torch.backends.cudnn.deterministic = True
-    # # torch.use_deterministic_algorithms(True)
-    # torch.backends.cudnn.benchmark = False
-    #
-    # random.seed(SEED)
-    # torch.cuda.manual_seed_all(SEED)
-    # # os.environ['PYTHONHASHSEED'] = str(SEED)
-
-    # NEW VERSION
-    # https://pytorch.org/docs/stable/notes/randomness.html
     np.random.seed(SEED)
     torch.manual_seed(SEED)
     random.seed(SEED)
     torch.cuda.manual_seed_all(SEED)
     os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
-    # TODO: If sparse or entmax are not used at the end, warn only can be set to false again!
+    # Note: If sparse or entmax are not used at the end, warn only can be set to false again!
     torch.use_deterministic_algorithms(True, warn_only=True)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
@@ -74,7 +59,6 @@ def tuning_params(name):
             # "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
             # "heads": tune.grid_search([3, 5, 8, 16, 32]),
             # "gru_units": tune.grid_search([12, 24, 32]),
-            # "discard_FC_before_MH": tune.grid_search([True, False])
             "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
             "heads": tune.grid_search([4, 8, 12]),
             "gru_units": tune.grid_search([12, 24, 32]),
@@ -143,23 +127,6 @@ def tuning_params(name):
             "pre_conv_kernel": tune.grid_search([3, 8, 12, 20, 24])
         }
     elif name == "FinalModel":
-        # # Variant with additional FC for Attention
-        # return {
-        #     "down_sample": "conv",
-        #     "vary_channels": True,
-        #     "pos_skip": "all",
-        #     "norm_type": "BN",
-        #     "norm_pos": "all",
-        #     "norm_before_act": True,
-        #     "use_pre_activation_design": tune.grid_search([True, False]),
-        #     "use_pre_conv": True,       # only has a meaning when used with pre-activation design
-        #     "dropout_attention": tune.grid_search([0.2, 0.4]),  # see table, but also visualization (mark areas)
-        #     "heads": tune.grid_search([5, 8, 16, 32]),  # No clear direction, 8 and 32 most promising according to plot
-        #     "gru_units": tune.grid_search([12, 18, 24]),  # See graphical visualization and TOP 5 Table
-        #     "discard_FC_before_MH": False
-        # }
-        #
-        # # Variant without additional FC for Attention
         # return {
         #     "down_sample": "conv",
         #     "vary_channels": True,
@@ -172,7 +139,6 @@ def tuning_params(name):
         #     "dropout_attention": tune.grid_search([0.3, 0.4]),  # Majority in TOP5
         #     "heads": tune.grid_search([5, 8, 12, 16]),    # Runs mit 3 und 32 bis auf eine Ausnahme nicht gut
         #     "gru_units": tune.grid_search([24, 28, 32]),    # See graphical visualization
-        #     "discard_FC_before_MH": True
         # }
 
         # Rerun without FC
@@ -189,22 +155,6 @@ def tuning_params(name):
         #     "heads": tune.grid_search([3, 5, 8, 32]),  # See visualization, 16 does not work well (was trained nevertheless)
         #     "gru_units": tune.grid_search([12, 24, 32]),  # Eventually add 18
         #     "discard_FC_before_MH": True
-        # }
-
-        # # Rerun with FC
-        # return {
-        #     "down_sample": "conv",
-        #     "vary_channels": True,
-        #     "pos_skip": "all",
-        #     "norm_type": "BN",
-        #     "norm_pos": "all",
-        #     "norm_before_act": True,
-        #     "use_pre_activation_design": True,  # tune.grid_search([True, False]),
-        #     "use_pre_conv": True,  # only has a meaning when used with pre-activation design
-        #     "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
-        #     "heads": tune.grid_search([3, 8, 16, 32]),  # See visualization, 5 does not work well in comparison
-        #     "gru_units": tune.grid_search([12, 24, 32]),  # Eventually add 18
-        #     "discard_FC_before_MH": False
         # }
 
         # NEW MACRO PAPER, Batchsize is varied in Config
@@ -795,11 +745,9 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
         valid_data_loader = valid_dl
     elif cv_active:
         # Setup data_loader instances for current the cross validation run
-        stratified_k_fold = config.config.get("data_loader", {}).get("cross_valid", {}).get("stratified_k_fold", False)
         data_loader = config.init_obj('data_loader', module_data_loader,
                                       cross_valid=True, train_idx=train_idx, valid_idx=valid_idx, cv_train_mode=True,
                                       fold_id=k_fold, total_num_folds=total_num_folds,
-                                      stratified_k_fold=stratified_k_fold,
                                       single_batch=False)
         valid_data_loader = data_loader.split_validation()
     else:

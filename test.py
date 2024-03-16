@@ -20,8 +20,8 @@ import seaborn as sns
 from tqdm import tqdm
 
 import data_loader.data_loaders as module_data
-import model.loss as module_loss
-from evaluation import multi_label_metrics, single_label_metrics, multi_label_metrics_variedThreshold
+import loss.loss as module_loss
+from evaluation import multi_label_metrics, single_label_metrics
 from evaluation.multi_label_metrics import class_wise_confusion_matrices_multi_label_sk, THRESHOLD
 from evaluation.single_label_metrics import overall_confusion_matrix_sk, class_wise_confusion_matrices_single_label_sk
 from parse_config import ConfigParser
@@ -91,7 +91,6 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
             fold_id=None
         )
     else:
-        stratified_k_fold = config.config.get("data_loader", {}).get("cross_valid", {}).get("stratified_k_fold", False)
         data_loader = getattr(module_data, config['data_loader']['type'])(
             cv_data_dir,
             batch_size=64,
@@ -102,8 +101,7 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
             test_idx=test_idx,
             cv_train_mode=False,
             fold_id=k_fold,
-            total_num_folds=total_num_folds,
-            stratified_k_fold=stratified_k_fold
+            total_num_folds=total_num_folds
         )
 
     # build model architecture

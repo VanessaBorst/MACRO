@@ -2,78 +2,15 @@ import torch.nn as nn
 from torchinfo import summary
 
 from base import BaseModel
-from layers.ContextualAttention import ContextualAttention, MultiHeadContextualAttention, \
-    MultiHeadContextualAttentionV2, MultiHeadContextualAttentionV3, MultiHeadContextualAttentionV4, \
-    MultiHeadContextualAttentionV5
-from utils import plot_record_from_np_array
+from layers.ContextualAttention import MultiHeadContextualAttention
 
-
-def _get_attention_module(discard_FC_before_MH, dropout_attention, d_model, heads,
-                          attention_type, use_reduced_head_dims, attention_activation_function, attention_special_init):
-    # Sanity checks for the GRU and MHAttention-related parameters
-    assert use_reduced_head_dims is None or attention_type == "v1", \
-        "use_reduced_head_dims can only be used with attention_type=v1!"
-
-    assert attention_activation_function is None or attention_type == "v1", \
-        "attention_activation_function can only be used with attention_type=v1!"
-
-    assert (attention_special_init is None or attention_special_init is False) or attention_type == "v1", \
-        "attention_special_init can only be used with attention_type=v1!"
-
-    if use_reduced_head_dims:
-        assert d_model % heads == 0, \
-            "d_model (e.g., twice the number of GRU cells) must be divisible by num_heads!"
-
-    match attention_type:
-        case "v1":
-            # Own MHA implementation with random query initialization
-            head_dims = use_reduced_head_dims if use_reduced_head_dims is not None else False
-            attention_activation = attention_activation_function if attention_activation_function is not None else "softmax"
-            special_init = attention_special_init if attention_special_init is not None else False
-            attention_module = MultiHeadContextualAttention(d_model=d_model,
-                                                            dropout=dropout_attention,
-                                                            heads=heads,
-                                                            discard_FC_before_MH=discard_FC_before_MH,
-                                                            use_reduced_head_dims=head_dims,
-                                                            attention_activation_function=attention_activation,
-                                                            special_init=special_init)
-        case "v2":
-            # Torch MHA implementation with random query initialization
-            attention_module = MultiHeadContextualAttentionV2(d_model=d_model,
-                                                              dropout=dropout_attention,
-                                                              heads=heads,
-                                                              discard_FC_before_MH=discard_FC_before_MH)
-        case "v3":
-            # Torch MHA implementation +  buggy query initialization based on the mean of the BiGRU output
-            attention_module = MultiHeadContextualAttentionV3(d_model=d_model,
-                                                              dropout=dropout_attention,
-                                                              heads=heads,
-                                                              discard_FC_before_MH=discard_FC_before_MH)
-        case "v4":
-            # Torch MHA implementation +  Learnable query projection with Linear layer
-            attention_module = MultiHeadContextualAttentionV4(d_model=d_model,
-                                                              dropout=dropout_attention,
-                                                              heads=heads,
-                                                              discard_FC_before_MH=discard_FC_before_MH)
-        case "v5":
-            # Torch MHA implementation +  Method "initialize_weights()" for query initialization
-            attention_module = MultiHeadContextualAttentionV5(d_model=d_model,
-                                                              dropout=dropout_attention,
-                                                              heads=heads,
-                                                              discard_FC_before_MH=discard_FC_before_MH)
-        case _:
-            raise ValueError(f"Attention type {attention_type} not supported!")
-
-    return attention_module
 
 
 class BaselineModelWithMHAttentionV2(BaseModel):
     def __init__(self, apply_final_activation, multi_label_training, gru_units=12, dropout_attention=0.2, heads=3,
-                 discard_FC_before_MH=False, num_classes=9,
+                 num_classes=9,
                  use_reduced_head_dims=None,
-                 attention_activation_function=None,
-                 attention_special_init=None,
-                 attention_type="v2"):
+                 attention_activation_function=None):
         """
         :param apply_final_activation: whether the Sigmoid(sl) or the LogSoftmax(ml) should be applied at the end
         :param multi_label_training: if true, Sigmoid is used as final activation, else the LogSoftmax
@@ -141,14 +78,13 @@ class BaselineModelWithMHAttentionV2(BaseModel):
             nn.Dropout(0.2)
         )
 
-        self._multi_head_contextual_attention = _get_attention_module(discard_FC_before_MH=discard_FC_before_MH,
-                                                                      dropout_attention=dropout_attention,
-                                                                      d_model=2 * gru_units,
-                                                                      heads=heads,
-                                                                      attention_type=attention_type,
-                                                                      use_reduced_head_dims=use_reduced_head_dims,
-                                                                      attention_activation_function=attention_activation_function,
-                                                                      attention_special_init=attention_special_init)
+        head_dims = use_reduced_head_dims if use_reduced_head_dims is not None else False
+        attention_activation = attention_activation_function if attention_activation_function is not None else "softmax"
+        self._multi_head_contextual_attention = MultiHeadContextualAttention(d_model=2 * gru_units,
+                                                                                dropout=dropout_attention,
+                                                                                heads=heads,
+                                                                                use_reduced_head_dims=head_dims,
+                                                                                attention_activation_function=attention_activation)
 
         self._batchNorm = nn.Sequential(
             # The batch normalization layer has 24*2=48 trainable and 24*2=48 non-trainable parameters
@@ -197,8 +133,6 @@ if __name__ == "__main__":
         dropout_attention=0.4,
         heads=8,
         gru_units=12,
-        discard_FC_before_MH=True,
-        attention_type="v1",
         use_reduced_head_dims=True,
         attention_activation_function="entmax15")
     summary(model, input_size=(2, 12, 15000), col_names=["input_size", "output_size", "num_params"])

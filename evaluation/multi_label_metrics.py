@@ -708,14 +708,3 @@ def weighted_torch_recall(output, target, sigmoid_probs, logits, labels):
 def macro_torch_recall(output, target, sigmoid_probs, logits, labels):
     """See documentation for _torch_recall """
     return _torch_recall(output, target, sigmoid_probs, logits, labels, average='macro')
-
-
-if __name__ == '__main__':
-    test = torch.nn.functional.one_hot(torch.arange(0, 5) % 3)
-    reference_path = 'info/csv/REFERENCE_cpsc.csv'
-    answers_path = 'info/csv/fake_answers.csv'
-    cpsc_score(answers_path, reference_path)
-    # x = torch.randn(3, 2)
-    # print(x)
-    # test = _convert_sigmoid_probs_to_prediction(x)
-    # print(test)
