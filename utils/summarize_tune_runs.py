@@ -311,7 +311,7 @@ for tune_run in os.listdir(path_to_tune):
         num_params = _extract_num_params(tune_path)
 
         with open(os.path.join(tune_path, "progress.csv"), "r") as file:
-            with open(os.path.join(tune_path, "..", "config.json")) as config_file:
+            with open(os.path.join(tune_path, "../..", "config.json")) as config_file:
                 config = json.load(config_file)
                 try:
                     early_stop = config.get('trainer').get('early_stop')

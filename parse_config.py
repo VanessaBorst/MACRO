@@ -13,12 +13,18 @@ class ConfigParser:
     def __init__(self, config, resume=None, modification=None, mode=None, use_tune=False, run_id=None,
                  create_save_log_dir = True):
         """
-        class to parse configuration json file. Handles hyperparameters for training, initializations of modules, checkpoint saving
-        and logging module.
-        :param config: Dict containing configurations, hyperparameters for training. contents of `config.json` file for example.
-        :param resume: String, path to the checkpoint being loaded.
-        :param modification: Dict keychain:value, specifying position values to be replaced from config dict.
-        :param run_id: Unique Identifier for training processes. Used to save checkpoints and training log. Timestamp is being used as default
+        Class to parse configuration json file. Handles hyperparameters for training, initializations of modules,
+        checkpoint saving and logging module.
+
+         Args:
+            config (dict): Configuration dictionary.
+            resume (str, optional): Path to the checkpoint to resume training/testing from. Defaults to None.
+            modification (dict, optional): Modification dictionary to update the configuration. Defaults to None.
+            mode (str, optional): Mode of operation ('train' or 'test'). Defaults to None.
+            use_tune (bool, optional): Whether to use tuning. Defaults to False.
+            run_id (str, optional): Identifier for the run. Defaults to None - in this case, timestamp is used
+            create_save_log_dir (bool, optional): Whether to create directories for saving logs and outputs.
+                                                   Defaults to True.
         """
         # load config file and apply modification
         self._config = _update_config(config, modification)

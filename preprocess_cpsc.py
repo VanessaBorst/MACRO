@@ -12,7 +12,6 @@ from bidict import bidict
 from matplotlib import pyplot as plt
 from scipy.io import loadmat
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
 
 from utils import plot_record_from_df
 
@@ -207,131 +206,6 @@ def clean_meta(path):
     print("Finished meta data cleaning for " + src_path)
 
 
-def min_max_scaling(path):
-    """
-        The method applies min-max-scaling to each record under the given path
-        It uses the global min and max for the normalization, not the local ones per record
-    """
-    # Vanessa:
-    # For Min-Max-Normalization with local min() and max() per record,
-    # it would be the following (Pandas automatically applies column-wise function):
-    # df=(df-df.min())/(df.max()-df.min())
-
-    # The scaler internally maintains some attributes, which can be iteratively trained when using partial_fit
-    # Attributes:
-    # min_,: ndarray of shape (n_features,) -> per feature adjustment for minimum.
-    # scale_,: ndarray of shape (n_features,) -> per feature relative scaling of the data
-    # data_min_: ndarray of shape (n_features,) -> per feature minimum seen in the data
-    # data_max_: ndarray of shape (n_features,) -> per feature maximum seen in the data
-    # data_range_ ndarray of shape (n_features,) -> per feature range (data_max_ - data_min_) seen in the data
-    # n_samples_seen_:  The number of samples processed by the estimator.
-    #                   It will be reset on new calls to fit, but increments across partial_fit calls.
-    scaler = MinMaxScaler()
-
-    g_max = pd.DataFrame()
-
-    invalid_files = []
-
-    for file in os.listdir(path):
-        if os.path.isdir(os.path.join(path, file)):
-            continue
-
-        df, meta = pk.load(open(os.path.join(path, file), "rb"))
-
-        # Adds the max value for each lead of the record to a new row of the dataframe (the columns are again the leads)
-        g_max = g_max.append(df.max(), ignore_index=True)
-
-    # Sets a threshold for the max value per lead that valid records can contain
-    # If this threshold is exceeded, the record is considered invalid
-    # Again, the operations are applied column-wise, i.e. for each lead separately
-    g_max_threshold = g_max.median() + (g_max.std() * 2.5)
-
-    file_list = []
-
-    for file in os.listdir(path):
-        if os.path.isdir(os.path.join(path, file)):
-            continue
-        df, meta = pk.load(open(os.path.join(path, file), "rb"))
-
-        valid = True
-        for col in df.columns:
-            # df.loc[:, col] selects all values contained in the given column
-            # In this case, it returns all values of the current lead for the given record
-            if df.loc[:, col].max() > g_max_threshold.loc[col] \
-                    or abs(df.loc[:, col].min()) > g_max_threshold.loc[col]:
-                valid = False
-                invalid_files.append(file)
-
-                # df.loc[:, col].plot()
-                # plt.show()
-
-                break
-
-        if valid:
-            file_list.append(file)
-
-            # Partial_fit ==> Online computation of min and max on X for later scaling.
-            # Needed for training the scaler iteratively; with the fit() method the previous training would be discarded
-            scaler = scaler.partial_fit(df)
-
-    if not os.path.exists(os.path.join(path, "minmax")):
-        os.makedirs(os.path.join(path, "minmax"))
-
-    for file in file_list:
-        df, meta = pk.load(open(os.path.join(path, file), "rb"))
-
-        # Scales the features of the dataframe according to the desired feature_range, which is (0,1) by default
-        df.loc[:, :] = scaler.transform(df)
-        pk.dump((df, meta), open(os.path.join(path, "minmax", file), "wb"))
-
-    print(f"Valid: {len(file_list)} Invalid: {len(invalid_files)}")
-
-
-def normalize(path, drop_invalid_records = False):
-    def is_close_to_target(value, target, tolerance=1e-10):
-        return abs(value - target) < tolerance
-
-    folder_name = "normalized" if not drop_invalid_records else "normalized_drop_invalid"
-    if not os.path.exists(os.path.join(path, folder_name)):
-        os.makedirs(os.path.join(path, folder_name))
-
-    for file in os.listdir(path):
-        if ".pk" not in file:
-            continue
-        df, meta = pk.load(open(os.path.join(path, file), "rb"))
-
-        # Normalize with mean normalization
-        # df.mean() and df.std() operate on all columns, i.e. leads, separately
-        # df - df.mean(): For each col, the mean of the col is subtracted from each element in the respective col
-        df_normalized = (df - df.mean()) / df.std()
-
-        # Verification:
-        record_is_fine = True
-        ill_leads_idx = set([])
-        for i in range(0, 12):
-            column = df_normalized[df_normalized.columns[i]]
-            if not is_close_to_target(column.mean(), 0.0):
-                record_is_fine = False
-                ill_leads_idx.add(i)
-                # print(f"Lead {i}: Mean = {column.mean()} for file {file}")
-            if not is_close_to_target(column.std(),1.0):
-                record_is_fine = False
-                ill_leads_idx.add(i)
-                # print(f"Lead {i}: Std = {column.std()} for file {file}")
-            # print(f"Lead {i}: Mean = {column.mean()}, Std = {column.std()}")
-
-        if record_is_fine:
-            pk.dump((df_normalized, meta), open(os.path.join(path, folder_name, file), "wb"))
-        else:
-            print(f"Record {file} is not fine. Only some leads could be normalized correctly. "
-                  f"The leads {ill_leads_idx} should be checked.")
-            if not drop_invalid_records:
-                # Dump the normalized df to new pk file but keep the original leads where the normalization failed
-                for lead in ill_leads_idx:
-                    df_normalized[df.columns[lead]] = df[df.columns[lead]]
-                pk.dump((df_normalized, meta), open(os.path.join(path, folder_name, file), "wb"))
-
-
 
 def pad_or_truncate(path, seq_len, seconds=None, pad_halfs=False):
     """
@@ -399,60 +273,47 @@ def show(path):
 
 
 if __name__ == "__main__":
-    # src_path = "data/CinC_CPSC/raw/"
-    # dest_path = "data/CinC_CPSC/"
-    # split_train_test(src_path,dest_path, test_ratio=0.2)
+    src_path = "data/CinC_CPSC/raw/"
+    dest_path = "data/CinC_CPSC/"
+    split_train_test(src_path,dest_path, test_ratio=0.2)
 
     # Uncomment for applying basic preprocessing
     # Reads the .mat files, possibly downsamples the data, extracts meta data and writes everything to pickle dumps
-    # src_path = "data/CinC_CPSC/train/raw"
-    # target_path = "data/CinC_CPSC/train/preprocessed/"
-    # run_basic_preprocessing(src_path, target_path, sampling="4ms")
-    # src_path = "data/CinC_CPSC/test/raw"
-    # target_path = "data/CinC_CPSC/test/preprocessed/"
-    # run_basic_preprocessing(src_path, target_path, sampling="4ms")
-    #
-    # # Uncomment to extend the meta information by encoded classes
-    # # More importantly, deal with multi-label-case to fix the order of labels to match the one of the original CPSC
-    # src_path = "data/CinC_CPSC/train/preprocessed/4ms/"
-    # clean_meta(src_path)
-    # src_path = "data/CinC_CPSC/test/preprocessed/4ms/"
-    # clean_meta(src_path)
+    src_path = "data/CinC_CPSC/train/raw"
+    target_path = "data/CinC_CPSC/train/preprocessed/"
+    run_basic_preprocessing(src_path, target_path, sampling="4ms")
+    src_path = "data/CinC_CPSC/test/raw"
+    target_path = "data/CinC_CPSC/test/preprocessed/"
+    run_basic_preprocessing(src_path, target_path, sampling="4ms")
 
-    #  Uncomment for applying further preprocessing like normalization
+    # Uncomment to extend the meta information by encoded classes
+    # More importantly, deal with multi-label-case to fix the order of labels to match the one of the original CPSC
     src_path = "data/CinC_CPSC/train/preprocessed/4ms/"
-    normalize(src_path, drop_invalid_records=True)
-    # show(src_path + "normalized")
-    # min_max_scaling(path=src_path)
-    # show(src_path + "minmax")
+    clean_meta(src_path)
     src_path = "data/CinC_CPSC/test/preprocessed/4ms/"
-    normalize(src_path, drop_invalid_records=True)
-    # show(src_path + "normalized")
-    # min_max_scaling(path=src_path)
-    # show(src_path + "minmax")
+    clean_meta(src_path)
 
-    # # Uncomment for applying further preprocessing like padding
-    # src_path = "data/CinC_CPSC/train/preprocessed/no_sampling/"
-    # for desired_len_in_seconds in [10, 15, 30, 60]:
-    #     seq_len = _get_seq_len(hz=500, desired_seconds=desired_len_in_seconds)
-    #     pad_or_truncate(path=src_path, seq_len=seq_len, seconds=desired_len_in_seconds)
-    #
-    # src_path = "data/CinC_CPSC/test/preprocessed/no_sampling/"
-    # for desired_len_in_seconds in [10, 15, 30, 60]:
-    #     seq_len = _get_seq_len(hz=500, desired_seconds=desired_len_in_seconds)
-    #     pad_or_truncate(path=src_path, seq_len=seq_len, seconds=desired_len_in_seconds)
-
+    # Uncomment for applying further preprocessing like padding
     # 4ms = 250Hz
-    src_path = "data/CinC_CPSC/train/preprocessed/4ms/normalized_drop_invalid/"
+    src_path = "data/CinC_CPSC/train/preprocessed/4ms/"
     for desired_len_in_seconds in [60]:     # [10,15,30,60]:
         seq_len = _get_seq_len(hz=250, desired_seconds=desired_len_in_seconds)
         pad_or_truncate(path=src_path, seq_len=seq_len, seconds=desired_len_in_seconds, pad_halfs=False)
 
-    src_path = "data/CinC_CPSC/test/preprocessed/4ms/normalized_drop_invalid/"
+    src_path = "data/CinC_CPSC/test/preprocessed/4ms/"
     for desired_len_in_seconds in [60]:     # [10,15,30,60]:
         seq_len = _get_seq_len(hz=250, desired_seconds=desired_len_in_seconds)
         pad_or_truncate(path=src_path, seq_len=seq_len, seconds=desired_len_in_seconds, pad_halfs=False)
 
-    # show("data/CinC_CPSC/train/preprocessed/4ms/normalized/eq_len_60s")
-    # show("data/CinC_CPSC/cross_valid/250Hz/normalized/60s/")
+    # show("data/CinC_CPSC/test/preprocessed/4ms/eq_len_60s")
+
+    # Copy all files to another folder used for k-fold cross-validation
+    for mode in ["train", "test"]:
+        src_path = f"data/CinC_CPSC/{mode}/preprocessed/4ms/eq_len_60s"
+        dest_path = f"data/CinC_CPSC/cross_valid/250Hz/60s"
+        if not os.path.exists(dest_path):
+            os.makedirs(dest_path)
+        for file in os.listdir(src_path):
+            shutil.copy(os.path.join(src_path, file), dest_path)
+
     print("Finished")

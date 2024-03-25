@@ -1,12 +1,8 @@
 import argparse
 import pickle
 
-import numpy as np
 import seaborn as sns
-import pandas as pd
 import matplotlib.pyplot as plt
-import shap
-from matplotlib.gridspec import GridSpec
 
 import global_config
 from utils import ensure_dir
@@ -26,10 +22,7 @@ def visualize_feature_importance_on_cross_fold_data(main_path, total_num_folds):
     save_dir = os.path.join("../figures", "feature_importance", folder_name)
     ensure_dir(save_dir)
 
-    # Store the shap values across folds for later visualization
     class_names = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE']
-    shap_values_dict = dict.fromkeys(class_names, [])
-    test_sets = []
     feature_importance_list = []
 
     params = {'font.size': 40,
@@ -80,9 +73,7 @@ def visualize_feature_importance_on_cross_fold_data(main_path, total_num_folds):
         feature_importance_list.append(feature_importance)
 
 
-    # All feature importance and shap data across the folds is loaded and can be visualized now
-
-    # Begin with the visualization of the feature importance
+    # All feature importance information across the folds is loaded and can be visualized now
     # Merge feature importances into a single DataFrame
     mean_feature_importance_df = sum(feature_importance_list) / len(feature_importance_list)
     fig, ax = plt.subplots(figsize=(fig_width, 10), dpi=300)
