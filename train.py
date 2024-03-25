@@ -126,8 +126,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
         # torch.backends.cudnn.deterministic = True
         # torch.backends.cudnn.benchmark = False
 
-        data_loader = main_config.init_obj('data_loader', module_data_loader, data_dir=full_data_dir,
-                                           single_batch=main_config['data_loader'].get('overfit_single_batch', False))
+        data_loader = main_config.init_obj('data_loader', module_data_loader, data_dir=full_data_dir)
         valid_data_loader = data_loader.split_validation()
 
         # Check data splitting by record name -> saves records to a file for manual inspection
@@ -357,12 +356,10 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
         # Setup data_loader instances for current the cross validation run
         data_loader = config.init_obj('data_loader', module_data_loader,
                                       cross_valid=True, train_idx=train_idx, valid_idx=valid_idx, cv_train_mode=True,
-                                      fold_id=k_fold, total_num_folds=total_num_folds,
-                                      single_batch=False)
+                                      fold_id=k_fold, total_num_folds=total_num_folds)
         valid_data_loader = data_loader.split_validation()
     else:
-        data_loader = config.init_obj('data_loader', module_data_loader,
-                                      single_batch=config['data_loader'].get('overfit_single_batch', False))
+        data_loader = config.init_obj('data_loader', module_data_loader)
         valid_data_loader = data_loader.split_validation()
 
     # build model architecture, then print to console

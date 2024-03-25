@@ -106,7 +106,6 @@ def run_inference_on_given_fold_data(config, cv_data_dir=None,
 
     # ------------------- Summary Report -------------------
     # summary_dict = module_metric.sk_classification_summary(output=det_outputs, target=det_targets,
-    #                                                        sigmoid_probs=_param_dict["sigmoid_probs"],
     #                                                        logits=_param_dict["logits"],
     #                                                        labels=_param_dict["labels"],
     #                                                        output_dict=True)
