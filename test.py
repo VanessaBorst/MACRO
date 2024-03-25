@@ -37,32 +37,14 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
     assert not cv_active or tune_config is None, "For cross validation, please specifiy ALL params in the main config"
 
     # Conditional inputs depending on the config
-    if config['arch']['type'] == 'BaselineModelWoRnnWoAttention':
-        import model.baseline_model_woRNN_woAttention as module_arch
-    elif config['arch']['type'] == 'BaselineModel':
+    if config['arch']['type'] == 'BaselineModel':
         import model.baseline_model as module_arch
-    elif config['arch']['type'] == 'BaselineModelWithSkipConnections':
-        import model.old.baseline_model_with_skips as module_arch
-    elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndInstanceNorm':
-        import model.old.baseline_model_with_skips_and_InstNorm as module_arch
-    elif config['arch']['type'] == "BaselineModelWithSkipConnectionsAndNorm":
-        import model.old.baseline_model_with_skips_and_norm as module_arch
-    elif config['arch']['type'] == "BaselineModelWithSkipConnectionsV2":
-        import model.old.baseline_model_with_skips_v2 as module_arch
-    elif config['arch']['type'] == "BaselineModelWithSkipConnectionsAndNormV2":
-        import model.old.baseline_model_with_skips_and_norm_v2 as module_arch
-    elif config['arch']['type'] == 'BaselineModelWithMHAttention':
-        import model.old.baseline_model_with_MHAttention as module_arch
-    elif config['arch']['type'] == 'BaselineModelWithMHAttentionNovelQuery':
-        import model.old.baseline_model_with_MHAttention_NovelQuery as module_arch
     elif config['arch']['type'] == 'BaselineModelWithMHAttentionV2':
         import model.baseline_model_with_MHAttention_v2 as module_arch
     elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndNormV2PreActivation':
         import model.baseline_model_with_skips_and_norm_v2_pre_activation_design as module_arch
     elif config['arch']['type'] == 'FinalModel':
         import model.final_model as module_arch
-    elif config['arch']['type'] == 'FinalModelMultiBranchOld':
-        import model.old.final_model_multibranch_old as module_arch
     elif config['arch']['type'] == 'FinalModelMultiBranch':
         import model.final_model_multibranch as module_arch
 
@@ -124,20 +106,9 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
     model = model.to(device)
     model.eval()
 
-    # get function handles of loss and metrics
+    # get function handles of loss
     # Important: The method config['loss'] must exist in the loss module (<module 'model.loss' >)
-    # Equivalently, all metrics specified in the context must exist in the metrics module
     loss_fn = getattr(module_loss, config['loss']['type'])
-    # if config['arch']['args']['multi_label_training']:
-    #     metrics_iter = [getattr(module_metric, met) for met in config['metrics']['ml']['per_iteration'].keys()]
-    #     metrics_epoch = [getattr(module_metric, met) for met in config['metrics']['ml']['per_epoch']]
-    #     metrics_epoch_class_wise = [getattr(module_metric, met) for met in
-    #                                 config['metrics']['ml']['per_epoch_class_wise']]
-    # else:
-    #     metrics_iter = [getattr(module_metric, met) for met in config['metrics']['sl']['per_iteration'].keys()]
-    #     metrics_epoch = [getattr(module_metric, met) for met in config['metrics']['sl']['per_epoch']]
-    #     metrics_epoch_class_wise = [getattr(module_metric, met) for met in
-    #                                 config['metrics']['sl']['per_epoch_class_wise']]
 
     # HARD-CODE the metrics to calc here
     # The sk-summary report is used automatically
@@ -168,10 +139,6 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
     multi_label_training = config['arch']['args']['multi_label_training']
     class_labels = data_loader.dataset.class_labels
 
-    # total_loss = 0.0
-    # total_metrics_iter = torch.zeros(len(metrics_iter))
-    # total_metrics_epoch = torch.zeros(len(metrics_epoch))
-    # total_metrics_epoch_class_wise = torch.zeros(len(metrics_epoch_class_wise))
 
     # Store potential parameters needed for metrics
     _param_dict = {
@@ -288,7 +255,7 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
             # total_loss += loss.item() * batch_size
             metric_tracker.iter_update('loss', loss.item(), n=output.shape[0])
 
-            # Compute the the iteration-based metrics on test set
+            # Compute the iteration-based metrics on test set
             for i, met in enumerate(metrics_iter):
                 args = inspect.signature(met).parameters.values()
                 # Output and target are needed for all metrics! Only consider other args WITHOUT default
@@ -454,41 +421,6 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
         all_cms = [cm_tracker.cm, cm_tracker.class_wise_cms]
         pickle.dump(all_cms, cm_file)
 
-    # # Beautified version, see Zhang et al
-    # target_names = ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]
-    # desired_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE']
-    # normalize = True
-    # for counter in range(0,9):
-    #     desired_class = desired_order[counter]
-    #     idx = target_names.index(desired_class)
-    #
-    #     cm = cm_tracker.class_wise_cms[idx]  # confusion_matrix(y_true, y_pred)
-    #     # Normalize
-    #     if normalize:
-    #         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-    #     fig, ax = plt.subplots(figsize=(4, 4))
-    #     im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
-    #     ax.figure.colorbar(im, ax=ax)
-    #     ax.set(xticks=np.arange(cm.shape[1]),
-    #            yticks=np.arange(cm.shape[0]),
-    #            xticklabels=[0, 1], yticklabels=[0, 1],
-    #            title=desired_class.replace('IAVB', 'I-AVB').replace('VEB', 'PVC'),
-    #            ylabel='True label',
-    #            xlabel='Predicted label')
-    #     plt.setp(ax.get_xticklabels(), ha="center")
-    #
-    #     fmt = '.3f' if normalize else 'd'
-    #     thresh = cm.max() / 2.
-    #     for i in range(cm.shape[0]):
-    #         for j in range(cm.shape[1]):
-    #             ax.text(j, i, format(cm[i, j], fmt),
-    #                     ha="center", va="center",
-    #                     color="white" if cm[i, j] > thresh else "black")
-    #     np.set_printoptions(precision=3)
-    #     fig.tight_layout()
-    #     plt.savefig(config.test_output_dir / "cm_plots_beautified.pdf")
-    #     # plt.savefig(f'results/{label}.png')
-    #     plt.close(fig)
 
     # ------------------- Predicted Scores and Classes -------------------
     str_mode = "Test" if 'test' in str(config.test_output_dir).lower() else "Validation"

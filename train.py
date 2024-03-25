@@ -46,163 +46,33 @@ def _get_mid_kernel_size_second_conv_blocks(spec):
 
 
 def tuning_params(name):
-    if name == "BaselineModelWithSkipConnections" or name == "BaselineModelWithSkipConnectionsAndInstanceNorm":
-        return {
-            "mid_kernel_size_first_conv_blocks": tune.grid_search([3, 5, 7]),
-            "mid_kernel_size_second_conv_blocks": tune.sample_from(_get_mid_kernel_size_second_conv_blocks),
-            "last_kernel_size_first_conv_blocks": tune.grid_search([21, 24, 27]),
-            "last_kernel_size_second_conv_blocks": tune.grid_search([45, 48, 51]),
-            "down_sample": tune.grid_search(["conv", "max_pool"])
-        }
-    elif name == "BaselineModelWithMHAttention":
-        return {
-            # "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
-            # "heads": tune.grid_search([3, 5, 8, 16, 32]),
-            # "gru_units": tune.grid_search([12, 24, 32]),
-            "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
-            "heads": tune.grid_search([4, 8, 12]),
-            "gru_units": tune.grid_search([12, 24, 32]),
-            "discard_FC_before_MH": tune.grid_search([True, False])
-        }
-    elif name == "BaselineModelWithMHAttentionV2":
+    # The parameters for the tuning can be specified here according to the example scheme below
+    if name == "BaselineModelWithMHAttentionV2":
         return {
             "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
             "heads": tune.grid_search([6, 8, 12]),
-            "gru_units": tune.grid_search([12, 24, 36]),
-            "discard_FC_before_MH": False  # tune.grid_search([True, False])
-        }
-    elif name == "BaselineModelWithSkipConnectionsAndNorm":
-        return {
-            "mid_kernel_size_first_conv_blocks": 7,
-            "mid_kernel_size_second_conv_blocks": 7,
-            "last_kernel_size_first_conv_blocks": 21,
-            "last_kernel_size_second_conv_blocks": 48,
-            "down_sample": "conv",
-            "norm_type": tune.grid_search(["BN", "IN", "LN"]),
-            "norm_pos": tune.grid_search(["all", "last"]),
-            "norm_before_act": tune.grid_search([True, False])
-        }
-    elif name == "BaselineModelWithSkipConnectionsV2":
-        return {
-            "down_sample": tune.grid_search(["conv", "max_pool"]),
-            "vary_channels": tune.grid_search([True, False]),
-            "pos_skip": tune.grid_search(["all", "not_last", "not_first"])
-        }
-    elif name == "BaselineModelWithSkipConnectionsAndNormV2":
-        return {
-            "down_sample": "conv",  # tune.grid_search(["conv", "max_pool"]),
-            "vary_channels": True,
-            "pos_skip": "not_first",  # tune.grid_search(["all", "not_last", "not_first"]),
-            "norm_type": "BN",  # tune.grid_search(["BN", "IN", "LN"]),
-            "norm_pos": "all"  # tune.grid_search(["all", "last"])
-            # Tested TOP3 from first experiment, i.e., the following:
-            # Conv + True + not_last,
-            # MaxPool + True + all,
-            # MaxPool + True + not_first
-        }
-    elif name == "BaselineModelWithSkipConnectionsAndNormV2PreActivation":
-        # Run 1
-        # return {
-        #     "down_sample": tune.grid_search(["conv", "max_pool"]),
-        #     "vary_channels": True,
-        #     "pos_skip": tune.grid_search(["all", "not_last"]),
-        #     "norm_type": "BN",
-        #     "norm_pos": "all",  #tune.grid_search(["all", "last"]),
-        #     "norm_before_act": tune.grid_search([True, False]),
-        #     # Tested TOP3 from second experiment, i.e., the following:
-        #     # Conv + True + not_last + BN + all
-        #     # Conv + True + all + BN + all
-        #     # Pool + True + all + BN + all
-        # }
-
-        # Run 2: Only best one of run 1, but this time for different kernel sizes
-        return {
-            "down_sample": "conv",
-            "vary_channels": True,
-            "pos_skip": "all",
-            "norm_type": "BN",
-            "norm_pos": "all",
-            "norm_before_act": True,
-            "use_pre_conv": True,
-            "pre_conv_kernel": tune.grid_search([3, 8, 12, 20, 24])
+            "gru_units": tune.grid_search([12, 24, 36])
         }
     elif name == "FinalModel":
-        # return {
-        #     "down_sample": "conv",
-        #     "vary_channels": True,
-        #     "pos_skip": "all",
-        #     "norm_type": "BN",
-        #     "norm_pos": "all",
-        #     "norm_before_act": True,
-        #     "use_pre_activation_design": True, # tune.grid_search([True, False]),
-        #     "use_pre_conv": True,  # only has a meaning when used with pre-activation design
-        #     "dropout_attention": tune.grid_search([0.3, 0.4]),  # Majority in TOP5
-        #     "heads": tune.grid_search([5, 8, 12, 16]),    # Runs mit 3 und 32 bis auf eine Ausnahme nicht gut
-        #     "gru_units": tune.grid_search([24, 28, 32]),    # See graphical visualization
-        # }
-
-        # Rerun without FC
-        # return {
-        #     "down_sample": "conv",
-        #     "vary_channels": True,
-        #     "pos_skip": "all",
-        #     "norm_type": "BN",
-        #     "norm_pos": "all",
-        #     "norm_before_act": True,
-        #     "use_pre_activation_design": True, # tune.grid_search([True, False]),
-        #     "use_pre_conv": True,  # only has a meaning when used with pre-activation design
-        #     "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
-        #     "heads": tune.grid_search([3, 5, 8, 32]),  # See visualization, 16 does not work well (was trained nevertheless)
-        #     "gru_units": tune.grid_search([12, 24, 32]),  # Eventually add 18
-        #     "discard_FC_before_MH": True
-        # }
-
-        # NEW MACRO PAPER, Batchsize is varied in Config
-        # return {
-        #     "down_sample": "conv",
-        #     "vary_channels": True,
-        #     "pos_skip": "all",
-        #     "norm_type": "BN",
-        #     "norm_pos": "all",
-        #     "norm_before_act": True,
-        #     "use_pre_activation_design": True,
-        #     "use_pre_conv": True,
-        #     "pre_conv_kernel": 16,
-        #     "dropout_attention": 0.3,
-        #     "heads": tune.grid_search([1, 2, 3, 8]),
-        #     "gru_units": tune.grid_search([12, 24, 32]),
-        #     "discard_FC_before_MH": tune.grid_search([True, False])
-        # }
         return {
             "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
             "heads": tune.grid_search([6, 8, 12]),
-            # "gru_units": tune.grid_search([12, 24]),
+            "gru_units": tune.grid_search([12, 24]),
         }
     elif name == "FinalModelMultiBranch":
         return {
             # BranchNet specifics
-            # "branchNet_reduce_channels": tune.grid_search([True, False]),
-            # "branchNet_heads": tune.grid_search([6, 8]),        # Add 12 later if time left
-            # "branchNet_attention_dropout": tune.grid_search([0.2, 0.4]),
+            "branchNet_reduce_channels": tune.grid_search([True, False]),
+            "branchNet_heads": tune.grid_search([6, 8]),
+            "branchNet_attention_dropout": tune.grid_search([0.2, 0.4]),
             # Multibranch specifics
-            # "multi_branch_heads": tune.grid_search([24]),  # Add 12 later if time left
-            # "multi_branch_attention_dropout": tune.grid_search([0.2, 0.4]),
-            # "use_conv_reduction_block": True
-            "conv_reduction_first_kernel_size": tune.grid_search([3, 8, 16]),  # tune.grid_search([3, 16]),  # add 16, 24 later if time left
-            "conv_reduction_second_kernel_size": tune.grid_search([3, 8, 16]),  # tune.grid_search([3, 16]),  # add 6, 24 later if time left
-            "conv_reduction_third_kernel_size": tune.grid_search([3, 8, 16]),  # tune.grid_search([3, 16]),  # add 6, 24 later if time left
+            "multi_branch_heads": tune.grid_search([12, 24]),
+            "multi_branch_attention_dropout": tune.grid_search([0.2, 0.4]),
+            "use_conv_reduction_block": True,
+            "conv_reduction_first_kernel_size": tune.grid_search([3, 8, 16]),
+            "conv_reduction_second_kernel_size": tune.grid_search([3, 8, 16]),
+            "conv_reduction_third_kernel_size": tune.grid_search([3, 8, 16]),
         }
-        # Old
-        # return {
-        #     "multi_branch_heads": tune.grid_search([1, 2, 3, 8]),
-        #     "conv_reduction_first_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
-        #     "conv_reduction_second_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
-        #     "conv_reduction_third_kernel_size": tune.grid_search([3, 16]),  # add 24 later if time left
-        #     "vary_channels_lighter_version": False,  # tune.grid_search([True, False]),
-        #     "discard_FC_before_MH": True,
-        #     "branchNet_gru_units": 24,
-        #     "branchNet_heads": 2
-        # }
     else:
         return None
 
@@ -214,157 +84,14 @@ class MyTuneCallback(Callback):
         self.manager = TuneClient(tune_address="127.0.0.1", port_forward=4321)
 
     def setup(self):
-        # Experiment 3: Final Model
-        # seen_configs = [
-        #     {
-        #         "down_sample": "conv",
-        #         "vary_channels": True,
-        #         "pos_skip": "all",
-        #         "norm_type": "BN",
-        #         "norm_pos": "all",
-        #         "norm_before_act": True,
-        #         "use_pre_activation_design": True,
-        #         "use_pre_conv": True,
-        #         "dropout_attention": 0.3,
-        #         "heads": 5,
-        #         "gru_units": 24,
-        #         "discard_FC_before_MH": True
-        #     },
-        #     {
-        #         "down_sample": "conv",
-        #         "vary_channels": True,
-        #         "pos_skip": "all",
-        #         "norm_type": "BN",
-        #         "norm_pos": "all",
-        #         "norm_before_act": True,
-        #         "use_pre_activation_design": True,
-        #         "use_pre_conv": True,
-        #         "dropout_attention": 0.4,
-        #         "heads": 5,
-        #         "gru_units": 24,
-        #         "discard_FC_before_MH": True
-        #     },
-        #     {
-        #         "down_sample": "conv",
-        #         "vary_channels": True,
-        #         "pos_skip": "all",
-        #         "norm_type": "BN",
-        #         "norm_pos": "all",
-        #         "norm_before_act": True,
-        #         "use_pre_activation_design": True,
-        #         "use_pre_conv": True,
-        #         "dropout_attention": 0.3,
-        #         "heads": 5,
-        #         "gru_units": 28,
-        #         "discard_FC_before_MH": True
-        #     },
-        #     {
-        #         "down_sample": "conv",
-        #         "vary_channels": True,
-        #         "pos_skip": "all",
-        #         "norm_type": "BN",
-        #         "norm_pos": "all",
-        #         "norm_before_act": True,
-        #         "use_pre_activation_design": True,
-        #         "use_pre_conv": True,
-        #         "dropout_attention": 0.4,
-        #         "heads": 5,
-        #         "gru_units": 28,
-        #         "discard_FC_before_MH": True
-        #     },
-        #     {
-        #         "down_sample": "conv",
-        #         "vary_channels": True,
-        #         "pos_skip": "all",
-        #         "norm_type": "BN",
-        #         "norm_pos": "all",
-        #         "norm_before_act": True,
-        #         "use_pre_activation_design": True,
-        #         "use_pre_conv": True,
-        #         "dropout_attention": 0.3,
-        #         "heads": 5,
-        #         "gru_units": 32,
-        #         "discard_FC_before_MH": True
-        #     },
-        #     {
-        #         "down_sample": "conv",
-        #         "vary_channels": True,
-        #         "pos_skip": "all",
-        #         "norm_type": "BN",
-        #         "norm_pos": "all",
-        #         "norm_before_act": True,
-        #         "use_pre_activation_design": True,
-        #         "use_pre_conv": True,
-        #         "dropout_attention": 0.4,
-        #         "heads": 5,
-        #         "gru_units": 32,
-        #         "discard_FC_before_MH": True
-        #     },
-        #     {
-        #         "down_sample": "conv",
-        #         "vary_channels": True,
-        #         "pos_skip": "all",
-        #         "norm_type": "BN",
-        #         "norm_pos": "all",
-        #         "norm_before_act": True,
-        #         "use_pre_activation_design": True,
-        #         "use_pre_conv": True,
-        #         "dropout_attention": 0.3,
-        #         "heads": 8,
-        #         "gru_units": 24,
-        #         "discard_FC_before_MH": True
-        #     },
-        #     {
-        #         "down_sample": "conv",
-        #         "vary_channels": True,
-        #         "pos_skip": "all",
-        #         "norm_type": "BN",
-        #         "norm_pos": "all",
-        #         "norm_before_act": True,
-        #         "use_pre_activation_design": True,
-        #         "use_pre_conv": True,
-        #         "dropout_attention": 0.4,
-        #         "heads": 8,
-        #         "gru_units": 24,
-        #         "discard_FC_before_MH": True
-        #     },
-        #     {
-        #         "down_sample": "conv",
-        #         "vary_channels": True,
-        #         "pos_skip": "all",
-        #         "norm_type": "BN",
-        #         "norm_pos": "all",
-        #         "norm_before_act": True,
-        #         "use_pre_activation_design": True,
-        #         "use_pre_conv": True,
-        #         "dropout_attention": 0.3,
-        #         "heads": 8,
-        #         "gru_units": 28,
-        #         "discard_FC_before_MH": True
-        #     },
-        #
-        # ]
+        # Load the already seen configurations to avoid that the experiments are repeated here
+        # Useful, if training was interrupted and the same experiment should be continued
         seen_configs = []
         for config in seen_configs:
             self.already_seen.add(str(config))
 
     def on_trial_start(self, iteration, trials, trial, **info):
-        # Experiment 1_2
-        # Tested TOP3 from first experiment, i.e., the following:
-        # Conv + True + not_last
-        # MaxPool + True + all
-        # MaxPool + True + not_first
-        # unwanted_combination = (trial.config["down_sample"] == "conv" and trial.config["pos_skip"] == "all") or \
-        #     (trial.config["down_sample"] == "conv" and trial.config["pos_skip"] == "not_first") or \
-        #     (trial.config["down_sample"] == "max_pool" and trial.config["pos_skip"] == "not_last")
-
-        # Experiment 1_3: Wanted
-        # Conv + True + not_last + BN + all
-        # Conv + True + all + BN + all
-        # Pool + True + all + BN + all
-        # unwanted_combination = (trial.config["down_sample"] == "max_pool" and trial.config["pos_skip"] == "not_last")
-
-        if str(trial.config) in self.already_seen:  # or unwanted_combination:
+        if str(trial.config) in self.already_seen:
             print("Stop trial with id " + str(trial.trial_id))
             self.manager.stop_trial(trial.trial_id)
         else:
@@ -375,7 +102,6 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
     def name_trial(trial):
         file_name = f""
         for key in tune_config.keys():
-            # file_name += f"{key[:8] if len(key) > 8 else key}={trial.config[key]}_"
             file_name += f"{trial.config[key]}_"
         if len(file_name) > 240:
             file_name = file_name[:240]
@@ -385,22 +111,18 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
     data_dir = main_config['data_loader']['args']['data_dir']
     full_data_dir = os.path.join(str(get_project_root()), data_dir)
 
-    # data_loader = main_config.init_obj('data_loader', module_data_loader, data_dir=full_data_dir,
-    #                                    single_batch=config['data_loader'].get('overfit_single_batch', False))
-    # valid_data_loader = data_loader.split_validation()
 
     def train_fn(config, checkpoint_dir=None):
-        # NEW Jan 2024: Without this, the valid split varies from worker to worker!!!!
+        # Without this, the valid split varies from worker to worker!
         np.random.seed(global_config.SEED)
         torch.manual_seed(global_config.SEED)
         random.seed(global_config.SEED)
         torch.cuda.manual_seed_all(global_config.SEED)
         os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
         os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
-        # TODO: If sparse or entmax are not used at the end, warn only can be set to false again!
+        # Since entmax is used, warn only needs to be set to True
         torch.use_deterministic_algorithms(True, warn_only=True)
-        # Each of the following two aspects would lead to a TypeError !!!
-        # FAIL serialization: cannot pickle 'CudnnModule' object
+        # Each of the following two aspects would lead to a TypeError !
         # torch.backends.cudnn.deterministic = True
         # torch.backends.cudnn.benchmark = False
 
@@ -408,7 +130,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                                            single_batch=main_config['data_loader'].get('overfit_single_batch', False))
         valid_data_loader = data_loader.split_validation()
 
-        # NEW (Jan 2024) to check data splitting by record name
+        # Check data splitting by record name -> saves records to a file for manual inspection
         valid_records = []
         for idx in valid_data_loader.sampler.indices:
             valid_records.append(valid_data_loader.dataset[idx][4])
@@ -422,8 +144,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
         train_model(config=main_config, tune_config=config, train_dl=data_loader, valid_dl=valid_data_loader,
                     checkpoint_dir=checkpoint_dir, use_tune=True)
 
-    # os.environ["RAY_PICKLE_VERBOSE_DEBUG"] = "1"
-    ray.init(_temp_dir=os.path.join('/home/vab30xh/', 'ray_tmp'))  # get_project_root(), 'ray_tmp'))
+    ray.init(_temp_dir=os.path.join(get_project_root(), 'ray_tmp'))  # TODO: Check in the end
 
     trainer = main_config['trainer']
     early_stop = trainer.get('monitor', 'off')
@@ -433,104 +154,14 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
         mnt_mode = "min"
         mnt_metric = "val_loss"
 
-
-    if main_config["arch"]["type"] == "BaselineModelWithSkipConnections" \
-            or main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndInstanceNorm":
-        reporter = CLIReporter(
-            parameter_columns={
-                "mid_kernel_size_first_conv_blocks": "Mid kernel 1st",
-                "mid_kernel_size_second_conv_blocks": "Mid kernel 2nd",
-                "last_kernel_size_first_conv_blocks": "Last kernel 1st",
-                "last_kernel_size_second_conv_blocks": "Last kernel 2nd",
-                "down_sample": "Downsampling"
-            },
-            metric_columns=["loss", "val_loss",
-                            "val_macro_sk_f1",
-                            "val_weighted_sk_f1",
-                            "val_cpsc_F1",
-                            "val_cpsc_Faf",
-                            "val_cpsc_Fblock",
-                            "val_cpsc_Fpc",
-                            "val_cpsc_Fst",
-                            "training_iteration"])
-    elif main_config["arch"]["type"] == "BaselineModelWithMHAttention" \
-            or main_config["arch"]["type"] == "BaselineModelWithMHAttentionV2":
+    # The reporter is used to print the results of the tuning to the console
+    # It can be configured here according to the example scheme below
+    if main_config["arch"]["type"] == "BaselineModelWithMHAttentionV2":
         reporter = CLIReporter(
             parameter_columns={
                 "dropout_attention": "Droput MH Attention",
                 "heads": "Num Heads",
-                "gru_units": "Num Units GRU",
-                "discard_FC_before_MH": "Discard FC"
-            },
-            metric_columns=["loss", "val_loss",
-                            "val_macro_sk_f1",
-                            "val_weighted_sk_f1",
-                            "val_cpsc_F1",
-                            "val_cpsc_Faf",
-                            "val_cpsc_Fblock",
-                            "val_cpsc_Fpc",
-                            "val_cpsc_Fst",
-                            "training_iteration"])
-    elif main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNorm":
-        reporter = CLIReporter(
-            parameter_columns={
-                "norm_type": "Type",
-                "norm_pos": "Position",
-                "norm_before_act": "Before L-ReLU"
-            },
-            metric_columns=["loss", "val_loss",
-                            "val_macro_sk_f1",
-                            "val_weighted_sk_f1",
-                            "val_cpsc_F1",
-                            "val_cpsc_Faf",
-                            "val_cpsc_Fblock",
-                            "val_cpsc_Fpc",
-                            "val_cpsc_Fst",
-                            "training_iteration"])
-    elif main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsV2":
-        reporter = CLIReporter(
-            parameter_columns={
-                "down_sample": "Downsampling",
-                "vary_channels": "Varied channels",
-                "pos_skip": "Skip Pos"
-            },
-            metric_columns=["loss", "val_loss",
-                            "val_macro_sk_f1",
-                            "val_weighted_sk_f1",
-                            "val_cpsc_F1",
-                            "val_cpsc_Faf",
-                            "val_cpsc_Fblock",
-                            "val_cpsc_Fpc",
-                            "val_cpsc_Fst",
-                            "training_iteration"])
-    elif main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2":
-        reporter = CLIReporter(
-            parameter_columns={
-                "down_sample": "Downsampling",
-                "vary_channels": "Varied channels",
-                "pos_skip": "Skip Pos",
-                "norm_type": "Type",
-                "norm_pos": "Position",
-                "pre_conv_kernel": "1st Conv Kernel"
-            },
-            metric_columns=["loss", "val_loss",
-                            "val_macro_sk_f1",
-                            "val_weighted_sk_f1",
-                            "val_cpsc_F1",
-                            "val_cpsc_Faf",
-                            "val_cpsc_Fblock",
-                            "val_cpsc_Fpc",
-                            "val_cpsc_Fst",
-                            "training_iteration"])
-    elif main_config["arch"]["type"] == "BaselineModelWithSkipConnectionsAndNormV2PreActivation":
-        reporter = CLIReporter(
-            parameter_columns={
-                "down_sample": "Downsampling",
-                "vary_channels": "Varied channels",
-                "pos_skip": "Skip Pos",
-                "norm_type": "Type",
-                "norm_pos": "Norm pos",
-                "norm_before_act": "NormBefAct"
+                "gru_units": "Num Units GRU"
             },
             metric_columns=["loss", "val_loss",
                             "val_macro_sk_f1",
@@ -543,24 +174,11 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                             "training_iteration"])
     elif main_config["arch"]["type"] == "FinalModel":
         reporter = CLIReporter(
-            # parameter_columns={
-            #     "down_sample": "Downsampling",
-            #     "vary_channels": "Varied channels",
-            #     "pos_skip": "Skip Pos",
-            #     "norm_type": "Type",
-            #     "norm_pos": "Norm pos",
-            #     "norm_before_act": "NormBefAct",
-            #     "use_pre_activation_design": "PreActDesign",
-            #     "dropout_attention": "DP Att",
-            #     "heads": "H",
-            #     "gru_units": "GRU",
-            #     "discard_FC_before_MH": "WithoutFC"
-            # },
             # MACRO
             parameter_columns={
+                "dropout_attention": "Droput MH Attention",
                 "heads": "H",
-                "gru_units": "GRU",
-                "discard_FC_before_MH": "WithoutFC"
+                "gru_units": "GRU"
             },
             metric_columns=["loss", "val_loss",
                             "val_macro_sk_f1",
@@ -574,7 +192,6 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
     elif main_config["arch"]["type"] == "FinalModelMultiBranch":
         reporter = CLIReporter(
             parameter_columns={
-
                 "branchNet_reduce_channels": "BN_Rdc",
                 "branchNet_heads": "BN_H",
                 "branchNet_attention_dropout": "BN_DP",
@@ -596,6 +213,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
                             "val_cpsc_Fst",
                             "training_iteration"])
 
+    # The number of GPUs to use depends on the architecture
     match main_config["arch"]["type"]:
         case "BaselineModelWithMHAttentionV2":
             # Six trials in parallel
@@ -627,16 +245,12 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
             sync_period=60,
         ),
 
-        #  scheduler=scheduler,             # Do not use any scheduler, early stopping can be configured in the Config!
         metric=mnt_metric,
         mode=mnt_mode,
-        # stop=CombinedStopper(experiment_stopper, trial_stopper),
-        # keep_checkpoints_num=10,
-        # checkpoint_score_attr=f"{mnt_mode}-{mnt_metric}",
 
-        # search_alg=ax_searcher,           # Just use Random Grid Search instead of an advanced search algo
-        search_alg=BasicVariantGenerator(),  # points_to_evaluate=initial_param_suggestions, max_concurrent=3),
-        config={**tune_config}, # .update({'seed':}),
+
+        search_alg=BasicVariantGenerator(),
+        config={**tune_config},
         resources_per_trial={"cpu": 5 if torch.cuda.is_available() else 1,
                              "gpu": num_gpu if torch.cuda.is_available() else 0},
 
@@ -653,21 +267,35 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
     print("Best hyperparameters found were: ", analysis.best_config)
     print("Best Trials best checkpoint: " + str(analysis.best_checkpoint))
 
-    # Get a dataframe for the max CPSC f1 score seen for each trial
+    # Get a dataframe for the max metric score seen for each trial
     df = analysis.dataframe(metric=mnt_metric, mode=mnt_mode)
     with open(os.path.join(main_config.save_dir, "best_per_trial.p"), "wb") as file:
         pickle.dump(df, file)
 
-    # Does not work after Lib updates ->   Can't pickle local object 'hyper_study.<locals>.name_trial'
-    # with open(os.path.join(main_config.save_dir, "analysis.p"), "wb") as file:
-    #     pickle.dump(analysis, file)
 
 
 def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoint_dir=None, use_tune=False,
                 train_idx=None, valid_idx=None, k_fold=None, total_num_folds=None, cv_active=False):
-    # config: type: ConfigParser -> can be used as usual
-    # tune_config: type: Dict -> contains the tune params with the samples values,
-    #               e.g. {'num_first_conv_blocks': 8, 'num_second_conv_blocks': 9, ...}
+    """
+      Train the model based on the provided configuration.
+       Args:
+           config (ConfigParser): Can be used as usual
+           tune_config (dict, optional): Configuration dictionary for tuning
+                                        (contains the tune params with the samples values). Defaults to None.
+           train_dl (DataLoader, optional): Training data loader. Defaults to None.
+           valid_dl (DataLoader, optional): Validation data loader. Defaults to None.
+           checkpoint_dir (str, optional): Directory containing checkpoint for resuming training/testing. Defaults to None.
+           use_tune (bool, optional): Whether to use tuning. Defaults to False.
+           train_idx (list, optional): Indices for training data in cross-validation. Defaults to None.
+           valid_idx (list, optional): Indices for validation data in cross-validation. Defaults to None.
+           k_fold (int, optional): Current fold in cross-validation. Defaults to None.
+           total_num_folds (int, optional): Total number of folds in cross-validation. Defaults to None.
+           cv_active (bool, optional): Whether cross-validation is active. Defaults to False.
+
+       Returns:
+           dict: Dictionary containing the best metrics achieved during training.
+   """
+
     import torch  # Needed to work with asych. tune workers as well
 
     assert use_tune is False or cv_active is False, "Cross Validation does not work with active tuning!"
@@ -681,7 +309,7 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
         torch.cuda.manual_seed_all(global_config.SEED)
         os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
         os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
-        # TODO: If sparse or entmax are not used at the end, warn only can be set to false again!
+        # Since entmax is used, warn only needs to be set to True!
         torch.use_deterministic_algorithms(True, warn_only=True)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
@@ -689,32 +317,14 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
         os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
 
     # Conditional inputs depending on the config
-    if config['arch']['type'] == 'BaselineModelWoRnnWoAttention':
-        import model.baseline_model_woRNN_woAttention as module_arch
-    elif config['arch']['type'] == 'BaselineModel':
+    if config['arch']['type'] == 'BaselineModel':
         import model.baseline_model as module_arch
-    elif config['arch']['type'] == 'BaselineModelWithSkipConnections':
-        import model.old.baseline_model_with_skips as module_arch
-    elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndInstanceNorm':
-        import model.old.baseline_model_with_skips_and_InstNorm as module_arch
-    elif config['arch']['type'] == "BaselineModelWithSkipConnectionsAndNorm":
-        import model.old.baseline_model_with_skips_and_norm as module_arch
-    elif config['arch']['type'] == "BaselineModelWithSkipConnectionsV2":
-        import model.old.baseline_model_with_skips_v2 as module_arch
-    elif config['arch']['type'] == "BaselineModelWithSkipConnectionsAndNormV2":
-        import model.old.baseline_model_with_skips_and_norm_v2 as module_arch
-    elif config['arch']['type'] == 'BaselineModelWithMHAttention':
-        import model.old.baseline_model_with_MHAttention as module_arch
     elif config['arch']['type'] == 'BaselineModelWithMHAttentionV2':
         import model.baseline_model_with_MHAttention_v2 as module_arch
-    elif config['arch']['type'] == 'BaselineModelWithMHAttentionNovelQuery':
-        import model.old.baseline_model_with_MHAttention_NovelQuery as module_arch
     elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndNormV2PreActivation':
         import model.baseline_model_with_skips_and_norm_v2_pre_activation_design as module_arch
     elif config['arch']['type'] == 'FinalModel':
         import model.final_model as module_arch
-    elif config['arch']['type'] == 'FinalModelMultiBranchOld':
-        import model.old.final_model_multibranch_old as module_arch
     elif config['arch']['type'] == 'FinalModelMultiBranch':
         import model.final_model_multibranch as module_arch
 
@@ -769,7 +379,7 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
         model = torch.nn.DataParallel(model, device_ids=device_ids)
 
     # Get function handles of loss and metrics
-    # Important: The method config['loss'] must exist in the loss module (<module 'model.loss' >)
+    # Important: The method config['loss'] must exist in the loss module (<module 'loss.loss' >)
     # Equivalently, all metrics specified in the context must exist in the metrics modul
     criterion = getattr(module_loss, config['loss']['type'])
     if config['arch']['args']['multi_label_training']:

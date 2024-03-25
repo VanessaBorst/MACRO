@@ -172,5 +172,4 @@ class MultiHeadContextualAttention(nn.Module):
 if __name__ == "__main__":
     model = MultiHeadContextualAttention(d_model=12 * 2, heads=3)
     summary(model, input_size=(64, 2250, 24), col_names=["input_size", "output_size", "num_params"])
-    count_parameters(model)
 

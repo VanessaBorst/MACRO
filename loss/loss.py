@@ -1,8 +1,3 @@
-import torch
-import torch.nn.functional as F
-from torch.nn import BCELoss, BCEWithLogitsLoss, MultiLabelSoftMarginLoss
-
-from loss.asymmetric_loss import AsymmetricLoss, AsymmetricLossOptimized
 
 
 # ------------------------- Multi-Label Classification Loss Function -------------------------
