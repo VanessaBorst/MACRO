@@ -162,14 +162,12 @@ desired_col_order = ['branchNet_attention_dropout', 'branchNet_heads', # 'branch
 include_class_wise_f1 = True
 include_weighted_avg = True
 include_macro_avg = True
-include_CPSC_scores = False
 include_details = True  # epochs, params
 use_abbrevs = True
 
 cols_class_wise_f1 = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE']
 cols_weighted_avg = ['W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc']
 cols_macro_avg = ['m-F1', 'm-ROC-AUC', 'm-Acc']
-cols_CPSC_scores = ['cpsc_F1', 'cpsc_Faf', 'cpsc_Fblock', 'cpsc_Fpc', 'cpsc_Fst']
 col_details = ['Epochs', 'Params']
 
 max_columns = []
@@ -185,9 +183,6 @@ if include_macro_avg:
     df_columns = df_columns + cols_macro_avg
 df_columns = df_columns + ['MR']
 max_columns = max_columns + ['MR']
-if include_CPSC_scores:
-    max_columns = max_columns + cols_CPSC_scores
-    df_columns = df_columns + cols_CPSC_scores
 
 if include_details:
     df_summary_valid = pd.DataFrame(columns=df_columns + col_details)
@@ -271,9 +266,6 @@ def _append_to_summary(path, df_summary, tune_dict, best_epoch=None, num_params=
     # Append the subset acc (=MR)
     row_values = row_values + df_single_metrics['sk_subset_accuracy'].values.tolist()
 
-    if include_CPSC_scores:
-        # Append single metrics
-        row_values = row_values + df_single_metrics[cols_CPSC_scores].values.tolist()[0]
 
     if include_details:
         # Append the number of epochs

@@ -4,9 +4,6 @@ import torch.nn.functional as F
 from torchinfo import summary
 
 from layers.MultiHeadAttention import MultiHeadAttention
-from torch.nn import MultiheadAttention as MultiheadAttention_torch
-
-from utils import count_parameters
 
 
 class ContextualAttention(nn.Module):
@@ -20,7 +17,7 @@ class ContextualAttention(nn.Module):
     Parameters
     ----------
     d_model:
-        Length of the input and output vector
+        Length of the input and output vector  (default: 2xgru_dimension)
     attention_dimension:
         Dimension of the output of the layer (default: 2xgru_dimension)
     use_bias:
@@ -28,7 +25,7 @@ class ContextualAttention(nn.Module):
         the hidden states of the BiGRU (which serve as values)
     """
 
-    def __init__(self, gru_dimension=12, attention_dimension=24, use_bias=True):
+    def __init__(self, d_model=24, attention_dimension=24, use_bias=True):
         super().__init__()
         self._use_bias = use_bias
 
@@ -36,7 +33,7 @@ class ContextualAttention(nn.Module):
         # This layer calculates a hidden representation of the incoming values for which attention weights are needed
         # It calculates the following: tanh(W h +b)
         self._hidden_rep = nn.Sequential(
-            nn.Linear(in_features=2 * gru_dimension, out_features=attention_dimension, bias=self._use_bias),
+            nn.Linear(in_features=d_model, out_features=attention_dimension, bias=self._use_bias),
             nn.Tanh()
         )
 
@@ -45,31 +42,6 @@ class ContextualAttention(nn.Module):
         # Hence, the attention scoring function calculates a dot product as follows: u ° tanh(W h +b)
         self._attn_scoring_fn = nn.Linear(attention_dimension, 1, bias=False)
 
-        '''OLD:
-        # ----- Define the parameters of the layer -----
-        # W and b are used to transform the incoming features from the biGRU
-        self._W = nn.Parameter(torch.Tensor(in_shape[-1], in_shape[-1]))
-        if self._bias:
-            self._b = nn.Parameter(toself._hidden_rep = nn.Sequential(
-            nn.Linear(in_features=2 * d_model, out_features=attention_dimension, bias=self._use_bias),
-            nn.Tanh()
-        )
-
-        # Apply the attention scoring function (dot-product) between the values and the query vector u
-        # Here u is represented as dense layer without bias: u has shape (attention_dimension x 1)
-        # Hence, the attention scoring function calculates a dot product as follows: u ° tanh(W h +b)
-        self._attn_scoring_fn = nn.Linear(attention_dimension, 1, bias=False)rch.Tensor(in_shape[-1]))
-
-        # The vector u serves as query of the attention mechanism
-        self._u = nn.Parameter(torch.Tensor(in_shape[-1]))
-
-        # ----- Initialize weights with Glorot initialization-----
-        nn.init.xavier_uniform(self._W)
-        if self._bias:
-            nn.init.zeros_(self._b)
-        # TODO _u init should be xavier as well
-        nn.init.uniform(self._u)
-        '''
 
     def forward(self, biGRU_outputs):
         # biGRU_outputs is of shape [batch_size, seq_len, 2*num_units], e.g., bs*2250*24
@@ -90,18 +62,10 @@ class ContextualAttention(nn.Module):
         attention_weights = F.softmax(attention_scores, dim=1)
 
         # Finally, the output of the attention layer is calculated as weighted sum of the BiGRU's hidden states
-        # The '*' operator is an element-wise multiplication in Python
-        # Alternatively, mul() can be used
-        # attention_output = (biGRU_outputs * attention_weights).sum(axis=1)
         attention_output = torch.mul(biGRU_outputs, attention_weights).sum(axis=1)
 
         return attention_output, attention_weights
 
-        # OLD
-        # x = biGRU_outputs
-        # u_in = F.tanh(F.add(F.dot(x, self._W), self._b)) if self._bias else F.tanh(F.dot(x, self._W))
-        # a = F.softmax(F.dot(u_in, self._u))
-        # return x[:, -1, :]  # For testing, just pass through/choose the last hidden state for each element of the batch
 
 
 class MultiHeadContextualAttention(nn.Module):
@@ -116,34 +80,38 @@ class MultiHeadContextualAttention(nn.Module):
     ----------
     d_model:
         Length of the input and output vector
-    use_bias:
-        Bool specifying whether a bias should be used to retrieve the hidden representation for
-        the hidden states of the BiGRU (which serve as values)
+    heads:
+        Number of heads to use in the MultiHeadAttention
+    dropout:
+        Dropout ratio to be applied as float. If None, no dropout is applied
+    use_reduced_head_dims:
+        Bool specifying whether the dimensions of the keys, queries, and values should be reduced
+        to avoid large matrices. If true, d_k = d_v = d_q = d_model/h is chosen
+    attention_activation_function:
+        Can be one of ``'softmax'``, ``'sparsemax'``, ``'entmax15'``, ``'entmax_bisect'``. Default is ``softmax``.
     """
 
-    def __init__(self, d_model, heads, dropout=None, use_bias=True,
+    def __init__(self, d_model, heads, dropout=None,
                  use_reduced_head_dims=False, attention_activation_function="softmax"):
         super().__init__()
-        self._use_bias = use_bias
         self._use_reduced_head_dims = use_reduced_head_dims
 
         # Apply the attention scoring function (dot-product) between the values and the query vector u
         # The query needs to be learned
-        # Hence, u is represented as trainable tensor, which has shape (attention_dimension x 1)
+        # Hence, u is represented as trainable tensor, which has shape (d_model x 1)
         u = torch.empty(d_model, 1)
         u = nn.init.xavier_uniform_(u)
         self._query = nn.Parameter(u, requires_grad=True)
 
         if self._use_reduced_head_dims:
-            # Previous version:
             # To avoid to large matrices, reduce the dimensions of the keys, queries, and values
             # Based on the paper "Attention is all you need" d_k = d_v =d_model/h is chosen
             # In this paper: queries and keys have dimension d_k, i.e., d_q = d_k = d_model/h
             d_k = d_v = d_q = d_model // heads
         else:
-            # Current version (=thesis version):
-            # The matrices are not that large anymore, since a convolutional reduction block is introduced
+            # Since a convolutional reduction block is introduced into MB-M, the matrices are not too large any more
             # after the concatenation of the single lead branch feature maps
+            # Hence, using the full dimension for the keys, queries, and values is also an option
             d_k = d_q = d_v = d_model
 
         self._multihead_attention = MultiHeadAttention(d_model=d_model, k=d_k,

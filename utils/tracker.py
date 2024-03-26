@@ -18,9 +18,6 @@ class MetricTracker:
     def __init__(self, keys_iter: list, keys_epoch: list, keys_epoch_class_wise: list, labels: list, writer=None):
         self.writer = writer
         # Create a dataframe containing one row per key (e.g. one per metric and another one for the loss)
-        if 'cpsc_score' in keys_epoch:
-            keys_epoch.remove('cpsc_score')
-            keys_epoch.extend(['cpsc_F1', 'cpsc_Faf', 'cpsc_Fblock', 'cpsc_Fpc', 'cpsc_Fst'])
         self._data_iter = pd.DataFrame(index=keys_iter,
                                        columns=['current', 'sum', 'square_sum', 'counts', 'mean', 'square_avg', 'std'],
                                        dtype=np.float64)
@@ -49,13 +46,6 @@ class MetricTracker:
         for col in self._data_iter.columns:
             self._data_iter[col].values[:] = 0
 
-    def _epoch_update_cpsc(self, values):
-        value_names = ['cpsc_F1', 'cpsc_Faf', 'cpsc_Fblock', 'cpsc_Fpc', 'cpsc_Fst']
-        for idx, value in enumerate(values):
-            if self.writer is not None:
-                self.writer.add_scalar(value_names[idx], value, global_step=self._epoch)
-            self._data_epoch.at[value_names[idx], 'mean'] = value
-
     def iter_update(self, key, value, n=1):
         if self.writer is not None:
             self.writer.add_scalar(key, value)
@@ -65,12 +55,9 @@ class MetricTracker:
         self._data_iter.at[key, 'counts'] += n
 
     def epoch_update(self, key, value):
-        if key == 'cpsc_score':
-            self._epoch_update_cpsc(values=value)
-        else:
-            if self.writer is not None:
-                self.writer.add_scalar(key, value, global_step=self._epoch)
-            self._data_epoch.at[key, 'mean'] = value.item()
+        if self.writer is not None:
+            self.writer.add_scalar(key, value, global_step=self._epoch)
+        self._data_epoch.at[key, 'mean'] = value.item()
 
     # class_wise_epoch_update(met.__name__, met(target=targets, output=outputs, **additional_kwargs), epoch)
     def class_wise_epoch_update(self, key, values):

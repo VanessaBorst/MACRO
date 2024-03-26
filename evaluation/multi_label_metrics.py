@@ -1,5 +1,3 @@
-import csv
-
 import numpy as np
 import pandas as pd
 import torch
@@ -13,6 +11,15 @@ THRESHOLD = 0.5
 
 
 # ----------------------------------- Sklearn Metric -----------------------------------------------
+# For details, see https://scikit-learn.org/stable/modules/classes.html#module-sklearn.metrics
+# Included metrics: F1, Precision, Recall, ROC AUC, Subset Accuracy, Confusion Matrix, Classification Report
+# Short summary for the multi-label case:
+# @param output: dimension=(N,C) => Label indicator array / sparse matrix with estimated targets of a classifier.
+# @param target:  dimension= (N,C) => Label indicator array / sparse matrix containing the ground truth data
+# @param logits: If set to True, the vectors are expected to contain logits/raw scores,
+#                otherwise the vectors are expected to contain Sigmoid output probabilities
+# @param labels: The set of labels to include when average != 'binary', and their order if average is None.
+# @param average: Should be None, 'micro', 'macro', 'weighted', or 'samples'
 
 def _convert_sigmoid_probs_to_prediction(sigmoid_probs, threshold=THRESHOLD):
     return torch.where(sigmoid_probs > threshold, 1, 0)
@@ -24,36 +31,10 @@ def _convert_logits_to_prediction(logits, threshold=THRESHOLD):
     sigmoid_probs = torch.sigmoid(logits)
     return torch.where(sigmoid_probs > threshold, 1, 0)
 
-# 2023-08-10: Checked scikit-learn for API updates
-# All sk functions seem to be working as before -> no changes needed
 
 def _sk_f1(output, target, logits, labels, average):
     """
-    Compute the F1 score, also known as balanced F-score or F-measure.
-    In the multi-class and multi-label case, this is the average of the F1 score of each class with
-    weighting depending on the average parameter.
-
-    The following parameter description applies for the multi-label case
-    :param output: output: dimension=(N,C)
-         Label indicator array / sparse matrix containing the estimated targets as returned by a classifier.
-    :param target: dimension= (N,C)
-        Lbel indicator array / sparse matrix containing the ground truth data
-    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
-    :param labels: The set of labels to include when average != 'binary', and their order if average is None.
-    :param average: Determines the type of averaging performed on the data (if not None).
-        Parameter values useful for this application:
-        None: The scores for each class are returned
-        'micro': Calculate metrics globally by counting the total true positives, false negatives and false positives.
-        'macro': Calculate metrics for each label, and find their unweighted mean.
-                    This does not take label imbalance into account.
-        'weighted': Calculate metrics for each label, and find their average weighted by support
-            (the number of true instances for each label).
-            This alters ‘macro’ to account for label imbalance; can result in F-score that is not between precision & recall
-        'samples': Calculate metrics for each instance, and find their average
-                    (only meaningful for multilabel classification where this differs from accuracy_score)
-
-    :return: float or array of float, shape = [n_unique_labels]
-        -> The F1 score, also known as balanced F-score or F-measure.
+    Compute the F1 score
     """
     with torch.no_grad():
         if not logits:
@@ -67,28 +48,6 @@ def _sk_f1(output, target, logits, labels, average):
 def _sk_precision(output, target, logits, labels, average):
     """
     Compute the precision
-
-    The following parameter description applies for the multi-label case
-    :param output: output: dimension=(N,C)
-         Label indicator array / sparse matrix containing the estimated targets as returned by a classifier.
-    :param target: dimension= (N,C)
-        Label indicator array / sparse matrix containing the ground truth data
-    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
-    :param labels: The set of labels to include when average != 'binary', and their order if average is None.
-    :param average: Determines the type of averaging performed on the data (if not None).
-        Parameter values useful for this application:
-        None: The scores for each class are returned
-        'micro': Calculate metrics globally by counting the total true positives, false negatives and false positives.
-        'macro': Calculate metrics for each label, and find their unweighted mean.
-                    This does not take label imbalance into account.
-        'weighted': Calculate metrics for each label, and find their average weighted by support
-                    (the number of true instances for each label).
-                    This alters ‘macro’ to account for label imbalance; can result in F-score not between precision/recall
-        'samples': Calculate metrics for each instance, and find their average
-                    (only meaningful for multilabel classification where this differs from accuracy_score)
-    :return: float (if average is not None) or array of float of shape (n_unique_labels,)
-                -> Precision of the positive class in binary classification or weighted average of the precision of each
-                    class for the multiclass task.
     """
     with torch.no_grad():
         if not logits:
@@ -102,30 +61,7 @@ def _sk_precision(output, target, logits, labels, average):
 def _sk_recall(output, target, logits, labels, average):
     """
     Compute the recall
-
-    The following parameter description applies for the multi-label case
-    :param output: output: dimension=(N,C)
-         Label indicator array / sparse matrix containing the estimated targets as returned by a classifier.
-    :param target: dimension= (N,C)
-        Lbel indicator array / sparse matrix containing the ground truth data
-    :param logits:  If set to True, the vectors are expected to contain logits/raw scores,
-                    otherwise the vectors are expected to contain Sigmoid output probabilities
-    :param labels: The set of labels to include when average != 'binary', and their order if average is None.
-    :param average: Determines the type of averaging performed on the data (if not None).
-        Parameter values useful for this application:
-        None: The scores for each class are returned
-        'micro': Calculate metrics globally by counting the total true positives, false negatives and false positives.
-        'macro': Calculate metrics for each label, and find their unweighted mean.
-                    This does not take label imbalance into account.
-        'weighted': Calculate metrics for each label, and find their average weighted by support
-                    (the number of true instances for each label).
-                    This alters ‘macro’ to account for label imbalance; can result in F-score not between precision/recall
-        'samples': Calculate metrics for each instance, and find their average
-                    (only meaningful for multilabel classification where this differs from accuracy_score)
-    :return: float (if average is not None) or array of float of shape (n_unique_labels,)
-                -> Recall of the positive class in binary classification or weighted average of the recall of each class
-                        for the multiclass task.
-        """
+    """
     with torch.no_grad():
         if not logits:
             pred = _convert_sigmoid_probs_to_prediction(output)
@@ -137,15 +73,7 @@ def _sk_recall(output, target, logits, labels, average):
 
 def _sk_roc_auc(output, target, logits, labels, average):
     """
-    The following parameter description applies for the multilabel case
-    :param output: dimension=(N,C)
-        Per entry, the (log) probability estimates of each class should be contained
-    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
-    :param target: dimension= (N,C)
-        Label indicator array / sparse matrix containing the ground truth data
-    :param labels: Needed for multiclass targets. List of labels that index the classes in output
-    :param average: In the multilabel-case, either ‘macro’, 'micro', ‘weighted’, 'samples' or None
-    :return: Area Under the Receiver Operating Characteristic Curve (ROC AUC) for the multilabel case
+    Compute the ROC AUC score
     """
     with torch.no_grad():
         # Predictions should be passed as probabilities, not as one-hot-vector!
@@ -160,15 +88,6 @@ def sk_subset_accuracy(output, target, logits):
     Calculates the (TOP-1) accuracy for the multi-label  case
     For the multi-label case, this function computes subset accuracy:
     the set of labels predicted for a sample must exactly match the corresponding set of labels in y_true
-
-    Parameters
-    ----------
-    :param output: dimension=(N,C)
-        Label indicator array / sparse matrix as returned by the classifier
-    :param target: dimension= (N,C)
-        Label indicator array / sparse matrix containing the Ground Truth
-    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
-
     """
     with torch.no_grad():
         if not logits:
@@ -278,22 +197,15 @@ def class_wise_sk_roc_auc(output, target, logits, labels):
     """See documentation for _roc_auc """
     return _sk_roc_auc(output, target, logits, labels, average=None)
 
-
-# A Normal confusion matrix does not make sense in the multi-label context, but a label-wise one can be computed
 def class_wise_confusion_matrices_multi_label_sk(output, target, logits, labels):
     """
+    Compute class-wise (default) multilabel confusion matrix to evaluate the accuracy of a classification,
+    and output confusion matrices for each class or sample.
+
     Creates a 2x2 confusion matrix per class contained in labels
     CM(0,0) -> TN, CM(1,0) -> FN, CM(0,1) -> FP, CM(1,1) -> TP
     The name of axis 1 is set to the respective label
-
-    :param output: dimension=(N,C)
-        Label indicator array / sparse matrix } of shape (n_samples, n_classes)  as returned by the classifier
-    :param target: dimension= (N,C)
-        Label indicator array / sparse matrix } of shape (n_samples, n_classes) containing the Ground Truth
-    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
-    :param labels: List of integers representing all classes that can occur
-    :return: List of dataframes
-
+    :@return: List of dataframes
     """
     with torch.no_grad():
         if not logits:
@@ -310,6 +222,11 @@ def class_wise_confusion_matrices_multi_label_sk(output, target, logits, labels)
 
 def sk_classification_summary(output, target, logits, labels, output_dict,
                               target_names=["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]):
+    """
+    Compute the classification report
+    @param output_dict: If True, return output as dict.
+    @param target_names: Optional display names matching the labels (same order).
+    """
     with torch.no_grad():
         if not logits:
             pred = _convert_sigmoid_probs_to_prediction(output)
@@ -320,189 +237,44 @@ def sk_classification_summary(output, target, logits, labels, output_dict,
                                      output_dict=output_dict)
 
 
-# ----------------------------------- Further Metrics -----------------------------------------------
-
-
-def _convert_multi_label_probs_to_single_prediction(sigmoid_prob_output):
-    return torch.argmax(sigmoid_prob_output, dim=1)
-
-
-def _convert_multi_label_logits_to_single_prediction(logits_output):
-    # Convert the logits to probabilities and take the one with the highest one as final predicti
-    softmax_probs = torch.nn.functional.softmax(logits_output, dim=1)
-    # Should be the same as directly taking the maximum of raw logits
-    if not (torch.argmax(softmax_probs, dim=1) == torch.argmax(logits_output, dim=1)).all():
-        # assert (torch.argmax(softmax_probs, dim=1) == torch.argmax(logits_output, dim=1)).all()
-        with open('/home/vab30xh/projects/2023-macro-paper-3.10/savedVM/models/BaselineModel_Preprocess_CV/temp_error.txt', 'a') as f:
-            f.write('Hi')
-            f.write('torch.argmax(softmax_probs, dim=1) == torch.argmax(logits_output, dim=1)).all() failed')
-            f.write('Softmax Probs: ' + str(softmax_probs) + " -> argmax: " + str(torch.argmax(softmax_probs, dim=1)))
-            f.write('Logits Output: ' + str(logits_output) + " -> argmax: " + str(torch.argmax(logits_output, dim=1)))
-
-            list_true_false = (torch.argmax(softmax_probs, dim=1) == torch.argmax(logits_output, dim=1))
-            false_idx = [i for i, x in enumerate(list_true_false) if not x]
-            f.write('False for: ' + str(false_idx))
-            for false in false_idx:
-                f.write('Softmax Probs: ' + str(softmax_probs[false]) + "Logits Output: " + str(logits_output[false]))
-
-            f.write('' + str ((torch.argmax(softmax_probs, dim=1) == torch.argmax(logits_output, dim=1)).all()))
-    # In very seldom cases the following is not true, probably because of numerical instability:
-    # torch.sigmoid(torch.Tensor([7.4171776772])) == torch.sigmoid(torch.Tensor([7.4171915054,]))
-    # even though the first logit is smaller!
-    # assert (torch.argmax(softmax_probs, dim=1) == torch.argmax(torch.sigmoid(logits_output), dim=1)).all()
-    return torch.argmax(softmax_probs, dim=1)
-
-
-def cpsc_score(output, target, logits):
-    '''
-    cspc2018_challenge score
-    Written by:  Xingyao Wang, Feifei Liu, Chengyu Liu
-                 School of Instrument Science and Engineering
-                 Southeast University, China
-                 chengyu@seu.edu.cns
-    Adapted by: Vanessa Borst
-    Output and Target are no longer csv file paths but arrays of size ()
-    '''
-
-    '''
-    Score the prediction answers by comparing answers.csv and REFERENCE.csv in validation_set folder,
-    The scoring uses a F1 measure, which is an average of the nine F1 values from each classification
-    type. The specific score rules will be found on http://www.icbeb.org/Challenge.html.
-    Matrix A follows the format as:
-                                         Predicted
-                          Normal  AF  I-AVB  LBBB  RBBB  PAC  PVC  STD  STE
-                   Normal  N11   N12   N13   N14   N15   N16  N17  N18  N19
-                   AF      N21   N22   N23   N24   N25   N26  N27  N28  N29
-                   I-AVB   N31   N32   N33   N34   N35   N36  N37  N38  N39
-                   LBBB    N41   N42   N43   N44   N45   N46  N47  N48  N49
-    Reference      RBBB    N51   N52   N53   N54   N55   N56  N57  N58  N59
-                   PAC     N61   N62   N63   N64   N65   N66  N67  N68  N69
-                   PVC     N71   N72   N73   N74   N75   N76  N77  N78  N79
-                   STD     N81   N82   N83   N84   N85   N86  N87  N88  N89
-                   STE     N91   N92   N93   N94   N95   N96  N97  N98  N99
-                   
-    For each of the nine types, F1 is defined as:
-    Normal: F11=2*N11/(N1x+Nx1) AF: F12=2*N22/(N2x+Nx2) I-AVB: F13=2*N33/(N3x+Nx3) LBBB: F14=2*N44/(N4x+Nx4) RBBB: F15=2*N55/(N5x+Nx5)
-    PAC: F16=2*N66/(N6x+Nx6)    PVC: F17=2*N77/(N7x+Nx7)    STD: F18=2*N88/(N8x+Nx8)    STE: F19=2*N99/(N9x+Nx9)
-
-    The final challenge score is defined as:
-    F1 = (F11+F12+F13+F14+F15+F16+F17+F18+F19)/9
-
-    In addition, we also calculate the F1 measures for each of the four sub-abnormal types:
-                AF: Faf=2*N22/(N2x+Nx2)                         Block: Fblock=2*(N33+N44+N55)/(N3x+Nx3+N4x+Nx4+N5x+Nx5)
-    Premature contraction: Fpc=2*(N66+N77)/(N6x+Nx6+N7x+Nx7)    ST-segment change: Fst=2*(N88+N99)/(N8x+Nx8+N9x+Nx9)
-                   
-    UDPATE:
-                                             Predicted
-                            IAVB  AF    LBBB  PAC   RBBB  SNR  STD  STE  VEB
-                   IAVB     N11   N12   N13   N14   N15   N16  N17  N18  N19
-                   AF       N21   N22   N23   N24   N25   N26  N27  N28  N29
-                   LBBB     N31   N32   N33   N34   N35   N36  N37  N38  N39
-                   PAC      N41   N42   N43   N44   N45   N46  N47  N48  N49
-    Reference      RBBB     N51   N52   N53   N54   N55   N56  N57  N58  N59
-                   SNR      N61   N62   N63   N64   N65   N66  N67  N68  N69
-                   STD      N71   N72   N73   N74   N75   N76  N77  N78  N79
-                   STE      N81   N82   N83   N84   N85   N86  N87  N88  N89
-                   VEB      N91   N92   N93   N94   N95   N96  N97  N98  N99
-
-   
-
-    The static of predicted answers and the final score are saved to score.txt in local path.
-    '''
-    with torch.no_grad():
-        if not logits:
-            # ndarray of size (sample_num, )
-            answers = _convert_multi_label_probs_to_single_prediction(output).numpy()
-        else:
-            # ndarray of size (sample_num, )
-            answers = _convert_multi_label_logits_to_single_prediction(output).numpy()
-
-        # list of sample_num ndarrays of size (1, ) or (2, ) or (3,)
-        reference = [np.nonzero(sample_vec == 1)[0] for sample_vec in target.numpy()]
-
-        assert len(answers) == len(reference), "Answers and References should have equal length"
-
-        A = np.zeros((9, 9), dtype=float)
-
-        for sample_idx in range(0, len(answers)):
-            pred_class = answers[sample_idx]
-            reference_classes = reference[sample_idx]
-            if pred_class in reference_classes:
-                A[pred_class][pred_class] += 1
-            else:
-                A[reference_classes[0]][pred_class] += 1
-
-        F11 = 2 * A[0][0] / (np.sum(A[0, :]) + np.sum(A[:, 0]))
-        F12 = 2 * A[1][1] / (np.sum(A[1, :]) + np.sum(A[:, 1]))
-        F13 = 2 * A[2][2] / (np.sum(A[2, :]) + np.sum(A[:, 2]))
-        F14 = 2 * A[3][3] / (np.sum(A[3, :]) + np.sum(A[:, 3]))
-        F15 = 2 * A[4][4] / (np.sum(A[4, :]) + np.sum(A[:, 4]))
-        F16 = 2 * A[5][5] / (np.sum(A[5, :]) + np.sum(A[:, 5]))
-        F17 = 2 * A[6][6] / (np.sum(A[6, :]) + np.sum(A[:, 6]))
-        F18 = 2 * A[7][7] / (np.sum(A[7, :]) + np.sum(A[:, 7]))
-        F19 = 2 * A[8][8] / (np.sum(A[8, :]) + np.sum(A[:, 8]))
-
-        F1 = (F11 + F12 + F13 + F14 + F15 + F16 + F17 + F18 + F19) / 9
-
-        # Following is calculating scores for 4 types: AF, Block, Premature contraction, ST-segment change.
-
-        # Class AF -> 164889003 -> Index 1
-        Faf = 2 * A[1][1] / (np.sum(A[1, :]) + np.sum(A[:, 1]))
-        """                    
-        Block: Fblock=2*(N33+N44+N55)/(N3x+Nx3+N4x+Nx4+N5x+Nx5)
-        Premature contraction: Fpc=2*(N66+N77)/(N6x+Nx6+N7x+Nx7)    
-        ST-segment change: Fst=2*(N88+N99)/(N8x+Nx8+N9x+Nx9)
-        """
-        # Block: Classes I-AVB, LBBB, RBBB -> 270492004, 164909002, 59118001 -> Indices 0, 2, 4
-        Fblock = 2 * (A[0][0] + A[2][2] + A[4][4]) / \
-                 (np.sum(A[0, :]) + np.sum(A[:, 0]) + np.sum(A[2, :]) + np.sum(A[:, 2]) + np.sum(A[4, :]) + np.sum(
-                     A[:, 4]))
-
-        # # Classes PAC, PVC -> 284470004, 164884008 -> Indices 3, 8
-        Fpc = 2 * (A[3][3] + A[8][8]) / (np.sum(A[3, :]) + np.sum(A[:, 3]) + np.sum(A[8, :]) + np.sum(A[:, 8]))
-
-        # # Classes STD, STE -> 429622005, 164931005 -> Indices 6, 7
-        Fst = 2 * (A[6][6] + A[7][7]) / (np.sum(A[6:8, :]) + np.sum(A[:, 6:8]))
-        test = 2 * (A[6][6] + A[7][7]) / (np.sum(A[6, :]) + np.sum(A[:, 6]) + np.sum(A[7, :]) + np.sum(A[:, 7]))
-        assert Fst == test
-
-        # print(A)
-        # print('Total Record Number: ', np.sum(A))
-        return F1, Faf, Fblock, Fpc, Fst
-
-
 # ----------------------------------- TORCHMETRICS -----------------------------------------------
+# For details, see https://lightning.ai/docs/torchmetrics/stable/
+# Included metrics: Precision, Recall, ROC AUC, ROC, F1, Accuracy
+# Short summary for the multi-label case:
+# @param output: dimension=(N,C) => : An int tensor or float tensor,
+# @param target:  dimension= (N,C) => An int tensor containing the ground truth data
+# @param logits: If set to True, the vectors are expected to contain logits/raw scores,
+#                otherwise the vectors are expected to contain Sigmoid output probabilities
+# @param labels: The set of labels, used for passing the num_classes parameter to TorchMetrics
+# @param average: Should be None, 'micro', 'macro', or 'weighted' (NOT 'samples');
+#                   'samples' is not supported in newer lib versions, new param multidim_average was introduced for this
+# NOTE:
+# The default Threshold for transforming probability or logit predictions to binary (0,1) predictions is 0.5,
+# and corresponds to input being probabilities.
 
-# 2023-08-10: Checked torchmetrics for API updates
-# The torchmetrics functions don't seem to be working as before -> Changes needed and applied
-
-# Not used in the current version
-def _inverse_sigmoid(x):
-    # torch.log is the natural logarithm
-    return torch.log(x / (1 - x))
 
  
 def _torch_precision(output, target, logits, labels, average):
+    """
+    Compute the precision
+    """
     with torch.no_grad():
-        # 'samples' is not supported in newer lib versions, new param multidim_average was introduced for this
         assert average in ['macro', 'micro', 'weighted', None], \
             "Average must be one of 'macro', 'micro', 'weighted', None"
 
-        # The default Threshold for transforming probability or logit predictions to binary (0,1) predictions,
-        # is 0.5 and corresponds to input being probabilities.
         pred = output if not logits else torch.sigmoid(output)
         precision = Precision(task='multilabel', num_classes=len(labels), average=average, threshold=THRESHOLD)
         return precision(pred, target)
 
 
 def _torch_recall(output, target, logits, labels, average):
+    """
+    Compute the recall
+    """
     with torch.no_grad():
-        # 'samples' is not supported in newer lib versions, new param multidim_average was introduced for this
         assert average in ['macro', 'micro', 'weighted', None], \
             "Average must be one of 'macro', 'micro', 'weighted', None"
 
-        # The default Threshold for transforming probability or logit predictions to binary (0,1) predictions,
-        # is 0.5 and corresponds to input being probabilities.
         pred = output if not logits else torch.sigmoid(output)
         recall = Recall(task='multilabel', num_classes=len(labels), average=average, threshold=THRESHOLD)
         return recall(pred, target)
@@ -510,71 +282,48 @@ def _torch_recall(output, target, logits, labels, average):
 
 def _torch_roc_auc(output, target, logits, labels, average):
     """
-    The following parameter description applies for the multilabel case
-    For non-binary input, if the preds and target tensor have the same size the input will be interpretated as
-    multilabel and if preds have one dimension more than the target tensor the input will be interpretated as multiclass.
-    :param output: (N, C, ...) (multiclass) tensor with probabilities, where C is the number of classes.
-    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
-    :param target: (N, ...) or (N, C, ...) with integer labels
-    :param labels: List of labels that index the classes in output
-    :param average: Either ‘macro’, ‘weighted’, or None
-    :return: Area Under the Receiver Operating Characteristic Curve (ROC AUC) for the multilabel case
+    Compute the Area Under the Receiver Operating Characteristic Curve (ROC AUC) for the multilabel case
     """
     with torch.no_grad():
 
-        assert average in ['macro', 'weighted', None], "Average must be one of 'macro', 'weighted', None"
+        assert average in ['macro', 'micro', 'weighted', None], \
+            "Average must be one of 'macro', 'micro', 'weighted', None"
 
         # In newer lib versions, pred should be a tensor of shape (N, C, ...) with probabilities, where C is the number
         # of classes, or logits  (logits are expected if preds has values outside [0,1] range)
-        # Here, we stick to calculating the probs before as in the original thesis code
+        # Here, we stick to calculating the probs before
         pred = output if not logits else torch.sigmoid(output)
 
-        # pos_label is no longer a valid argument in newer torchmetrics versions
-        # Strange bug: in multilabel settings, num_labels is used instead of num_classes
-        auroc = AUROC(task='multilabel', num_classes=len(labels),num_labels=len(labels), average=average)
+        # In multilabel settings, num_labels is used instead of num_classes for the AUROC metric
+        auroc = AUROC(task='multilabel', num_labels=len(labels), average=average)
         return auroc(pred, target)
 
 
 def torch_roc(output, target, logits, labels):
     """
-    The following parameter description applies for the multilabel case
-    :param output: (N, C, ...) (multiclass/multilabel) tensor with probabilities, where C is the number of classes.
-    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
-    :param target: (N, ...) or (N, C, ...) with integer labels
-    :param labels: List of labels that index the classes in output
-    :return: Receiver Operating Characteristic Curve (ROC) for the multilabel case
+    Compute the Receiver Operating Characteristic (ROC).
     """
     with torch.no_grad():
 
         # In newer lib versions, pred should be a tensor of shape (N, C, ...) with probabilities, where C is the number
         # of classes, or logits  (logits are expected if preds has values outside [0,1] range)
-        # Here, we stick to calculating the probs before as in the original thesis code
+        # Here, we stick to calculating the probs before
         pred = output if not logits else torch.sigmoid(output)
 
-        # pos_label is no longer a valid argument in newer torchmetrics versions
-        # Strange bug: in multilabel settings, num_labels is used instead of num_classes
-        roc = ROC(task='multilabel', num_classes=len(labels), num_labels=len(labels))
+        # In multilabel settings, num_labels is used instead of num_classes for the ROC metric
+        roc = ROC(task='multilabel',  num_labels=len(labels))
         # returns a tuple (fpr, tpr, thresholds)
         return roc(pred, target)
 
 
 def _torch_f1(output, target, logits, labels, average):
     """
-    The following parameter description applies for the multilabel case
-    :param output: (N, C, ...), accepts logits or probabilities from a model output or integer class values
-    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
-    :param target: dimension= (N) (long tensor)
-    :param labels: Needed for multiclass targets. List of labels that index the classes in output
-    :param average: Either ‘macro’,´micro', ‘weighted’, or None
-    :return: F1 score for the multilabel case
+    Compute F-1 score.
     """
     with torch.no_grad():
-        # 'samples' is not supported in newer lib versions, new param multidim_average was introduced for this
         assert average in ['macro', 'micro', 'weighted', None], \
             "Average must be one of 'macro', 'micro', 'weighted', None"
 
-        # The default Threshold for transforming probability or logit predictions to binary (0,1) predictions,
-        # is 0.5 and corresponds to input being probabilities.
         pred = output if not logits else torch.sigmoid(output)
         f1 = F1Score(task='multilabel', num_classes=len(labels), average=average, threshold=THRESHOLD)
         return f1(pred, target)
@@ -582,24 +331,15 @@ def _torch_f1(output, target, logits, labels, average):
 
 def _torch_accuracy(output, target, logits, labels, average):
     """
-    The following parameter description applies for the multilabel case
-    :param output: (N, C, ...), accepts logits or probabilities from a model output or integer class values
-    :param logits:  If set to True, the vectors are expected to contain logits/raw scores
-    :param target: dimension= (N) (long tensor)
-    :param labels: Needed for multiclass targets. List of labels that index the classes in output
-    :param average: Either ‘macro’,´micro', ‘weighted’ or None
-    :return: F1 score for the multilabel case
+    Compute the accuracy
     """
     with torch.no_grad():
 
-        # 'samples' is not supported in newer lib versions, new param multidim_average was introduced for this
         assert average in ['macro', 'micro', 'weighted', None], \
             "Average must be one of 'macro', 'micro', 'weighted', None"
 
-        # The default Threshold for transforming probability or logit predictions to binary (0,1) predictions,
-        # is 0.5 and corresponds to input being probabilities.
         pred = output if not logits else torch.sigmoid(output)
-        # Strange bug: in multilabel settings, num_labels is used instead of num_classes
+        # In multilabel settings, num_labels is used instead of num_classes for the Accuracy metric
         accuracy = Accuracy(task='multilabel', num_labels=len(labels), average=average, threshold=THRESHOLD)
         return accuracy(pred, target)
 

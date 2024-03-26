@@ -119,8 +119,7 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
     # in "metrics_epoch" containing the macro and the weighted average (otherwise results can not be merged)
     if config['arch']['args']['multi_label_training']:
         metrics_iter = [getattr(module_metric, met) for met in ['sk_subset_accuracy']]
-        metrics_epoch = [getattr(module_metric, met) for met in ['cpsc_score',
-                                                                 'weighted_torch_roc_auc',
+        metrics_epoch = [getattr(module_metric, met) for met in ['weighted_torch_roc_auc',
                                                                  'weighted_torch_accuracy',
                                                                  'macro_torch_roc_auc',
                                                                  'macro_torch_accuracy']]
@@ -128,8 +127,7 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
                                                                             'class_wise_torch_accuracy']]
     else:
         metrics_iter = [getattr(module_metric, met) for met in ['sk_accuracy']]
-        metrics_epoch = [getattr(module_metric, met) for met in ['cpsc_score',
-                                                                 'weighted_torch_roc_auc',
+        metrics_epoch = [getattr(module_metric, met) for met in ['weighted_torch_roc_auc',
                                                                  'weighted_torch_accuracy',
                                                                  'macro_torch_roc_auc',
                                                                  'macro_torch_accuracy']]
@@ -293,12 +291,7 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
             additional_kwargs = {
                 param_name: _param_dict[param_name] for param_name in additional_args
             }
-            if not multi_label_training and met.__name__ == 'cpsc_score':
-                # Consider all labels for evaluation, even in the single label case
-                metric_tracker.epoch_update(met.__name__, met(target=det_targets_all_labels, output=det_outputs,
-                                                              **additional_kwargs))
-            else:
-                metric_tracker.epoch_update(met.__name__, met(target=det_targets, output=det_outputs,
+            metric_tracker.epoch_update(met.__name__, met(target=det_targets, output=det_outputs,
                                                               **additional_kwargs))
 
         # This holds for the class-wise, epoch-based metrics as well

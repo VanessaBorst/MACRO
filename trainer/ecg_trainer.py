@@ -129,36 +129,6 @@ class ECGTrainer(BaseTrainer):
         # Moreover, set the epoch number for the MetricTracker
         self.train_metrics.epoch = epoch
 
-        if self.try_run:
-            # Create a figure for the average gradient flows of the epoch
-            params_with_grad = [name for name, param in self.model.named_parameters()
-                                if param.requires_grad and ("bias" not in name)]
-
-            fig_gradient_flow_lines, ax_gradient_lines = plt.subplots(figsize=(8, 8))
-            ax_gradient_lines.hlines(0, 0, len(params_with_grad) + 1, linewidth=1, color="k")
-            ax_gradient_lines.set_xticks(range(0, len(params_with_grad), 1))
-            ax_gradient_lines.set_xticklabels(params_with_grad, rotation="vertical")
-            ax_gradient_lines.set_xlim(xmin=0, xmax=len(params_with_grad))
-            ax_gradient_lines.set_xlabel("Layers")
-            ax_gradient_lines.set_ylabel("Average Gradient")
-            ax_gradient_lines.set_title("Gradient Flow")
-            ax_gradient_lines.grid(True)
-
-            fig_gradient_flow_bars, ax_gradient_bars = plt.subplots(figsize=(8, 8))
-            ax_gradient_bars.hlines(0, 0, len(params_with_grad) + 1, lw=2, color="k")
-            ax_gradient_bars.set_xticks(range(0, len(params_with_grad), 1))
-            ax_gradient_bars.set_xticklabels(params_with_grad, rotation="vertical")
-            ax_gradient_bars.set_xlim(xmin=0, xmax=len(params_with_grad))
-            ax_gradient_bars.set_ylim(bottom=-0.001, top=0.02)  # zoom in on the lower gradient regions
-            ax_gradient_bars.set_xlabel("Layers")
-            ax_gradient_bars.set_ylabel("Average Gradient")
-            ax_gradient_bars.set_title("Gradient Flow")
-            ax_gradient_bars.grid(True)
-            ax_gradient_bars.legend([Line2D([0], [0], color="c", lw=4),
-                                     Line2D([0], [0], color="b", lw=4),
-                                     Line2D([0], [0], color="k", lw=4)],
-                                    ['max-gradient', 'mean-gradient', 'zero-gradient'])
-
         start = time.time()
 
         if self.profiler_active:
@@ -204,10 +174,6 @@ class ECGTrainer(BaseTrainer):
                     else:
                         # single-branch network
                         output, attention_weights = output
-                        if self.try_run and self.writer is not None:
-                            self._send_attention_weights_to_writer(
-                                attention_weights=attention_weights.detach().cpu().numpy()[:, :, 0],
-                                batch_idx=batch_idx, epoch=epoch, str_mode="training")
 
                 # Detach tensors needed for further tracing and metrics calculation to remove them from the graph
                 detached_output = output.detach().cpu()
@@ -244,12 +210,6 @@ class ECGTrainer(BaseTrainer):
 
                 loss.backward()
 
-                if self.try_run:
-                    # Add the average gradient of the current batch to the respective figure to
-                    # record the average gradients per layer in every training iteration
-                    plot_grad_flow_lines(named_parameters=self.model.named_parameters(), ax=ax_gradient_lines)
-                    plot_grad_flow_bars(named_parameters=self.model.named_parameters(), ax=ax_gradient_bars)
-
                 self.optimizer.step()
                 if self.writer is not None:
                     self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
@@ -270,17 +230,6 @@ class ECGTrainer(BaseTrainer):
 
                 if batch_idx == self.len_epoch:
                     break
-
-        if self.try_run and self.writer is not None:
-            # At the end of the epoch, send the gradient flows of the current epoch to the TensorboardWriter
-            fig_gradient_flow_lines.tight_layout()
-            fig_gradient_flow_bars.tight_layout()
-            self.writer.add_figure("Gradient flow as lines", fig_gradient_flow_lines, global_step=epoch)
-            self.writer.add_figure("Gradient flow as bars", fig_gradient_flow_bars, global_step=epoch)
-            fig_gradient_flow_lines.clear()
-            fig_gradient_flow_bars.clear()
-            plt.close(fig_gradient_flow_lines)
-            plt.close(fig_gradient_flow_bars)
 
         # At the end of each epoch, explicitly handle the tracking of metrics and confusion matrices by means of
         # the SummaryWriter/TensorboardWriter, but only each epoch_log_step steps
@@ -390,10 +339,6 @@ class ECGTrainer(BaseTrainer):
                     else:
                         # single-branch network
                         output, attention_weights = output
-                        if self.try_run and self.writer is not None:
-                            self._send_attention_weights_to_writer(
-                                attention_weights=attention_weights.detach().cpu().numpy()[:, :, 0],
-                                batch_idx=batch_idx, epoch=epoch, str_mode="validation")
 
                 # Detach tensors needed for further tracing and metrics calculation to remove them from the graph
                 detached_output = output.detach().cpu()
@@ -448,12 +393,7 @@ class ECGTrainer(BaseTrainer):
                                                            outputs=outputs_list, targets=targets_list,
                                                            targets_all_labels=targets_all_labels_list, mode='valid',
                                                            track_cms=False)
-        # track_cms=  (epoch == 1 or epoch % self.epoch_log_step_valid == 0))
 
-        if self.try_run and self.writer is not None:
-            # Add histogram of model parameters to the tensorboard
-            for name, p in self.model.named_parameters():
-                self.writer.add_histogram(name, p, bins='auto')
 
         # For validation, the metrics are contained each epoch
         valid_log = self.valid_metrics.result(include_epoch_metrics=True)
@@ -521,12 +461,7 @@ class ECGTrainer(BaseTrainer):
             additional_kwargs = {
                 param_name: self._param_dict[param_name] for param_name in additional_args
             }
-            if not self.multi_label_training and met.__name__ == 'cpsc_score':
-                # Consider all labels for evaluation, even in the single label case
-                metric_tracker.epoch_update(met.__name__, met(target=det_targets_all_labels, output=det_outputs,
-                                                              **additional_kwargs))
-            else:
-                metric_tracker.epoch_update(met.__name__, met(target=det_targets, output=det_outputs,
+            metric_tracker.epoch_update(met.__name__, met(target=det_targets, output=det_outputs,
                                                               **additional_kwargs))
 
         # This holds for the class-wise, epoch-based metrics as well
@@ -542,12 +477,6 @@ class ECGTrainer(BaseTrainer):
                                                                      **additional_kwargs))
 
         # ------------------- Predicted Scores and Classes -------------------
-        if self.try_run and self.writer is not None:
-            # Plot heatmaps of the predicted scores for each training/validation sample to verify if they change
-            self._send_pred_scores_to_writer(epoch, det_outputs.numpy(), mode)
-            # Plot heatmaps of the predicted classes for easier interpretability as well
-            self._send_pred_classes_to_writer(epoch, det_outputs, mode)
-
         # Create a summary for each call, dump the dict and return the string
         summary_str = self._create_report_summary(det_outputs=det_outputs, det_targets=det_targets, epoch=epoch)
         return summary_str
@@ -604,66 +533,7 @@ class ECGTrainer(BaseTrainer):
 
         return "Summary Report for Epoch " + str(epoch) + ":\n" + pd.DataFrame(summary_dict).to_string()
 
-    def _send_attention_weights_to_writer(self, attention_weights, batch_idx, epoch, str_mode):
-        fig_attention_weights, attention_ax = plt.subplots(figsize=(8, 8))
-        sns.heatmap(data=attention_weights, ax=attention_ax)
-        self.writer.add_figure("Attention weights for " + str(str_mode) + " batch " + str(batch_idx),
-                               fig_attention_weights, global_step=epoch)
-        fig_attention_weights.clear()
-        plt.close(fig_attention_weights)
 
-    def _send_pred_scores_to_writer(self, epoch, det_outputs, str_mode):
-        """
-        :param epoch: Current epoch
-        :param outputs: All outputs of the current train/validation session
-        :param str_mode: Should either be 'train' or 'valid'
-        :return:
-        """
-        # Create the figure
-        fig_output_scores, ax = plt.subplots(figsize=(10, 20))
-        sns.heatmap(data=det_outputs, ax=ax)
-        ax.set_xlabel("Class ID")
-        ax.set_ylabel(str(str_mode).capitalize() + " Sample ID")
-        self.writer.add_figure("Predicted output scores per " + str(str_mode).lower() + " sample",
-                               fig_output_scores, global_step=epoch)
-        fig_output_scores.clear()
-        plt.close(fig_output_scores)
-
-    def _send_pred_classes_to_writer(self, epoch, det_outputs, str_mode):
-        """
-        :param epoch: Current epoch
-        :param outputs: All outputs of the current train/validation session
-        :param str_mode: Should either be 'train' or 'valid'
-        :return:
-        """
-        if self.multi_label_training:
-            if self._param_dict['logits']:
-                sigmoid_probs = torch.sigmoid(det_outputs)
-                classes = torch.where(sigmoid_probs > THRESHOLD, 1, 0)
-            else:
-                classes = torch.where(det_outputs > THRESHOLD, 1, 0)
-        else:
-            # Use the argmax (doesn't matter if the outputs are probs or logits)
-            pred_classes = torch.argmax(det_outputs, dim=1)
-            classes = torch.nn.functional.one_hot(pred_classes, len(self._class_labels))
-
-        # Create the figure
-        fig_output_classes, ax = plt.subplots(figsize=(10, 20))
-        # Define the colors
-        colors = ["lightgray", "gray"]
-        cmap = LinearSegmentedColormap.from_list('Custom', colors, len(colors))
-        # Classes should be one-hot like [[1, 0, 0, 0, 0], [0, 1, 1, 0, 0]]
-        sns.heatmap(data=classes.detach().numpy(), cmap=cmap, ax=ax)
-        # Set the Colorbar labels
-        colorbar = ax.collections[0].colorbar
-        colorbar.set_ticks([0.25, 0.75])
-        colorbar.set_ticklabels(['0', '1'])
-        ax.set_xlabel("Class ID")
-        ax.set_ylabel(str(str_mode).capitalize() + " Sample ID")
-        self.writer.add_figure("Predicted output class(es) per " + str(str_mode).lower() + " sample",
-                               ax.get_figure(), global_step=epoch)
-        fig_output_classes.clear()
-        plt.close(fig_output_classes)
 
     def _progress(self, batch_idx):
         base = '[{}/{} ({:.0f}%)]'
