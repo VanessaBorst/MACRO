@@ -63,7 +63,7 @@ def _parse_and_downsample_record(src_path, file, target_path, sampling, orig_Hz=
         # delta_t between two timestamps: 2ms for 500 Hz
         # For sampling="20ms" + 500Hz:  20/2=10 values are merged   -> 6000/10= 600 Samples for 12 sec   -> 50 Hz
         # For sampling="4ms" + 500Hz:   4/2=2 values are merged     -> 600/2= 3000 Samples for 12 sec    -> 250 Hz
-        df = df.resample(sampling).mean()           # Robert: df = df.resample(f"{sampling}ms").mean()
+        df = df.resample(sampling).mean()
         df.index = np.arange(0, df.shape[0])  # return to numbers as row index (0-#samples)
 
     pk.dump((df, meta), open(f"{target_path}/{file}.pk", "wb"))
@@ -139,14 +139,14 @@ def clean_meta(path):
         ==> The method only operates on the meta information and keeps the actual time series data unchanged
     """
     # Read in the REFERENCES.csv provided by the official CPSC
-    cpsc_labels = pd.read_csv("info/csv/REFERENCE_cpsc.csv").set_index("Recording")
+    cpsc_labels = pd.read_csv("preprocessing/info/REFERENCE_cpsc.csv").set_index("Recording")
 
     # Get the mapping between the classes and push them in a dict
-    mapping_df= pd.read_csv("info/csv/mapping_cpsc_CinC.csv").drop(["type","abbreviation_cpsc","abbreviation_wfdb"], axis=1)
+    mapping_df= pd.read_csv("preprocessing/info/mapping_cpsc_CinC.csv").drop(["type", "abbreviation_cpsc", "abbreviation_wfdb"], axis=1)
     mapping_dict = mapping_df.set_index('id_cpsc')['id_wfdb'].to_dict()
 
     # Reads in the encoding csv provided by CinC and converts the snomed CT code column to the row index
-    cinc_classes = pd.read_csv("info/csv/dx_classes_CinC.csv").set_index("SNOMED CT Code")
+    cinc_classes = pd.read_csv("preprocessing/info/dx_classes_CinC.csv").set_index("SNOMED CT Code")
     cinc_classes.index = cinc_classes.index.map(str)
 
     # Creates an empty dataframe with one column per class/CT code
@@ -187,7 +187,7 @@ def clean_meta(path):
     values = metas.columns.to_list()
     own_wfdb_encoding = bidict(dict(zip(keys, values)))
     pd.DataFrame.from_dict(data=own_wfdb_encoding, orient='index', columns=['label']).reset_index(level=0).\
-        to_csv('info/csv/own_encoding_CinC.csv', index=False)
+        to_csv('preprocessing/info/own_encoding_CinC.csv', index=False)
     metas.columns = list(range(len(metas.columns)))
 
     # Iterate through the records (one row in metas per record) and update its meta information

@@ -65,7 +65,6 @@
         "monitor": "max val_macro_sk_f1",
         "early_stop": 20,
         "tensorboard": true,
-        "try_run": false,
         "profiler_active": false
     },
     "SEED": 123

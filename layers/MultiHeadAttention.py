@@ -8,29 +8,28 @@ from entmax import sparsemax, entmax15, entmax_bisect
 
 
 class MultiHeadAttention(nn.Module):
-    """Multi Head Attention block from Attention is All You Need.
+    """Multi Head Attention block
 
-    Given 3 inputs of shape (batch_size, K, d_model), that will be used
-    to compute query, keys and values, we output a self attention
-    tensor of shape (batch_size, K, d_model).
+    Given 3 inputs of shape (batch_size, T, d_model), that will be used
+    to compute query, keys and values, we output an attention
+    tensor of shape (batch_size, d_model).
 
     Parameters
     ----------
     d_model:
-        Dimension of the input (and hence, also the output) vector.
+        Dimension of the input (and hence, also the output) vector. Here: d_model = 2*num_units
     k:
-        Dimension of all key matrix.
+        Dimension of all key matrices.
     q:
-        Dimension of all query matrix.
+        Dimension of all query matrices.
     v:
-        Dimension of all value matrix.
+        Dimension of all value matrices.
     h:
         Number of heads.
     dropout:
         Dropout ratio to be applied as float. If None, no dropout is applied
-    attention_size:
-        Number of backward elements to apply attention.
-        Deactivated if ``None``. Default is ``None``.
+    attention_activation_function:
+       Can be one of ``'softmax'``, ``'sparsemax'``, ``'entmax15'``, ``'entmax_bisect'``. Default is ``softmax``.
     """
 
     def __init__(self,
@@ -52,6 +51,7 @@ class MultiHeadAttention(nn.Module):
         # Query, keys and value matrices
         self._W_q = nn.Linear(d_model, q*self._h)
 
+        # Apply tanh after each heads linear key transformation
         self._W_k = nn.Sequential(
             nn.Linear(d_model, k*self._h),
             nn.Tanh()
@@ -72,13 +72,12 @@ class MultiHeadAttention(nn.Module):
     def forward(self,
                 query: torch.Tensor,
                 key: torch.Tensor,
-                value: torch.Tensor,
-                mask: Optional[str] = None) -> torch.Tensor:
-        """Propagate forward the input through the MHB.
+                value: torch.Tensor) -> torch.Tensor:
+        """Propagate forward the input through the MHA.
 
         We compute for each head the queries, keys and values matrices,
         followed by the Scaled Dot-Product. The result is concatenated
-        and returned with shape (batch_size, K, d_model).
+        and returned with shape (batch_size,d_model).
 
         Parameters
         ----------
@@ -88,18 +87,11 @@ class MultiHeadAttention(nn.Module):
             Input tensor with shape (batch_size, T, d_model) used to compute keys.
         value:
             Input tensor with shape (batch_size, T, d_model) used to compute values.
-        mask:
-            Mask to apply on scores before computing attention.
-            One of ``'subsequent'``, None. Default is None.
 
         Returns
         -------
-            MH attention tensor with shape (batch_size, 1, d_model).
+            MH attention tensor with shape (batch_size, d_model).
         """
-        # Old version (works only as long as d_k = d_model):
-        # K = key.shape[2]        #shape[1] corresponds to T, shape[2] corresponds to 2x GRU cells
-        # After modifications (d_k = d_v = d_model/h in the multi-branch-attention) use self._k instead of K)
-
         # Compute Q, K and V, concatenate heads on batch dimension
         queries = torch.cat(self._W_q(query).chunk(self._h, dim=-1), dim=0)
         keys = torch.cat(self._W_k(key).chunk(self._h, dim=-1), dim=0)

@@ -142,7 +142,7 @@ class BaselineModelWithSkipConnectionsAndNormV2PreActivation(BaseModel):
             nn.Dropout(0.2)
         )
 
-        self._contextual_attention = ContextualAttention(gru_dimension=12, attention_dimension=24)
+        self._contextual_attention = ContextualAttention(d_model=12*2, attention_dimension=24)
 
         self._batchNorm = nn.Sequential(
             nn.BatchNorm1d(24),
