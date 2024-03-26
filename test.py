@@ -144,9 +144,8 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
     _param_dict = {
         "labels": class_labels,
         "device": device,
-        "sigmoid_probs": config["metrics"]["additional_metrics_args"].get("sigmoid_probs", False),
-        "log_probs": config["metrics"]["additional_metrics_args"].get("log_probs", False),
-        "logits": config["metrics"]["additional_metrics_args"].get("logits", False),
+        "log_probs": config["arch"]["args"].get("apply_final_activation", False),
+        "logits": not config["arch"]["args"].get("apply_final_activation", False),
         "pos_weights": data_loader.dataset.get_ml_pos_weights(
             idx_list=list(range(len(data_loader.sampler))),
             mode='test',
@@ -317,10 +316,8 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
     # ------------ ROC Plots ------------------------------------
     if config['arch']['args']['multi_label_training']:
         fpr, tpr, thresholds = module_metric.torch_roc(output=det_outputs, target=det_targets,
-                                                       sigmoid_probs=_param_dict["sigmoid_probs"],
                                                        logits=_param_dict["logits"], labels=_param_dict["labels"])
         roc_auc_scores = module_metric.class_wise_torch_roc_auc(output=det_outputs, target=det_targets,
-                                                                sigmoid_probs=_param_dict["sigmoid_probs"],
                                                                 logits=_param_dict["logits"],
                                                                 labels=_param_dict["labels"])
 
@@ -408,8 +405,6 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
     else:
         upd_class_wise_cms = class_wise_confusion_matrices_multi_label_sk(output=det_outputs,
                                                                           target=det_targets,
-                                                                          sigmoid_probs=_param_dict[
-                                                                              'sigmoid_probs'],
                                                                           logits=_param_dict['logits'],
                                                                           labels=_param_dict['labels'])
     cm_tracker.update_class_wise_cms(upd_class_wise_cms)
@@ -469,7 +464,6 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
     # ------------------- Summary Report -------------------
     if multi_label_training:
         summary_dict = multi_label_metrics.sk_classification_summary(output=det_outputs, target=det_targets,
-                                                                     sigmoid_probs=_param_dict["sigmoid_probs"],
                                                                      logits=_param_dict["logits"],
                                                                      labels=_param_dict["labels"],
                                                                      output_dict=True)

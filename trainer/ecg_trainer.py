@@ -71,19 +71,16 @@ class ECGTrainer(BaseTrainer):
         # Store potential parameters needed for metrics
         val_class_weights = self.data_loader.dataset.get_inverse_class_frequency(
             idx_list=self.data_loader.valid_sampler.indices, multi_label_training=self.multi_label_training,
-            mode='valid', cross_valid_active=cross_valid_active) \
-            if not self.overfit_single_batch else None
+            mode='valid', cross_valid_active=cross_valid_active)
 
         val_pos_weights = self.data_loader.dataset.get_ml_pos_weights(
-            idx_list=self.data_loader.valid_sampler.indices, mode='valid', cross_valid_active=cross_valid_active) \
-            if not self.overfit_single_batch else None
+            idx_list=self.data_loader.valid_sampler.indices, mode='valid', cross_valid_active=cross_valid_active)
 
         self._param_dict = {
             "labels": self._class_labels,
             "device": self.device,
-            "sigmoid_probs": config["metrics"]["additional_metrics_args"].get("sigmoid_probs", False),
-            "log_probs": config["metrics"]["additional_metrics_args"].get("log_probs", False),
-            "logits": config["metrics"]["additional_metrics_args"].get("logits", False),
+            "log_probs": config["arch"]["args"].get("apply_final_activation", False),
+            "logits": not config["arch"]["args"].get("apply_final_activation", False),
             "train_pos_weights": self.data_loader.dataset.get_ml_pos_weights(
                 idx_list=self.data_loader.batch_sampler.sampler.indices,
                 mode='train',
@@ -271,7 +268,7 @@ class ECGTrainer(BaseTrainer):
                 if self.profiler_active:
                     profiler.step()
 
-                if batch_idx == self.len_epoch:  # or self.overfit_single_batch:
+                if batch_idx == self.len_epoch:
                     break
 
         if self.try_run and self.writer is not None:
@@ -297,7 +294,6 @@ class ECGTrainer(BaseTrainer):
         else:
             summary_str = "Not calc."
 
-        # Contains only NaNs for all non-iteration-based metrics when overfit_single_batch is True
         # Moreover, the train metrics are only contained each epoch_log_step times
         train_log = self.train_metrics.result(
             include_epoch_metrics=(epoch == 1 or epoch % self.epoch_log_step_train == 0))
@@ -517,36 +513,33 @@ class ECGTrainer(BaseTrainer):
         # ------------ Metrics ------------------------------------
         # Finally, the epoch-based metrics need to be updated
         # For this, calculate both, the normal epoch-based metrics as well as the class-wise epoch-based metrics
-        # When overfitting a single batch, only a small amount of data is used and hence, not all classes may be present
-        # In such case, not all metrics are defined, so skip updating the metrics in that case
-        if not self.overfit_single_batch:
-            for met in self.metrics_epoch:
-                args = inspect.signature(met).parameters.values()
-                # Output and target are needed for all metrics! Only consider other args WITHOUT default
-                additional_args = [arg.name for arg in args
-                                   if arg.name not in ('output', 'target') and arg.default is arg.empty]
-                additional_kwargs = {
-                    param_name: self._param_dict[param_name] for param_name in additional_args
-                }
-                if not self.multi_label_training and met.__name__ == 'cpsc_score':
-                    # Consider all labels for evaluation, even in the single label case
-                    metric_tracker.epoch_update(met.__name__, met(target=det_targets_all_labels, output=det_outputs,
-                                                                  **additional_kwargs))
-                else:
-                    metric_tracker.epoch_update(met.__name__, met(target=det_targets, output=det_outputs,
-                                                                  **additional_kwargs))
+        for met in self.metrics_epoch:
+            args = inspect.signature(met).parameters.values()
+            # Output and target are needed for all metrics! Only consider other args WITHOUT default
+            additional_args = [arg.name for arg in args
+                               if arg.name not in ('output', 'target') and arg.default is arg.empty]
+            additional_kwargs = {
+                param_name: self._param_dict[param_name] for param_name in additional_args
+            }
+            if not self.multi_label_training and met.__name__ == 'cpsc_score':
+                # Consider all labels for evaluation, even in the single label case
+                metric_tracker.epoch_update(met.__name__, met(target=det_targets_all_labels, output=det_outputs,
+                                                              **additional_kwargs))
+            else:
+                metric_tracker.epoch_update(met.__name__, met(target=det_targets, output=det_outputs,
+                                                              **additional_kwargs))
 
-            # This holds for the class-wise, epoch-based metrics as well
-            for met in self.metrics_epoch_class_wise:
-                args = inspect.signature(met).parameters.values()
-                # Output and target are needed for all metrics! Only consider other args WITHOUT default
-                additional_args = [arg.name for arg in args
-                                   if arg.name not in ('output', 'target') and arg.default is arg.empty]
-                additional_kwargs = {
-                    param_name: self._param_dict[param_name] for param_name in additional_args
-                }
-                metric_tracker.class_wise_epoch_update(met.__name__, met(target=det_targets, output=det_outputs,
-                                                                         **additional_kwargs))
+        # This holds for the class-wise, epoch-based metrics as well
+        for met in self.metrics_epoch_class_wise:
+            args = inspect.signature(met).parameters.values()
+            # Output and target are needed for all metrics! Only consider other args WITHOUT default
+            additional_args = [arg.name for arg in args
+                               if arg.name not in ('output', 'target') and arg.default is arg.empty]
+            additional_kwargs = {
+                param_name: self._param_dict[param_name] for param_name in additional_args
+            }
+            metric_tracker.class_wise_epoch_update(met.__name__, met(target=det_targets, output=det_outputs,
+                                                                     **additional_kwargs))
 
         # ------------------- Predicted Scores and Classes -------------------
         if self.try_run and self.writer is not None:
@@ -575,8 +568,6 @@ class ECGTrainer(BaseTrainer):
         else:
             upd_class_wise_cms = class_wise_confusion_matrices_multi_label_sk(output=output,
                                                                               target=target,
-                                                                              sigmoid_probs=self._param_dict[
-                                                                                  'sigmoid_probs'],
                                                                               logits=self._param_dict['logits'],
                                                                               labels=self._param_dict['labels'])
         cm_tracker.update_class_wise_cms(upd_class_wise_cms)
@@ -601,8 +592,6 @@ class ECGTrainer(BaseTrainer):
     def _create_report_summary(self, det_outputs, det_targets, epoch):
         if self.multi_label_training:
             summary_dict = multi_label_metrics.sk_classification_summary(output=det_outputs, target=det_targets,
-                                                                         sigmoid_probs=self._param_dict[
-                                                                             "sigmoid_probs"],
                                                                          logits=self._param_dict["logits"],
                                                                          labels=self._param_dict["labels"],
                                                                          output_dict=True)

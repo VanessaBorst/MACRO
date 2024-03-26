@@ -17,7 +17,7 @@ from sklearn.metrics import confusion_matrix, multilabel_confusion_matrix, \
 from torchmetrics import Precision, Accuracy, Recall, ROC, F1Score
 from torchmetrics.classification.auroc import AUROC
 
-# TODO: This file has not yet been checked for API updates, since single label metrics are not used for the Macro paper
+# TODO: This file has not yet been checked for API updates, since single label metrics are not used for the MACRO paper
 
 # ----------------------------------- SKlearn Metric -----------------------------------------------
 
@@ -627,29 +627,29 @@ def class_wise_torch_precision(output, target, log_probs, logits, labels):
     return _torch_precision(output, target, log_probs, logits, labels, average=None)
 
 
-def weighted_torch_precision(output, target, sigmoid_probs, logits, labels):
+def weighted_torch_precision(output, target, log_probs, logits, labels):
     """See documentation for _torch_precision """
-    return _torch_precision(output, target, sigmoid_probs, logits, labels, average='weighted')
+    return _torch_precision(output, target, log_probs, logits, labels, average='weighted')
 
 
-def macro_torch_precision(output, target, sigmoid_probs, logits, labels):
+def macro_torch_precision(output, target, log_probs, logits, labels):
     """See documentation for _torch_precision """
-    return _torch_precision(output, target, sigmoid_probs, logits, labels, average='macro')
+    return _torch_precision(output, target, log_probs, logits, labels, average='macro')
 
 
-def class_wise_torch_recall(output, target, sigmoid_probs, logits, labels):
+def class_wise_torch_recall(output, target, log_probs, logits, labels):
     """See documentation for _torch_recall """
-    return _torch_recall(output, target, sigmoid_probs, logits, labels, average=None)
+    return _torch_recall(output, target, log_probs, logits, labels, average=None)
 
 
-def weighted_torch_recall(output, target, sigmoid_probs, logits, labels):
+def weighted_torch_recall(output, target, log_probs, logits, labels):
     """See documentation for _torch_recall """
-    return _torch_recall(output, target, sigmoid_probs, logits, labels, average='weighted')
+    return _torch_recall(output, target, log_probs, logits, labels, average='weighted')
 
 
-def macro_torch_recall(output, target, sigmoid_probs, logits, labels):
+def macro_torch_recall(output, target, log_probs, logits, labels):
     """See documentation for _torch_recall """
-    return _torch_recall(output, target, sigmoid_probs, logits, labels, average='macro')
+    return _torch_recall(output, target, log_probs, logits, labels, average='macro')
 
 
 if __name__ == '__main__':

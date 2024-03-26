@@ -24,7 +24,6 @@
             "num_workers": 4,
             "pin_memory": false
         },
-        "overfit_single_batch": false,
         "test_dir": ""
     },
     "optimizer": {
@@ -43,7 +42,6 @@
         "ml": {
             "per_iteration": {
                 "sk_subset_accuracy": [
-                    "sigmoid_probs",
                     "logits"
                 ]
             },
@@ -54,11 +52,6 @@
             "per_epoch_class_wise": [
                 "class_wise_sk_f1"
             ]
-        },
-        "additional_metrics_args": {
-            "sigmoid_probs": false,
-            "log_probs": false,
-            "logits": true
         }
     },
     "lr_scheduler": {

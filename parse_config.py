@@ -142,7 +142,6 @@ class ConfigParser:
         """
         module_name = self[name]['type']  # e.g., MnistDataLoader
         module_args = dict(self[name]['args'])  # e.g., {'data_dir': 'data/', 'batch_size': 4, ..., 'seq_len': 72000}
-        # kwargs, i.e., single_batch for the data_loader
         # assert all([k not in module_args for k in kwargs]), 'Overwriting kwargs given in config file is not allowed'
         module_args.update(kwargs)
         # Gets a named attribute (here named "module_name") from an object (here from the given data-loader module)
@@ -220,44 +219,24 @@ class ConfigParser:
         if self.config["loss"]["type"] == "BCE_with_logits" or self.config["loss"]["type"] == "balanced_BCE_with_logits"\
                 or self.config["loss"]["type"] == "focal_binary_cross_entropy_with_logits":
             assert self.config["arch"]["args"]["multi_label_training"] \
-                   and not self.config["arch"]["args"]["apply_final_activation"] \
-                   and not self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
-                   and not self.config["metrics"]["additional_metrics_args"]["log_probs"] \
-                   and self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
-                                                                                    "fit to the rest of the " \
-                                                                                    "configuration"
+                   and not self.config["arch"]["args"]["apply_final_activation"], \
+                "The used loss does not fit to the rest of the configuration"
         elif self.config["loss"]["type"] == "BCE":
             assert self.config["arch"]["args"]["multi_label_training"] \
-                   and self.config["arch"]["args"]["apply_final_activation"] \
-                   and self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
-                   and not self.config["metrics"]["additional_metrics_args"]["log_probs"] \
-                   and not self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
-                                                                                        "fit to the rest of the " \
-                                                                                        "configuration "
+                   and self.config["arch"]["args"]["apply_final_activation"],\
+                "The used loss does not fit to the rest of the configuration"
+
         elif self.config["loss"]["type"] == "nll_loss":
             assert not self.config["arch"]["args"]["multi_label_training"] \
-                   and self.config["arch"]["args"]["apply_final_activation"] \
-                   and not self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
-                   and self.config["metrics"]["additional_metrics_args"]["log_probs"] \
-                   and not self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
-                                                                                        "fit to the rest of the " \
-                                                                                        "configuration "
-        elif self.config["loss"]["type"] == "cross_entropy_loss" or self.config["loss"]["type"] == "balanced_cross_entropy":
-            assert not self.config["arch"]["args"]["multi_label_training"] \
-                   and not self.config["arch"]["args"]["apply_final_activation"] \
-                   and not self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] \
-                   and not self.config["metrics"]["additional_metrics_args"]["log_probs"] \
-                   and self.config["metrics"]["additional_metrics_args"]["logits"], "The used loss does not " \
-                                                                                    "fit to the rest of the " \
-                                                                                    "configuration "
+                   and self.config["arch"]["args"]["apply_final_activation"],\
+                "The used loss does not fit to the rest of the configuration "
 
-        assert (self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"] ^
-                self.config["metrics"]["additional_metrics_args"]["log_probs"]
-                ^ self.config["metrics"]["additional_metrics_args"]["logits"]) and not \
-                   (self.config["metrics"]["additional_metrics_args"]["sigmoid_probs"]
-                    and self.config["metrics"]["additional_metrics_args"]["log_probs"]
-                    and self.config["metrics"]["additional_metrics_args"]["logits"]), \
-            "Exactly one of the three must be true"
+        elif self.config["loss"]["type"] == "cross_entropy_loss" \
+                or self.config["loss"]["type"] == "balanced_cross_entropy":
+            assert not self.config["arch"]["args"]["multi_label_training"] \
+                   and not self.config["arch"]["args"]["apply_final_activation"] ,\
+                "The used loss does not fit to the rest of the configuration "
+
 
 
 # helper functions to update config dict with custom cli options

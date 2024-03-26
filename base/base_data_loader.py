@@ -40,13 +40,7 @@ class BaseDataLoader(DataLoader):
     def __init__(self, dataset, batch_size, shuffle, validation_split=None, num_workers=1, pin_memory=False,
                  cross_valid=False, train_idx=None, valid_idx=None, test_idx=None, cv_train_mode=True,
                  fold_id=None, total_num_folds=None,
-                 collate_fn=default_collate,
-                 single_batch=False, worker_init_fn=seed_worker, generator=torch.Generator()):
-        """
-        single_batch: If set to True, this reduces the training set to a single batch and turns off the validation set.
-        Training on a single batch should quickly overfit and reach accuracy 1.0.
-        This is a recommended step for debugging networks, see https://twitter.com/karpathy/status/1013244313327681536
-        """
+                 collate_fn=default_collate, worker_init_fn=seed_worker, generator=torch.Generator()):
 
         generator.manual_seed(global_config.SEED)
 
@@ -58,22 +52,8 @@ class BaseDataLoader(DataLoader):
             self.batch_size = batch_size
             self.n_samples = len(dataset)
 
-            # Update 10.11.23; before: np.random.seed(0)
-            # np.random.seed(global_config.SEED)
+            self.sampler, self.valid_sampler = self._split_sampler(self.validation_split)
 
-            if not single_batch:
-                self.sampler, self.valid_sampler = self._split_sampler(self.validation_split)
-            else:
-                idx_full = np.arange(self.n_samples)
-                np.random.shuffle(idx_full)
-                # Use only the number of samples contained in one batch and try to overfit them
-                num_samples = batch_size if not batch_size % 2 == 1 else batch_size - 1
-                self.sampler = SubsetRandomSampler(idx_full[:num_samples])
-                # Set the new batch_size to 2 to update the gradient after each two samples
-                self.batch_size = 2
-                self.n_samples = num_samples
-                self.valid_sampler = None
-                self.shuffle = None
 
         else:
             if cv_train_mode:
