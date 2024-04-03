@@ -13,8 +13,6 @@ from matplotlib import pyplot as plt
 from scipy.io import loadmat
 from sklearn.model_selection import train_test_split
 
-from utils import plot_record_from_df
-
 
 def _get_seq_len(hz,desired_seconds):
     """
@@ -94,7 +92,7 @@ def split_train_test(src_path, dest_path, test_ratio=0.2):
     train_files, test_files = train_test_split(file_names, test_size=test_ratio, random_state=42, shuffle=True)
 
     # Copy the train and validation files into a dedicated folder
-    dest_path_train = os.path.join(dest_path, "train/")
+    dest_path_train = os.path.join(dest_path, "train", "raw")
     if not os.path.exists(dest_path_train):
         os.makedirs(dest_path_train)
     for file_name in train_files:
@@ -104,7 +102,7 @@ def split_train_test(src_path, dest_path, test_ratio=0.2):
                 shutil.copy(full_file_name, dest_path_train)
 
     # Copy the test files into a dedicated folder
-    dest_path_test = os.path.join(dest_path, "test/")
+    dest_path_test = os.path.join(dest_path, "test", "raw")
     if not os.path.exists(dest_path_test):
         os.makedirs(dest_path_test)
     for file_name in test_files:
@@ -117,7 +115,8 @@ def split_train_test(src_path, dest_path, test_ratio=0.2):
 
 
 def run_basic_preprocessing(src_path, target_path, sampling=None):
-    full_target_path = f"{target_path}{sampling}" if sampling is not None else f"{target_path}no_sampling"
+    sampling_name = "250Hz" if sampling=="4ms" else sampling
+    full_target_path = f"{target_path}{sampling_name}" if sampling is not None else f"{target_path}no_sampling"
     if not os.path.exists(full_target_path):
         os.makedirs(full_target_path)
 
@@ -139,14 +138,14 @@ def clean_meta(path):
         ==> The method only operates on the meta information and keeps the actual time series data unchanged
     """
     # Read in the REFERENCES.csv provided by the official CPSC
-    cpsc_labels = pd.read_csv("preprocessing/info/REFERENCE_cpsc.csv").set_index("Recording")
+    cpsc_labels = pd.read_csv("info/REFERENCE_cpsc.csv").set_index("Recording")
 
     # Get the mapping between the classes and push them in a dict
-    mapping_df= pd.read_csv("preprocessing/info/mapping_cpsc_CinC.csv").drop(["type", "abbreviation_cpsc", "abbreviation_wfdb"], axis=1)
+    mapping_df= pd.read_csv("info/mapping_cpsc_CinC.csv").drop(["type", "abbreviation_cpsc", "abbreviation_wfdb"], axis=1)
     mapping_dict = mapping_df.set_index('id_cpsc')['id_wfdb'].to_dict()
 
     # Reads in the encoding csv provided by CinC and converts the snomed CT code column to the row index
-    cinc_classes = pd.read_csv("preprocessing/info/dx_classes_CinC.csv").set_index("SNOMED CT Code")
+    cinc_classes = pd.read_csv("info/dx_classes_CinC.csv").set_index("SNOMED CT Code")
     cinc_classes.index = cinc_classes.index.map(str)
 
     # Creates an empty dataframe with one column per class/CT code
@@ -187,7 +186,7 @@ def clean_meta(path):
     values = metas.columns.to_list()
     own_wfdb_encoding = bidict(dict(zip(keys, values)))
     pd.DataFrame.from_dict(data=own_wfdb_encoding, orient='index', columns=['label']).reset_index(level=0).\
-        to_csv('preprocessing/info/own_encoding_CinC.csv', index=False)
+        to_csv('info/own_encoding_CinC.csv', index=False)
     metas.columns = list(range(len(metas.columns)))
 
     # Iterate through the records (one row in metas per record) and update its meta information
@@ -214,7 +213,7 @@ def pad_or_truncate(path, seq_len, seconds=None, pad_halfs=False):
         - cuts records that exceed seq_len from both sides and only uses values in the middle
     """
 
-    folder_name = f"eq_len_{seq_len}" if seconds is None else f"eq_len_{seconds}s"
+    folder_name = f"eq_len_{seq_len}" if seconds is None else f"{seconds}s"
     folder_name = folder_name + "_pad_halfs" if pad_halfs else folder_name
     if not os.path.exists(os.path.join(path, folder_name)):
         os.makedirs(os.path.join(path, folder_name))
@@ -273,44 +272,44 @@ def show(path):
 
 
 if __name__ == "__main__":
-    src_path = "data/CinC_CPSC/raw/"
-    dest_path = "data/CinC_CPSC/"
+    src_path = "../data/CinC_CPSC/raw/"
+    dest_path = "../data/CinC_CPSC/"
     split_train_test(src_path,dest_path, test_ratio=0.2)
 
     # Uncomment for applying basic preprocessing
     # Reads the .mat files, possibly downsamples the data, extracts meta data and writes everything to pickle dumps
-    src_path = "data/CinC_CPSC/train/raw"
-    target_path = "data/CinC_CPSC/train/preprocessed/"
+    src_path = "../data/CinC_CPSC/train/raw"
+    target_path = "../data/CinC_CPSC/train/preprocessed/"
     run_basic_preprocessing(src_path, target_path, sampling="4ms")
-    src_path = "data/CinC_CPSC/test/raw"
-    target_path = "data/CinC_CPSC/test/preprocessed/"
+    src_path = "../data/CinC_CPSC/test/raw"
+    target_path = "../data/CinC_CPSC/test/preprocessed/"
     run_basic_preprocessing(src_path, target_path, sampling="4ms")
 
     # Uncomment to extend the meta information by encoded classes
     # More importantly, deal with multi-label-case to fix the order of labels to match the one of the original CPSC
-    src_path = "data/CinC_CPSC/train/preprocessed/4ms/"
+    src_path = "../data/CinC_CPSC/train/preprocessed/250Hz/"
     clean_meta(src_path)
-    src_path = "data/CinC_CPSC/test/preprocessed/4ms/"
+    src_path = "../data/CinC_CPSC/test/preprocessed/250Hz/"
     clean_meta(src_path)
 
     # Uncomment for applying further preprocessing like padding
     # 4ms = 250Hz
-    src_path = "data/CinC_CPSC/train/preprocessed/4ms/"
+    src_path = "../data/CinC_CPSC/train/preprocessed/250Hz/"
     for desired_len_in_seconds in [60]:     # [10,15,30,60]:
         seq_len = _get_seq_len(hz=250, desired_seconds=desired_len_in_seconds)
         pad_or_truncate(path=src_path, seq_len=seq_len, seconds=desired_len_in_seconds, pad_halfs=False)
 
-    src_path = "data/CinC_CPSC/test/preprocessed/4ms/"
+    src_path = "../data/CinC_CPSC/test/preprocessed/250Hz/"
     for desired_len_in_seconds in [60]:     # [10,15,30,60]:
         seq_len = _get_seq_len(hz=250, desired_seconds=desired_len_in_seconds)
         pad_or_truncate(path=src_path, seq_len=seq_len, seconds=desired_len_in_seconds, pad_halfs=False)
 
-    # show("data/CinC_CPSC/test/preprocessed/4ms/eq_len_60s")
+    # show("../data/CinC_CPSC/test/preprocessed/4ms/eq_len_60s")
 
     # Copy all files to another folder used for k-fold cross-validation
     for mode in ["train", "test"]:
-        src_path = f"data/CinC_CPSC/{mode}/preprocessed/4ms/eq_len_60s"
-        dest_path = f"data/CinC_CPSC/cross_valid/250Hz/60s"
+        src_path = f"../data/CinC_CPSC/{mode}/preprocessed/250Hz/60s"
+        dest_path = f"../data/CinC_CPSC/cross_valid/250Hz/60s"
         if not os.path.exists(dest_path):
             os.makedirs(dest_path)
         for file in os.listdir(src_path):
