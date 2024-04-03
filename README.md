@@ -87,12 +87,12 @@ For this, run the following command:
 ```console
 python ML_ensemble/retrieve_detached_cross_fold_tensors.py -p <path_to_trained_model>
 ```
-Example path: <project_path>/savedVM/models/Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24/
+Example path: <project_path>/savedVM/models/Multibranch_MACRO_CV/run_id/
 
 Afterwards, the ML classifiers can be trained and evaluated based on these tensors by running the following command:
 ```console
 python ML_ensemble/train_ML_models_with_detached_tensors.py
- -p <path_to_XXX>
+ -p <path_to_trained_model>
  --strategy "gradient_boosting"
 ```
 By default, all features from the Multi-Branch MACRO (MB-M) and all BranchNets are used (i.e., 117 features). 
