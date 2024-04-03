@@ -16,14 +16,6 @@ import global_config
 from utils import ensure_dir
 
 
-# def predict_proba_ridge(classifier, X):
-#     # TODO This is not correct yet, cf https://stackoverflow.com/questions/66334612/plotting-roc-curve-for-ridgeclassifier-in-python
-#     # From https://stackoverflow.com/questions/22538080/scikit-learn-ridge-classifier-extracting-class-probabilities
-#     d = classifier.decision_function(X)
-#     if len(d.shape) == 1:
-#         d = np.c_[-d, d]
-#     return softmax(d)
-
 # Assuming X contains the sigmoid probabilities or logits and y contains the target labels
 # X.shape should be (num_samples, 13, num_classes)
 # => Here: X is a stack of BranchNets outputs followed by the Multibranch output
@@ -102,7 +94,7 @@ def _evaluate_ML_model(y_pred, y_pred_probs, y_test, save_path, path_suffix=None
 
 def train_ML_model(X_train, X_valid, X_test, y_train, y_valid, y_test, save_path,
                    strategy=None, individual_features=False, reduced_individual_features=False):
-    # TODO X_valid is only used for hyperparameter tuning of the GradientBoostingClassifier and
+    # Note: X_valid is only used for hyperparameter tuning of the GradientBoostingClassifier and
     #  the AdaBoostClassifier with all features right now
     methods_with_feature_importance = ["decision_tree", "gradient_boosting", "ada_boost"]
     num_classes = y_train.shape[1]

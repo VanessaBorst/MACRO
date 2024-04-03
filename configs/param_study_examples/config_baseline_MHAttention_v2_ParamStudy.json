@@ -17,14 +17,14 @@
       "data_dir": ""
     },
     "args": {
-      "data_dir": "data/CinC_CPSC/train/preprocessed/4ms/eq_len_60s",
+      "data_dir": "data/CinC_CPSC/train/preprocessed/250Hz/eq_len_60s",
       "batch_size": 64,
       "shuffle": true,
       "validation_split": 0.25,
       "num_workers": 4,
       "pin_memory": false
     },
-    "test_dir": "data/CinC_CPSC/test/preprocessed/4ms/eq_len_60s"
+    "test_dir": "data/CinC_CPSC/test/preprocessed/250Hz/eq_len_60s"
   },
   "optimizer": {
     "type": "Adam",
