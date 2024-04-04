@@ -278,6 +278,7 @@ if __name__ == "__main__":
 
     # Uncomment for applying basic preprocessing
     # Reads the .mat files, possibly downsamples the data, extracts meta data and writes everything to pickle dumps
+    # 4ms = 250Hz
     src_path = "../data/CinC_CPSC/train/raw"
     target_path = "../data/CinC_CPSC/train/preprocessed/"
     run_basic_preprocessing(src_path, target_path, sampling="4ms")
@@ -293,7 +294,6 @@ if __name__ == "__main__":
     clean_meta(src_path)
 
     # Uncomment for applying further preprocessing like padding
-    # 4ms = 250Hz
     src_path = "../data/CinC_CPSC/train/preprocessed/250Hz/"
     for desired_len_in_seconds in [60]:     # [10,15,30,60]:
         seq_len = _get_seq_len(hz=250, desired_seconds=desired_len_in_seconds)

@@ -31,11 +31,11 @@ we used a 10-fold cross-validation strategy.
 Our preprocessed data can be downloaded from [FigShare](https://figshare.com/s/c8d7d9641b283e4ae75b) 
 and should be placed in the `data` directory at project root level while maintaining the folder structure. 
 In case of using the fixed train-valid-test split, 
-the valid set is automatically created from the training set during the training process.
+the validation set is automatically created from the training set during the training process.
 
 Alternatively, the raw CPSC 2018 dataset can be downloaded from the website of the 
 [PhysioNet/Computing in Cardiology Challenge 2020](https://physionet.org/content/challenge-2020/1.0.2/training/cpsc_2018/#files-panel). 
-The downloaded `.mat` and `.hea` files can be merged and copied to `data/CinC_CPSC/raw`. 
+The downloaded `.mat` and `.hea` files can be merged into a single folder and copied to `data/CinC_CPSC/raw`. 
 Then, our preprocessing pipeline can be executed manually by running the `preprocesssing/preprocess_cpsc.py` script
 to get our preprocessed data and folder structure, including the data split and cross-validation folder.
 
