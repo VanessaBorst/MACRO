@@ -18,13 +18,14 @@ import loss.loss as module_loss
 from logger import update_logging_setup_for_tune_or_cross_valid
 from parse_config import ConfigParser
 from trainer.ecg_trainer import ECGTrainer
-from utils import prepare_device, get_project_root
+from utils import prepare_device, get_project_root, ensure_dir
 
 # Needed for working with SSH Interpreter...
 import os
 import torch
 
 os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
+HOME_DIR_USER = global_config.HOME_DIR_USER
 
 
 def _set_seed(SEED):
@@ -49,9 +50,12 @@ def tuning_params(name):
     # The parameters for the tuning can be specified here according to the example scheme below
     if name == "BaselineModelWithMHAttentionV2":
         return {
-            "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
-            "heads": tune.grid_search([6, 8, 12]),
-            "gru_units": tune.grid_search([12, 24, 36])
+            "dropout_attention": tune.grid_search([0.2, 0.3]),
+            "heads": tune.grid_search([6]),
+            "gru_units": tune.grid_search([12])
+            # "dropout_attention": tune.grid_search([0.2, 0.3]),
+            # "heads": tune.grid_search([6, 8, 12]),
+            # "gru_units": tune.grid_search([12, 24, 36])
         }
     elif name == "FinalModel":
         return {
@@ -129,21 +133,30 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
         data_loader = main_config.init_obj('data_loader', module_data_loader, data_dir=full_data_dir)
         valid_data_loader = data_loader.split_validation()
 
-        # Check data splitting by record name -> saves records to a file for manual inspection
+        # Check data splitting by record name -> should be equal across all workers and tune runs
         valid_records = []
         for idx in valid_data_loader.sampler.indices:
             valid_records.append(valid_data_loader.dataset[idx][4])
         valid_records.sort()
-        time = datetime.now().strftime("%m_%d_%Y_%H_%M_%S_%f")
-        with open(f"/home/vab30xh/projects/2023-macro-paper-3.10/data_loader/tune_log/valid_records_tune_train_fn_{time}.txt",
-                  "w") as txt_file:
-            for line in valid_records:
-                txt_file.write("".join(line) + "\n")
+
+        project_root = get_project_root()
+        ensure_dir(os.path.join(project_root, 'data_loader', 'tune_log'))
+        if Path(os.path.join(project_root, 'data_loader', 'tune_log', f'valid_records_tune_train_fn.txt')).is_file():
+            # If the file already exists, check if the records are the same
+            with open(os.path.join(project_root, 'data_loader', 'tune_log', f'valid_records_tune_train_fn.txt'),
+                      "r") as txt_file:
+                lines = txt_file.read().splitlines()
+                assert valid_records == lines, "Data Split Error! Check this again!"
+        else:
+            with open(os.path.join(project_root, 'data_loader', 'tune_log', f'valid_records_tune_train_fn.txt'),
+                      "w+") as txt_file:
+                for line in valid_records:
+                    txt_file.write("".join(line) + "\n")
 
         train_model(config=main_config, tune_config=config, train_dl=data_loader, valid_dl=valid_data_loader,
                     checkpoint_dir=checkpoint_dir, use_tune=True)
 
-    ray.init(_temp_dir=os.path.join(get_project_root(), 'ray_tmp'))  # TODO: Check in the end
+    ray.init(_temp_dir=os.path.join(HOME_DIR_USER, 'ray_tmp'))
 
     trainer = main_config['trainer']
     early_stop = trainer.get('monitor', 'off')
@@ -165,11 +178,6 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
             metric_columns=["loss", "val_loss",
                             "val_macro_sk_f1",
                             "val_weighted_sk_f1",
-                            "val_cpsc_F1",
-                            "val_cpsc_Faf",
-                            "val_cpsc_Fblock",
-                            "val_cpsc_Fpc",
-                            "val_cpsc_Fst",
                             "training_iteration"])
     elif main_config["arch"]["type"] == "FinalModel":
         reporter = CLIReporter(
@@ -182,11 +190,6 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
             metric_columns=["loss", "val_loss",
                             "val_macro_sk_f1",
                             "val_weighted_sk_f1",
-                            "val_cpsc_F1",
-                            "val_cpsc_Faf",
-                            "val_cpsc_Fblock",
-                            "val_cpsc_Fpc",
-                            "val_cpsc_Fst",
                             "training_iteration"])
     elif main_config["arch"]["type"] == "FinalModelMultiBranch":
         reporter = CLIReporter(
@@ -205,11 +208,6 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
             metric_columns=["loss", "val_loss",
                             "val_macro_sk_f1",
                             "val_weighted_sk_f1",
-                            "val_cpsc_F1",
-                            "val_cpsc_Faf",
-                            "val_cpsc_Fblock",
-                            "val_cpsc_Fpc",
-                            "val_cpsc_Fst",
                             "training_iteration"])
 
     # The number of GPUs to use depends on the architecture

@@ -7,11 +7,12 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 
-from utils import get_project_root
+from utils import get_project_root, ensure_dir
 
 
 def _save_record_names_to_txt(mode, record_names, suffix):
     project_root = get_project_root()
+    ensure_dir(os.path.join(project_root, 'data_loader', 'log'))
     with open(os.path.join(project_root, 'data_loader', 'log', f'Record_names_{mode}_{suffix}.txt'),"w+") as txt_file:
         for line in sorted(record_names):
             txt_file.write("".join(line) + "\n")

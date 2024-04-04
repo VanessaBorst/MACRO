@@ -2,8 +2,9 @@
 
 source venv/bin/activate
 
-# Specify a list of folders
-RELATIVE_PATHS_TO_FOLDERS=("../savedVM/" "../savedVM_old/" "../savedVM_until15Jan/" "../savedVM_veryOld/")
+# Specify a list of folders. Each folder is specified as a relative path from the current directory.
+# White spaces can be used to separate the elements in the list: ("../path1/" "../path2/")
+RELATIVE_PATHS_TO_FOLDERS=("../savedVM/")
 
 # Loop through each folder
 for REL_PATH in "${RELATIVE_PATHS_TO_FOLDERS[@]}"; do

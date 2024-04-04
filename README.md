@@ -39,26 +39,31 @@ The downloaded `.mat` and `.hea` files can be merged into a single folder and co
 Then, our preprocessing pipeline can be executed manually by running the `preprocesssing/preprocess_cpsc.py` script
 to get our preprocessed data and folder structure, including the data split and cross-validation folder.
 
-## Device Preparation: GPU Specification
+## Device Preparation
 To train the models, we recommend using a GPU. 
 The device ID can be set in the configuration file `global_config.py` by adapting the 
 CUDA_VISIBLE_DEVICES variable.  
+
+Moreover, the home directory of the user should be set in the `global_config.py` file by adapting the
+HOME_DIR_USER variable. This path is used to init the RayTune temporary directory.
 
 ## Training and Testing with Fixed Data Split
 To train one of the models with the fixed 60-20-20 data split, run the following command with the path to
 the corresponding configuration file of interest:
 ```console
-python train.py -c configs/single_run_example/config_baseline.json
+python train.py -c configs/single_run_examples/config_baseline.json
 ```
 
-To evaluate a trained model on the test set, run the following command
-with the path to the corresponding configuration file of interest:
+To evaluate a trained model on the test set, run the following command:
 ```console
-python test.py --resume <path_to_model_checkpoint> --test_dir data/CinC_CPSC/test/preprocessed/250Hz/60s
+python test.py --resume <path_to_model_checkpoint> 
 ```
-
 Example resume path: 
-<project_path>/savedVM/models/Baseline/run_id/model_best.pth
+<project_path>/savedVM/models/BaselineModel_SingleRun/run_id/model_best.pth
+
+The path to the test set is automatically retrieved from the corresponding config file, which is saved to the model 
+path during training. Under this path, the evaluation results are saved as well into a `test_output` folder.
+
 
 
 ## Training with Hyperparameter Tuning
@@ -68,8 +73,10 @@ the corresponding configuration file of interest and the `--tune` flag:
 python train.py -c configs/param_study_examples/config.json --tune
 ```
 
-**Important**: The hyperparameter search space can be defined in the `tuning_params` method of the `train.py` file 
-by specifying the search space for the architecture type of interest.
+**Important**: The hyperparameter search space can be defined in the `tuning_params` method of the `train.py` file. 
+The metrics configured for the CLI Reporter in the `train_fn` method should match those defined in the config file.
+Depending on the GPU size and architecture, the number of parallel trials can be adjusted by setting the `num_gpu` 
+variable to the desired value in the `train_fn` method.
 
 ## Training with 10-Fold Cross-Validation
 To train the model with 10-fold cross-validation, run the following command with the path to the
@@ -99,3 +106,18 @@ By default, all features from the Multi-Branch MACRO (MB-M) and all BranchNets a
 For a reduced feature set, the following flags can be passed: 
 - `--individual_features` : Predicted probabilities only for the class of interest (13 features)
 - `--reduced_individual_features` : Predicted probabilities only for the class of interest w/o MB-M (12 features)
+
+## Script Utils
+The `utils` directory contains scripts for the following tasks:
+- TBD
+- TBD
+
+The `utils_bash` directory contains scripts for the following tasks:
+- `clear_all_ckpt_from_folder.sh` : Removes all checkpoint files except `model_best.pth` from the folders specified in RELATIVE_PATHS_TO_FOLDERS, including single training runs, tune runs, and CV runs.
+- `run-eval.sh` : Evaluates all models in the specified folder on the test set. Should only be used with single training runs.
+- `run-eval-tune.sh` : Evaluates all models in the specified folder on the test set. Should only be used RayTune runs.
+
+## Acknowledgements and License
+This project is inspired by the [PyTorch Template Project](https://github.com/victoresque/pytorch-template) by 
+[Victor Huang](https://github.com/victoresque).
+It is licensed under the MIT License (see LICENSE for more details).
