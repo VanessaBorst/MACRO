@@ -123,7 +123,7 @@ The `utils` directory contains scripts for the following tasks:
 - `summarize_cross_valid_batch.py`: Summarizes the results of multiple cross-validation runs within a folder, one run at a time. 
 A path should be specified to the folder containing the cross-validation runs. Example usage:
     ```console
-    python summarize_cross_valid_batch.py -p "../savedVM/models/BaselineWithMultiHeadAttention_V2_CV"
+    python summarize_cross_valid_batch.py -p "../savedVM/models/BaselineWithMultiHeadAttention_CV"
     ```
 - `summarize_cross_valid_for_paper.py`: Fuses the results of the specified cross-validation runs in a suitable format 
 for the publication. The paths can be specified at the beginning of the script. 

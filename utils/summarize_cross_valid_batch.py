@@ -99,7 +99,7 @@ def summarize_single_cross_valid(cv_path):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Summarized all CVs under the given path")
-    # Path example: '../savedVM/models/BaselineWithMultiHeadAttention_V2_CV'
+    # Path example: '../savedVM/models/BaselineWithMultiHeadAttention_CV'
     parser.add_argument("-p", "--path", type=str, help="(Relative) path to the folder containing the CVs")
 
     args = parser.parse_args()
