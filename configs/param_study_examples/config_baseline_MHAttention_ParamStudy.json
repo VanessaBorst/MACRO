@@ -3,7 +3,7 @@
   "run_details": "",
   "n_gpu": 1,
   "arch": {
-    "type": "BaselineModelWithMHAttentionV2",
+    "type": "BaselineModelWithMHAttention",
     "args": {
       "apply_final_activation": false,
       "multi_label_training": true

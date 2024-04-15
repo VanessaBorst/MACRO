@@ -120,10 +120,10 @@ def prepare_model_for_inference(config, logger):
     # Conditional inputs depending on the config
     if config['arch']['type'] == 'BaselineModel':
         import model.baseline_model as module_arch
-    elif config['arch']['type'] == 'BaselineModelWithMHAttentionV2':
-        import model.baseline_model_with_MHAttention_v2 as module_arch
-    elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndNormV2PreActivation':
-        import model.baseline_model_with_skips_and_norm_v2_pre_activation_design as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithMHAttention':
+        import model.baseline_model_with_MHAttention as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndNormPreActivation':
+        import model.baseline_model_with_skips_and_norm_pre_activation_design as module_arch
     elif config['arch']['type'] == 'FinalModel':
         import model.final_model as module_arch
     elif config['arch']['type'] == 'FinalModelMultiBranch':

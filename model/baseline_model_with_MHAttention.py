@@ -6,7 +6,7 @@ from layers.ContextualAttention import MultiHeadContextualAttention
 
 
 
-class BaselineModelWithMHAttentionV2(BaseModel):
+class BaselineModelWithMHAttention(BaseModel):
     def __init__(self, apply_final_activation, multi_label_training, gru_units=12, dropout_attention=0.2, heads=3,
                  num_classes=9,
                  use_reduced_head_dims=None,
@@ -127,7 +127,7 @@ class BaselineModelWithMHAttentionV2(BaseModel):
 
 
 if __name__ == "__main__":
-    model =BaselineModelWithMHAttentionV2(
+    model =BaselineModelWithMHAttention(
         apply_final_activation=False,
         multi_label_training=True,
         dropout_attention=0.4,

@@ -7,7 +7,7 @@ from layers.BasicBlock1dWithNormPreActivationDesign import BasicBlock1dWithNormP
 from layers.ContextualAttention import ContextualAttention
 
 
-class BaselineModelWithSkipConnectionsAndNormV2PreActivation(BaseModel):
+class BaselineModelWithSkipConnectionsAndNormPreActivation(BaseModel):
     def __init__(self, apply_final_activation, multi_label_training, input_channel=12, num_classes=9,
                  drop_out_first_conv_blocks=0.2, drop_out_second_conv_blocks=0.2,
                  mid_kernel_size_first_conv_blocks=3, mid_kernel_size_second_conv_blocks=3,
@@ -187,7 +187,7 @@ class BaselineModelWithSkipConnectionsAndNormV2PreActivation(BaseModel):
 
 
 if __name__ == "__main__":
-    model = BaselineModelWithSkipConnectionsAndNormV2PreActivation(
+    model = BaselineModelWithSkipConnectionsAndNormPreActivation(
         apply_final_activation=False,
         multi_label_training=True,
         down_sample="conv",

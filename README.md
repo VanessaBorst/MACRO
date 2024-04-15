@@ -10,6 +10,12 @@ The `requirements.txt` contains all Python libraries that the project depends on
 pip install -r requirements.txt
 ```
 
+**Important**: The `PYTHONPATH` variable should be adapted to point to the project root directory to ensure that the
+modules can be imported correctly:
+```console
+export PYTHONPATH=$PYTHONPATH:<root project path>
+```
+
 ## Model Architectures
 
 ### MACRO
@@ -22,7 +28,7 @@ pip install -r requirements.txt
 
 ## Dataset  
 The dataset used in this study is the CPSC 2018 dataset, which contains 6877 ECG recordings.
-We preprocess the dataset by resampling the ECG signals to 250 Hz and equalizing the ECG signal length to 60 seconds, 
+We preprocessed the dataset by resampling the ECG signals to 250 Hz and equalizing the ECG signal length to 60 seconds, 
 yielding a signal length of T=15,000 data points per recording. 
 For the hyperparameter study, we employed a fixed train-valid-test split with ratio 60-20-20,
 while for the final evaluations, including the comparison with the state-of-the-art methods and ablation studies, 
@@ -48,7 +54,7 @@ Moreover, the home directory of the user should be set in the `global_config.py`
 HOME_DIR_USER variable. This path is used to init the RayTune temporary directory.
 
 ## Training and Testing with Fixed Data Split
-To train one of the models with the fixed 60-20-20 data split, run the following command with the path to
+To train one of the models with a fixed 60-20-20 data split, run the following command with the path to
 the corresponding configuration file of interest:
 ```console
 python train.py -c configs/single_run_examples/config_baseline.json
@@ -59,7 +65,7 @@ To evaluate a trained model on the test set, run the following command:
 python test.py --resume <path_to_model_checkpoint> 
 ```
 Example resume path: 
-<project_path>/savedVM/models/BaselineModel_SingleRun/run_id/model_best.pth
+<project_path>/savedVM/models/BaselineModel_SingleRun/<run_id>/model_best.pth
 
 The path to the test set is automatically retrieved from the corresponding config file, which is saved to the model 
 path during training. Under this path, the evaluation results are saved as well into a `test_output` folder.
@@ -90,11 +96,11 @@ python train_with_cv.py -c configs/CV/config.json
 ## Machine Learning Classifiers
 To train and evaluate machine learning classifiers, the input and output tensors across all folds need to be retrieved,
 while maintaining the fold structure and data split.
-For this, run the following command:
+For this, run the following command to save the detached tensors to an `output_logging` subdirectory:
 ```console
 python ML_ensemble/retrieve_detached_cross_fold_tensors.py -p <path_to_trained_model>
 ```
-Example path: <project_path>/savedVM/models/Multibranch_MACRO_CV/run_id/
+Example path: <project_path>/savedVM/models/Multibranch_MACRO_CV/<run_id>/ 
 
 Afterwards, the ML classifiers can be trained and evaluated based on these tensors by running the following command:
 ```console
@@ -102,20 +108,34 @@ python ML_ensemble/train_ML_models_with_detached_tensors.py
  -p <path_to_trained_model>
  --strategy "gradient_boosting"
 ```
+Example path: <project_path>/savedVM/models/Multibranch_MACRO_CV/<run_id>/ 
+
 By default, all features from the Multi-Branch MACRO (MB-M) and all BranchNets are used (i.e., 117 features). 
 For a reduced feature set, the following flags can be passed: 
 - `--individual_features` : Predicted probabilities only for the class of interest (13 features)
 - `--reduced_individual_features` : Predicted probabilities only for the class of interest w/o MB-M (12 features)
 
+**Important**: Since a parameter study is performed for each class' binary classifier per fold, the whole process can 
+take a while, depending on the number of features used. 
+
 ## Script Utils
 The `utils` directory contains scripts for the following tasks:
-- TBD
-- TBD
+- `summarize_cross_valid_batch.py`: Summarizes the results of multiple cross-validation runs within a folder, one run at a time. 
+A path should be specified to the folder containing the cross-validation runs. Example usage:
+    ```console
+    python summarize_cross_valid_batch.py -p "../savedVM/models/BaselineWithMultiHeadAttention_V2_CV"
+    ```
+- `summarize_cross_valid_for_paper.py`: Fuses the results of the specified cross-validation runs in a suitable format 
+for the publication. The paths can be specified at the beginning of the script. 
+- `summarize_tune_runs.py`: Can be used to summarize the results of a hyperparameter tuning run within a folder. 
+Details need to be configured at the beginning of the script. 
+- `tracker.py` and `util.py` : Helper functions for tracking the training progress and 
+
 
 The `utils_bash` directory contains scripts for the following tasks:
 - `clear_all_ckpt_from_folder.sh` : Removes all checkpoint files except `model_best.pth` from the folders specified in RELATIVE_PATHS_TO_FOLDERS, including single training runs, tune runs, and CV runs.
 - `run-eval.sh` : Evaluates all models in the specified folder on the test set. Should only be used with single training runs.
-- `run-eval-tune.sh` : Evaluates all models in the specified folder on the test set. Should only be used RayTune runs.
+- `run-eval-tune.sh` : Evaluates all models in the specified folder on the test set. Should only be used with RayTune runs.
 
 ## Acknowledgements and License
 This project is inspired by the [PyTorch Template Project](https://github.com/victoresque/pytorch-template) by 

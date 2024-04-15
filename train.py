@@ -48,7 +48,7 @@ def _get_mid_kernel_size_second_conv_blocks(spec):
 
 def tuning_params(name):
     # The parameters for the tuning can be specified here according to the example scheme below
-    if name == "BaselineModelWithMHAttentionV2":
+    if name == "BaselineModelWithMHAttention":
         return {
             "dropout_attention": tune.grid_search([0.2, 0.3]),
             "heads": tune.grid_search([6]),
@@ -168,7 +168,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
 
     # The reporter is used to print the results of the tuning to the console
     # It can be configured here according to the example scheme below
-    if main_config["arch"]["type"] == "BaselineModelWithMHAttentionV2":
+    if main_config["arch"]["type"] == "BaselineModelWithMHAttention":
         reporter = CLIReporter(
             parameter_columns={
                 "dropout_attention": "Droput MH Attention",
@@ -212,7 +212,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
 
     # The number of GPUs to use depends on the architecture
     match main_config["arch"]["type"]:
-        case "BaselineModelWithMHAttentionV2":
+        case "BaselineModelWithMHAttention":
             # Six trials in parallel
             num_gpu = 0.16
         case "FinalModel":
@@ -222,7 +222,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
             # Two trials in parallel
             num_gpu = 0.5
         case "BaselineModelWithSkipConnectionsV2" | "BaselineModelWithSkipConnectionsAndNormV2" | \
-             "BaselineModelWithSkipConnectionsAndNormV2PreActivation":
+             "BaselineModelWithSkipConnectionsAndNormPreActivation":
             # One trial at a time
             num_gpu = 1
         case _:
@@ -316,10 +316,10 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
     # Conditional inputs depending on the config
     if config['arch']['type'] == 'BaselineModel':
         import model.baseline_model as module_arch
-    elif config['arch']['type'] == 'BaselineModelWithMHAttentionV2':
-        import model.baseline_model_with_MHAttention_v2 as module_arch
-    elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndNormV2PreActivation':
-        import model.baseline_model_with_skips_and_norm_v2_pre_activation_design as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithMHAttention':
+        import model.baseline_model_with_MHAttention as module_arch
+    elif config['arch']['type'] == 'BaselineModelWithSkipConnectionsAndNormPreActivation':
+        import model.baseline_model_with_skips_and_norm_pre_activation_design as module_arch
     elif config['arch']['type'] == 'FinalModel':
         import model.final_model as module_arch
     elif config['arch']['type'] == 'FinalModelMultiBranch':

@@ -285,6 +285,8 @@ def fine_tune_gradient_boosting_or_ada_boost(X_train, y_train, class_index, save
     cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=global_config.SEED)
     grid_search = GridSearchCV(estimator=base_classifier, param_grid=param_grid,
                                cv=cv, n_jobs=24, scoring='f1')
+    print(f"Fine-tuning the hyperparameters for class {_get_class_name_by_index(class_index)} using {strategy}."
+          f" This may take a while...")
     grid_search.fit(X_train, y_train)
 
     # Print and save the best parameters found

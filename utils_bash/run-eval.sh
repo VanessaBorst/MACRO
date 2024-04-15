@@ -2,7 +2,7 @@
 
 source venv/bin/activate
 
-# REL_PATH="savedVM_v2/models/FinalModel/manual_runs/"
+# Adapt this path to the location of the saved models (trained as single run with a fixed train-valid-test split)
 REL_PATH="../savedVM/models/BaselineModel_SingleRun/"
 
 for dir in $(find $REL_PATH -mindepth 1 -maxdepth 1 -type d )

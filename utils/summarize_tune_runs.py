@@ -29,134 +29,23 @@ def _bold_formatter(x, value, num_decimals=2):
         return f"{x:.{num_decimals}f}"
 
 
-# path_to_tune = 'savedVM_v2/models/BaselineModelWithSkipConnectionsV2/experiment_1_1'  # Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
-# hyper_params = ['down_sample', 'pos_skip', 'vary_channels']
-# integer_vals = []
-# single_precision = []
-# desired_col_order = ['down_sample',  'pos_skip', 'vary_channels',
-#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs']
+############################ Configuration #########################################
 
-# path_to_tune = 'savedVM_v2/models/BaselineModelWithSkipConnectionsAndNormV2/experiment_1_2_all'
-# hyper_params = ["down_sample", "norm_pos", "norm_type",
-#                 "pos_skip", "vary_channels"]
-# integer_vals = []
-# single_precision = []
-# # "vary_channels" is always true
-# desired_col_order = ["down_sample", "pos_skip", "norm_type", "norm_pos",
-#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs']
-
-# path_to_tune = 'savedVM_v2/models/BaselineModelWithSkipConnectionsAndNormV2PreActivation/experiment_1_3_no_pre_conv_before_blocks_all'
-# hyper_params = ["down_sample", "norm_before_act", "norm_pos", "norm_type",
-#                 "pos_skip", "vary_channels"]
-# integer_vals = []
-# single_precision = []
-# desired_col_order = ["down_sample", "pos_skip", "norm_before_act",
-#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs']
-
-
-# # Contains best run from experiment_1_3 with different kernel sizes for the pre_conv
-# path_to_tune = 'savedVM_v2/models/BaselineModelWithSkipConnectionsAndNormV2PreActivation/experiment_1_3_best_run_with_different_kernels_for_pre_conv'
-# hyper_params = ["down_sample", "norm_before_act", "norm_pos", "norm_type",
-#                 "pos_skip", "pre_conv_kernel", "use_pre_conv", "vary_channels"]
-# integer_vals = []
-# single_precision = []
-# desired_col_order = ["pre_conv_kernel",
-#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs']
-
-# 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/0810_215444_ml_bs64_rerun_100821_withFC'
-# path_to_tune = 'savedVM/models/FinalModel_MACRO_ParamStudy/0123_131029_ml_bs64noFC-12gru-entmax15'
-# hyper_params = ['dropout_attention', 'heads']
-# integer_vals = ['heads', 'Epochs']
-# single_precision = ['dropout_attention']
-# desired_col_order = ['dropout_attention', 'heads',
-#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-#                      'm-F1', 'm-ROC-AUC', 'm-Acc',
-#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc',
-#                      'MR', 'Epochs', 'Params']
-
+# The details to run this script need to be adjusted to the specific use case, including
+# the path to the tune run, the hyperparameters that were considered, a specification of integer parameters and
+# those with single precision, and the desired column order in the summary.
+# The script will then summarize the results of the hyperparameter tuning in a condensed form.
 path_to_tune = 'savedVM/models/Multibranch_MACRO_ParamStudy/0130_135327_ml_bs64_noConvRedBlock'
 hyper_params = ['branchNet_attention_dropout', 'branchNet_heads',
-                # 'branchNet_reduce_channels',
-                # "conv_reduction_first_kernel_size", 'conv_reduction_second_kernel_size',
-                # 'conv_reduction_third_kernel_size',
                 'multi_branch_attention_dropout', 'multi_branch_heads']
-                # 'use_conv_reduction_block']
-
 integer_vals = ['branchNet_heads', 'multi_branch_heads', 'Epochs']
-# integer_vals = ['branchNet_heads', 'conv_reduction_first_kernel_size', 'conv_reduction_second_kernel_size',
-#                 'conv_reduction_third_kernel_size', 'multi_branch_heads', 'Epochs']
 single_precision = ['branchNet_attention_dropout', 'multi_branch_attention_dropout']
-desired_col_order = ['branchNet_attention_dropout', 'branchNet_heads', # 'branchNet_reduce_channels',
+desired_col_order = ['branchNet_attention_dropout', 'branchNet_heads',
                      'multi_branch_attention_dropout', 'multi_branch_heads',
-                     # 'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
                      'm-F1', 'm-ROC-AUC', 'm-Acc',
                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc',
                      'MR', 'Epochs', 'Params',
                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',]
-
-# 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/0810_215735_ml_bs64_rerun_100821_noFC'
-# Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
-# hyper_params = ['discard_FC_before_MH', 'dropout_attention', 'gru_units', 'heads']
-# integer_vals = ['gru_units', 'heads', 'Epochs']
-# single_precision = ['dropout_attention']
-# desired_col_order = ['discard_FC_before_MH', 'dropout_attention', 'heads', 'gru_units',
-#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-#                      'm-F1', 'm-ROC-AUC', 'm-Acc',
-#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc',
-#                      'MR', 'Epochs', 'Params']
-
-# # Old runs (no discard_FC param)
-# # 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/tune_run_1'
-# path_to_tune = 'savedVM_v2/models/CPSC_BaselineWithMultiHeadAttention_uBCE_F1/tune_run_2_additional_FC_discarded'
-# # Attention! The order of the hyper_params must match the one of params.json; it can differ from the order in train.py!
-# hyper_params = ['dropout_attention', 'gru_units', 'heads']
-# integer_vals = ['gru_units', 'heads', 'Epochs']
-# single_precision = ['dropout_attention']
-# desired_col_order = ['dropout_attention', 'heads', 'gru_units',
-#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs']
-
-
-
-# path_to_tune = 'savedVM_v2/models/FinalModel/experiment_3_rerun_noFC'
-# hyper_params = ["discard_FC_before_MH", "down_sample", "dropout_attention", "gru_units", "heads",
-#                 "norm_before_act", "norm_pos", "norm_type", "pos_skip",
-#                 "use_pre_activation_design", "use_pre_conv", "vary_channels"]
-# integer_vals = ['gru_units', 'heads', 'Epochs']
-# single_precision = ['dropout_attention']
-# desired_col_order = None
-# #  Discard FC before MH is either True or False for all runs (depending on VM), PreAct always True
-# desired_col_order = ["dropout_attention", "heads", "gru_units",
-#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs']
-
-
-# path_to_tune = 'savedVM/models/FinalModel_MACRO_ParamStudy/0829_141413_ml_bs16_macroF1'
-# hyper_params = ["discard_FC_before_MH", "down_sample", "dropout_attention", "gru_units", "heads",
-#                 "norm_before_act", "norm_pos", "norm_type", "pos_skip", "pre_conv_kernel",
-#                 "use_pre_activation_design", "use_pre_conv", "vary_channels"]
-# integer_vals = ['gru_units', 'heads', 'Epochs', 'Params']
-# single_precision = ['dropout_attention']
-# desired_col_order = ["discard_FC_before_MH", "heads", "gru_units",
-#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE', 'm-F1', 'm-ROC-AUC', 'm-Acc',
-#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs', 'Params']
-
-
-# path_to_tune = 'savedVM/models/FinalModel_MACRO_MultiBranch_ParamStudy/0831_110846_ml_bs16'
-# hyper_params = [ "branchNet_gru_units", "branchNet_heads", "discard_FC_before_MH", "conv_reduction_first_kernel_size",
-#                  "multi_branch_heads", "conv_reduction_second_kernel_size", "conv_reduction_third_kernel_size",
-#                  "vary_channels_lighter_version"]
-# integer_vals = ['branchNet_gru_units', 'branchNet_heads', "conv_reduction_first_kernel_size", "multi_branch_heads",
-#                 "conv_reduction_second_kernel_size", "conv_reduction_third_kernel_size", 'Epochs', 'Params']
-# single_precision = []
-# desired_col_order = ["multi_branch_heads", "conv_reduction_first_kernel_size", "conv_reduction_second_kernel_size",
-#                      "conv_reduction_third_kernel_size",
-#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE', 'm-F1', 'm-ROC-AUC', 'm-Acc',
-#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc', 'MR', 'Epochs', 'Params']
 
 
 include_class_wise_f1 = True
@@ -164,6 +53,9 @@ include_weighted_avg = True
 include_macro_avg = True
 include_details = True  # epochs, params
 use_abbrevs = True
+
+
+############################ Script #########################################
 
 cols_class_wise_f1 = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE']
 cols_weighted_avg = ['W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc']
