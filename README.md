@@ -129,7 +129,7 @@ A path should be specified to the folder containing the cross-validation runs. E
 for the publication. The paths can be specified at the beginning of the script. 
 - `summarize_tune_runs.py`: Can be used to summarize the results of a hyperparameter tuning run within a folder. 
 Details need to be configured at the beginning of the script. 
-- `tracker.py` and `util.py` : Helper functions for tracking the training progress and 
+- `tracker.py` and `util.py` : Helper functions (used internally by other code segments)
 
 
 The `utils_bash` directory contains scripts for the following tasks:
