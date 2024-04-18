@@ -25,7 +25,7 @@ import os
 import torch
 
 os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
-HOME_DIR_USER = global_config.HOME_DIR_USER
+TUNE_TEMP_DIR = global_config.TUNE_TEMP_DIR
 
 
 def _set_seed(SEED):
@@ -156,7 +156,7 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
         train_model(config=main_config, tune_config=config, train_dl=data_loader, valid_dl=valid_data_loader,
                     checkpoint_dir=checkpoint_dir, use_tune=True)
 
-    ray.init(_temp_dir=os.path.join(HOME_DIR_USER, 'ray_tmp'))
+    ray.init(_temp_dir=os.path.join(TUNE_TEMP_DIR, 'ray_tmp'))
 
     trainer = main_config['trainer']
     early_stop = trainer.get('monitor', 'off')

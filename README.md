@@ -47,11 +47,14 @@ to get our preprocessed data and folder structure, including the data split and 
 
 ## Device Preparation
 To train the models, we recommend using a GPU. 
-The device ID can be set in the configuration file `global_config.py` by adapting the 
-CUDA_VISIBLE_DEVICES variable.  
+The GPU ID (device UUID) can be set in the configuration file `global_config.py` by adapting the 
+CUDA_VISIBLE_DEVICES variable. For Nvidia GPUs, the UUID can be retrieved by running the following command:
+```console
+nvidia-smi -q | grep UUID
+```
 
-Moreover, the home directory of the user should be set in the `global_config.py` file by adapting the
-HOME_DIR_USER variable. This path is used to init the RayTune temporary directory.
+Moreover, a path for creating the RayTune temporary directory should be set in the `global_config.py` file by adjusting the
+TUNE_TEMP_DIR variable. 
 
 ## Training and Testing with Fixed Data Split
 To train one of the models with a fixed 60-20-20 data split, run the following command with the path to
@@ -116,14 +119,20 @@ For a reduced feature set, the following flags can be passed:
 - `--reduced_individual_features` : Predicted probabilities only for the class of interest w/o MB-M (12 features)
 
 **Important**: Since a parameter study is performed for each class' binary classifier per fold, the whole process can 
-take a while, depending on the number of features used. 
+take a while, depending on the number of features used. After completion, the results are saved in a 
+`ML models/<ML setting>` subdirectory. In order to get an improved, human-readable summary, you can use the 
+`summarize_cross_valid_batch.py` script from the `utils` directory described below: 
+```console
+python utils/summarize_cross_valid_batch.py -p "savedVM/models/Multibranch_MACRO_CV/<run_id>/ML models"
+```
+For each ML setting, a summary file called `cross_valid_runs_summary.tex` is created in the corresponding subdirectory.
 
 ## Script Utils
 The `utils` directory contains scripts for the following tasks:
 - `summarize_cross_valid_batch.py`: Summarizes the results of multiple cross-validation runs within a folder, one run at a time. 
 A path should be specified to the folder containing the cross-validation runs. Example usage:
     ```console
-    python summarize_cross_valid_batch.py -p "../savedVM/models/BaselineWithMultiHeadAttention_CV"
+    python utils/summarize_cross_valid_batch.py -p "savedVM/models/BaselineWithMultiHeadAttention_CV"
     ```
 - `summarize_cross_valid_for_paper.py`: Fuses the results of the specified cross-validation runs in a suitable format 
 for the publication. The paths can be specified at the beginning of the script. 
