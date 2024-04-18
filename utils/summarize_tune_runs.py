@@ -6,6 +6,8 @@ from functools import partial
 import mmap
 import pandas as pd
 
+import global_config
+global_config.suppress_warnings()
 
 def _bold_formatter(x, value, num_decimals=2):
     """Format a number in bold when (almost) identical to a given value.

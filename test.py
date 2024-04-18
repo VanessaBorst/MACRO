@@ -30,6 +30,7 @@ from train import _set_seed
 from utils.tracker import ConfusionMatrixTracker, MetricTracker
 
 os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
+global_config.suppress_warnings()
 
 
 def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,

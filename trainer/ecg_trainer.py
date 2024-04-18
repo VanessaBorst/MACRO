@@ -5,12 +5,9 @@ import time
 from contextlib import nullcontext
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import pandas as pd
-import seaborn as sns
 import torch
-from matplotlib.colors import LinearSegmentedColormap
-from matplotlib.lines import Line2D
+
 from torch._C._profiler import ProfilerActivity
 from torch.profiler import tensorboard_trace_handler
 

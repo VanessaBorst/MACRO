@@ -8,9 +8,7 @@ import pandas as pd
 from pathlib import Path
 
 import numpy as np
-from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold, StratifiedShuffleSplit, train_test_split
 from sklearn.preprocessing import LabelEncoder
-from collections import Counter
 
 import global_config
 from data_loader.ecg_data_set import ECGDataset
@@ -24,6 +22,7 @@ from utils import ensure_dir
 import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
+global_config.suppress_warnings()
 
 
 def test_fold(config, data_dir, test_idx, k_fold, total_num_folds):

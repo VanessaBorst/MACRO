@@ -27,6 +27,7 @@ import torch
 from tqdm import tqdm
 
 os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
+global_config.suppress_warnings()
 
 def run_inference_on_given_fold_data(config, cv_data_dir=None,
                                      test_idx=None,

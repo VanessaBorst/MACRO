@@ -1,13 +1,12 @@
 import os
 import pickle
-from itertools import combinations
 
-import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
-
+import global_config
 from utils import ensure_dir
+global_config.suppress_warnings()
 
 CONTENT = "gradient_boosting"           # Either gradient_boosting or raw_multi_branch
 assert CONTENT in ["gradient_boosting", "raw_multi_branch"], "Invalid CONTENT"

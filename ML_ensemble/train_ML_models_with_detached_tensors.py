@@ -18,6 +18,7 @@ from utils import ensure_dir
 import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
+global_config.suppress_warnings()
 
 
 def _convert_logits_to_prediction(logits, thresholds=None):

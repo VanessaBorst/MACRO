@@ -1,20 +1,19 @@
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import GradientBoostingClassifier, AdaBoostClassifier
-from sklearn.linear_model import Ridge, RidgeClassifier, LogisticRegression
-from sklearn.metrics import classification_report, f1_score, accuracy_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, accuracy_score
 import os
 import pickle
 import torch
-from sklearn.model_selection import GridSearchCV, KFold, StratifiedKFold
-from sklearn.multioutput import MultiOutputClassifier
+from sklearn.model_selection import GridSearchCV, StratifiedKFold
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.utils.extmath import softmax
 from torchmetrics import AUROC, Accuracy
 
 import global_config
 from utils import ensure_dir
 
+global_config.suppress_warnings()
 
 # Assuming X contains the sigmoid probabilities or logits and y contains the target labels
 # X.shape should be (num_samples, 13, num_classes)

@@ -2,7 +2,9 @@ import argparse
 import os
 import pickle
 import pandas as pd
+import global_config
 
+global_config.suppress_warnings()
 
 def main(path):
     try:
