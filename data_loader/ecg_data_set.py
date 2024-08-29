@@ -81,13 +81,14 @@ class ECGDataset(Dataset):
             # (not used for final eval)
             mode = "valid"
 
-        file_name = os.path.join(get_project_root(), f"data_loader/log/pos_weights_ml_{mode}.p")
+        dataset = self._input_dir.split("/")[1]
+        file_name = os.path.join(get_project_root(), f"data_loader/log/pos_weights_ml_{mode}_{dataset}.p")
 
         # For cross-validation, statistics change from run to run!
         if not cross_valid_active and os.path.isfile(file_name):
 
             # File has already been created. For safety, ensure that it fits to the given idx_list!
-            self._consistency_check_data_split(idx_list, mode, "pos_weights")
+            self._consistency_check_data_split(idx_list, mode, f"pos_weights_{dataset}")
 
             # If the file exists and the required indices match, just load the dataframe
             with open(file_name, "rb") as file:
@@ -104,7 +105,7 @@ class ECGDataset(Dataset):
 
             if mode is not None and not cross_valid_active:
                 # Dump the record names to a txt file to ensure they are the same between VMs
-                _save_record_names_to_txt(mode, record_names, "pos_weights")
+                _save_record_names_to_txt(mode, record_names, f"pos_weights_{dataset}")
 
             # Get the class freqs as Pandas series
             class_freqs = pd.DataFrame(classes).sum()
@@ -159,15 +160,16 @@ class ECGDataset(Dataset):
             # (not used for final eval)
             mode = "valid"
 
-        file_name = f"data_loader/log/class_freqs_ml_{mode}.p" if multi_label_training \
-            else f"data_loader/log/class_freqs_sl_{mode}.p"
+        dataset = self._input_dir.split("/")[1]
+        file_name = f"data_loader/log/class_freqs_ml_{mode}_{dataset}.p" if multi_label_training \
+            else f"data_loader/log/class_freqs_sl_{mode}_{dataset}.p"
         file_name = os.path.join(get_project_root(), file_name)
 
         # For cross-validation, statistics change from run to run!
         if not cross_valid_active and os.path.isfile(file_name):
 
             # File has already been created. For safety, ensure that it fits to the given idx_list!
-            self._consistency_check_data_split(idx_list, mode, "class_freqs")
+            self._consistency_check_data_split(idx_list, mode, f"class_freqs_{dataset}")
 
             # If the file exists and the required indices match, just load the dataframe
             with open(file_name, "rb") as file:
@@ -192,7 +194,7 @@ class ECGDataset(Dataset):
 
             if mode is not None and not cross_valid_active:
                 # Dump the record names to a txt file to ensure they are the same between VMs
-                _save_record_names_to_txt(mode, record_names, "class_freqs")
+                _save_record_names_to_txt(mode, record_names, f"class_freqs_{dataset}")
 
             # Get the class freqs as Pandas series
             class_freqs = pd.DataFrame(classes).sum()

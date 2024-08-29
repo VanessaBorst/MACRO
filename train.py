@@ -24,6 +24,7 @@ from utils import prepare_device, get_project_root, ensure_dir
 import os
 import torch
 
+global_config.suppress_warnings()
 os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
 TUNE_TEMP_DIR = global_config.TUNE_TEMP_DIR
 

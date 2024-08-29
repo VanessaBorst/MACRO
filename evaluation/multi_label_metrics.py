@@ -220,13 +220,19 @@ def class_wise_confusion_matrices_multi_label_sk(output, target, logits, labels)
         return df_class_wise_cms
 
 
-def sk_classification_summary(output, target, logits, labels, output_dict,
-                              target_names=["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]):
+def sk_classification_summary(output, target, logits, labels, output_dict, data_dir):
     """
     Compute the classification report
     @param output_dict: If True, return output as dict.
-    @param target_names: Optional display names matching the labels (same order).
+    @param data_dir: Required to retrieve target_names.
     """
+    if "PTB_XL" in data_dir:
+        target_names = ["CD", "HYP", "MI", "NORM", "STTC"]
+    elif "CinC_CPSC" in data_dir:
+        target_names = ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]
+    else:
+        raise ValueError("Information for the used dataset is not available")
+
     with torch.no_grad():
         if not logits:
             pred = _convert_sigmoid_probs_to_prediction(output)
