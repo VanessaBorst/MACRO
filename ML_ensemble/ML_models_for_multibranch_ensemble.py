@@ -10,6 +10,9 @@ from sklearn.model_selection import GridSearchCV, StratifiedKFold
 from sklearn.tree import DecisionTreeClassifier
 from torchmetrics import AUROC, Accuracy
 
+from imblearn.over_sampling import SMOTE
+from sklearn.utils.class_weight import compute_sample_weight
+
 import global_config
 from utils import ensure_dir
 
@@ -20,43 +23,40 @@ global_config.suppress_warnings()
 # => Here: X is a stack of BranchNets outputs followed by the Multibranch output
 # y.shape should be (num_samples, num_classes)
 
-def _get_class_name_by_index(class_index):
-    return ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"][class_index]
+def _evaluate_ML_model(y_pred, y_pred_probs, y_test, target_names, save_path, path_suffix=None):
 
-
-def _evaluate_ML_model(y_pred, y_pred_probs, y_test, save_path, path_suffix=None):
     save_path = os.path.join(save_path, path_suffix) if path_suffix is not None else save_path
     ensure_dir(save_path)
 
     # Evaluate the performance of the model
     eval_dict = classification_report(y_test, y_pred,
-                                      target_names=["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"],
+                                      target_names=target_names,
                                       output_dict=True)
     df_sklearn_summary = pd.DataFrame.from_dict(eval_dict)
 
     # Values need to be within [0,1] because otherwise, torchmetrics will apply a Sigmoid function!
-    torch_roc_auc = AUROC(task='multilabel', num_labels=9, average=None)
+    num_labels = len(target_names)
+    torch_roc_auc = AUROC(task='multilabel', num_labels=num_labels, average=None)
     torch_roc_auc_scores = torch_roc_auc(preds=torch.tensor(y_pred_probs), target=y_test)
-    macro_torch_roc_auc = AUROC(task='multilabel', num_labels=9, average="macro")
+    macro_torch_roc_auc = AUROC(task='multilabel', num_labels=num_labels, average="macro")
     macro_torch_roc_auc_score = macro_torch_roc_auc(preds=torch.tensor(y_pred_probs), target=y_test)
-    weighted_torch_roc_auc = AUROC(task='multilabel', num_labels=9, average="weighted")
+    weighted_torch_roc_auc = AUROC(task='multilabel', num_labels=num_labels, average="weighted")
     weighted_torch_roc_auc_score = weighted_torch_roc_auc(preds=torch.tensor(y_pred_probs), target=y_test)
 
-    torch_acc = Accuracy(task='multilabel', num_labels=9, average=None)
+    torch_acc = Accuracy(task='multilabel', num_labels=num_labels, average=None)
     torch_acc_scores = torch_acc(preds=torch.tensor(y_pred_probs), target=y_test)
-    macro_torch_acc = AUROC(task='multilabel', num_labels=9, average="macro")
+    macro_torch_acc = AUROC(task='multilabel', num_labels=num_labels, average="macro")
     macro_torch_acc_score = macro_torch_acc(preds=torch.tensor(y_pred_probs), target=y_test)
-    weighted_torch_acc = AUROC(task='multilabel', num_labels=9, average="weighted")
+    weighted_torch_acc = AUROC(task='multilabel', num_labels=num_labels, average="weighted")
     weighted_torch_acc_score = weighted_torch_acc(preds=torch.tensor(y_pred_probs), target=y_test)
 
     # Class_wise_torch_accuracy
     subset_acc = accuracy_score(y_true=y_test, y_pred=y_pred)
 
     # Save the evaluation results to a file
-    df_class_wise_results = pd.DataFrame(
-        columns=['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'macro avg', 'weighted avg'])
-    df_class_wise_results = pd.concat([df_class_wise_results, df_sklearn_summary[
-        ['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'macro avg', 'weighted avg']]])
+    columns = [*target_names,*['macro avg', 'weighted avg']]
+    df_class_wise_results = pd.DataFrame(columns=columns)
+    df_class_wise_results = pd.concat([df_class_wise_results, df_sklearn_summary[columns]])
 
     # Append the roc_auc and acc scores to the dataframe
     df_class_wise_results.loc["torch_roc_auc"] = torch.cat(
@@ -67,10 +67,11 @@ def _evaluate_ML_model(y_pred, y_pred_probs, y_test, save_path, path_suffix=None
         (torch_acc_scores, macro_torch_acc_score.unsqueeze(0),
          weighted_torch_acc_score.unsqueeze(0))).numpy()
 
-    # Reorder the class columns of the dataframe to match the one used in the
-    desired_col_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE', 'macro avg',
-                         'weighted avg']
-    df_class_wise_results = df_class_wise_results[desired_col_order]
+    # Reorder the class columns of the dataframe  if the used dataset is CPSC 2018
+    if target_names ==  ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]:
+        desired_col_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
+                             'macro avg', 'weighted avg']
+        df_class_wise_results = df_class_wise_results[desired_col_order]
 
     df_single_metric_results = pd.DataFrame(columns=['sk_subset_accuracy'])
     # Append the subset accuracy to the dataframe
@@ -92,17 +93,23 @@ def _evaluate_ML_model(y_pred, y_pred_probs, y_test, save_path, path_suffix=None
 
 
 def train_ML_model(X_train, X_valid, X_test, y_train, y_valid, y_test, save_path,
-                   strategy=None, individual_features=False, reduced_individual_features=False):
+                   strategy=None, individual_features=False, reduced_individual_features=False,
+                   target_names=["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"],
+                   use_SMOTE=False, use_class_weights=False):
+
     # Note: X_valid is only used for hyperparameter tuning of the GradientBoostingClassifier and
     #  the AdaBoostClassifier with all features right now
     methods_with_feature_importance = ["decision_tree", "gradient_boosting", "ada_boost"]
     num_classes = y_train.shape[1]
+    assert len(target_names) == num_classes, "Loaded target names do NOT match the number of classes"
+
     y_preds = []
     y_pred_probs = []
 
     # -------------------------------- ONLY NEEDED FOR DECISION TREE ------------------------------
     if strategy in methods_with_feature_importance:
-        df_feature_importance = _prepare_df_for_feature_importance(individual_features, reduced_individual_features)
+        df_feature_importance = _prepare_df_for_feature_importance(individual_features, reduced_individual_features,
+                                                                   target_names)
 
     # -------------------------------- END ONLY NEEDED FOR DECISION TREE ------------------------------
 
@@ -139,14 +146,16 @@ def train_ML_model(X_train, X_valid, X_test, y_train, y_valid, y_test, save_path
                                                                   y_train=y_train_valid[:, class_index],
                                                                   class_index=class_index,
                                                                   save_path=save_path,
-                                                                  strategy=strategy)
+                                                                  target_names=target_names,
+                                                                  strategy=strategy,
+                                                                  use_SMOTE=use_SMOTE,
+                                                                  use_class_weights=use_class_weights)
+
 
             # Also save the test set to a file
-            with open(os.path.join(save_path, f'X_test_{_get_class_name_by_index(class_index)}.p'),
-                      'wb') as file:
+            with open(os.path.join(save_path, f'X_test_{target_names[class_index]}.p'), 'wb') as file:
                 pickle.dump(X_test, file)
-            with open(os.path.join(save_path, f'y_test_{_get_class_name_by_index(class_index)}.p'),
-                      'wb') as file:
+            with open(os.path.join(save_path, f'y_test_{target_names[class_index]}.p'), 'wb') as file:
                 pickle.dump(y_test[:, class_index], file)
 
             y_pred = classifier.predict(X_test)
@@ -186,7 +195,7 @@ def train_ML_model(X_train, X_valid, X_test, y_train, y_valid, y_test, save_path
 
         if strategy in methods_with_feature_importance:
             df_feature_importance.loc[
-                f"class_{_get_class_name_by_index(class_index)}"] = classifier.feature_importances_
+                f"class_{target_names[class_index]}"] = classifier.feature_importances_
 
     # Stack the predictions and prediction probabilities
     y_preds = np.stack(y_preds, axis=1)
@@ -205,12 +214,13 @@ def train_ML_model(X_train, X_valid, X_test, y_train, y_valid, y_test, save_path
     df_class_wise_results, df_single_metric_results = _evaluate_ML_model(y_pred=y_preds,
                                                                          y_pred_probs=y_pred_probs,
                                                                          y_test=y_test,
+                                                                         target_names=target_names,
                                                                          save_path=save_path)
 
     return df_class_wise_results, df_single_metric_results
 
 
-def _prepare_df_for_feature_importance(individual_features, reduced_individual_features):
+def _prepare_df_for_feature_importance(individual_features, reduced_individual_features, target_names):
     if individual_features:
         if not reduced_individual_features:
             df_feature_importance = pd.DataFrame(
@@ -218,10 +228,10 @@ def _prepare_df_for_feature_importance(individual_features, reduced_individual_f
         else:
             df_feature_importance = pd.DataFrame(columns=[f"branchNet_{i + 1}" for i in range(12)])
     else:
-        column_names = [f"BrN{branchnet + 1}_c{_get_class_name_by_index(class_idx)}"
+        column_names = [f"BrN{branchnet + 1}_c{target_names[class_idx]}"
                         for branchnet in range(12)
-                        for class_idx in range(9)] \
-                       + [f"MuB_c{_get_class_name_by_index(class_idx)}" for class_idx in range(9)]
+                        for class_idx in range(len(target_names))] \
+                       + [f"MuB_c{target_names[class_idx]}" for class_idx in range(len(target_names))]
         df_feature_importance = pd.DataFrame(columns=column_names)
     return df_feature_importance
 
@@ -251,7 +261,9 @@ def get_classifier(strategy):
     return classifier
 
 
-def fine_tune_gradient_boosting_or_ada_boost(X_train, y_train, class_index, save_path, strategy="gradient_boosting"):
+def fine_tune_gradient_boosting_or_ada_boost(X_train, y_train, class_index, save_path, target_names,
+                                             strategy="gradient_boosting", use_SMOTE=False, use_class_weights=False):
+
     match strategy:
         case "gradient_boosting":
             # Fine-tune the hyperparameters of the GradientBoostingClassifier
@@ -263,6 +275,13 @@ def fine_tune_gradient_boosting_or_ada_boost(X_train, y_train, class_index, save
                 'min_samples_leaf': [1, 2, 3],
                 'subsample': [0.8, 0.9, 1],
                 'max_features': [None, 'sqrt', 'log2']
+                # 'learning_rate': [0.1],
+                # 'max_depth': [2],
+                # 'n_estimators': [100],
+                # 'min_samples_split': [2],
+                # 'min_samples_leaf': [1],
+                # 'subsample': [0.8],
+                # 'max_features': [None]
             }
             # Initialize the base classifier
             base_classifier = GradientBoostingClassifier(random_state=global_config.SEED)
@@ -284,36 +303,51 @@ def fine_tune_gradient_boosting_or_ada_boost(X_train, y_train, class_index, save
     cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=global_config.SEED)
     grid_search = GridSearchCV(estimator=base_classifier, param_grid=param_grid,
                                cv=cv, n_jobs=24, scoring='f1')
-    print(f"Fine-tuning the hyperparameters for class {_get_class_name_by_index(class_index)} using {strategy}."
+    print(f"Fine-tuning the hyperparameters for class {target_names[class_index]} using {strategy}."
           f" This may take a while...")
-    grid_search.fit(X_train, y_train)
+
+    assert not use_SMOTE or not use_class_weights, "Please do not use the combination of both"
+    if use_SMOTE:
+        print(f"Using SMOTE for resampling the data before fitting the classifier.")
+        smote = SMOTE(random_state=global_config.SEED)
+        X_resampled, y_resampled = smote.fit_resample(X_train, y_train)
+        # Fit the model on the resampled data
+        grid_search.fit(X_resampled, y_resampled)
+    elif use_class_weights:
+        print("Using sample weights to penalize the model for misclassifying the minority class")
+        # Compute sample weights to penalize the model for misclassifying the minority class
+        sample_weights = compute_sample_weight(class_weight='balanced', y=y_train)
+        # Fit the model using sample weights
+        grid_search.fit(X_train, y_train, sample_weight=sample_weights)
+    else:
+        grid_search.fit(X_train, y_train)
 
     # Print and save the best parameters found
     print("Best Parameters:", grid_search.best_params_)
     # If the class index is 0, overwrite the file, otherwise append to it
     if class_index == 0:
         with open(os.path.join(save_path, 'best_params.txt'), 'w') as file:
-            file.write(f"Class {_get_class_name_by_index(class_index)}:\n")
+            file.write(f"Class {target_names[class_index]}:\n")
             file.write(str(grid_search.best_params_) + "\n")
     else:
         with open(os.path.join(save_path, 'best_params.txt'), 'a') as file:
-            file.write(f"Class {_get_class_name_by_index(class_index)}:\n")
+            file.write(f"Class {target_names[class_index]}:\n")
             file.write(str(grid_search.best_params_) + "\n")
 
     # Save the best parameter dict to a pickle file
-    with open(os.path.join(save_path, f'best_params_{_get_class_name_by_index(class_index)}.p'), 'wb') as file:
+    with open(os.path.join(save_path, f'best_params_{target_names[class_index]}.p'), 'wb') as file:
         pickle.dump(grid_search.best_params_, file)
 
     # Log the cv results to a file as csv and as pickle
     cv_result_df = pd.DataFrame(grid_search.cv_results_)
     with open(os.path.join(save_path,
-                           f'{_get_class_name_by_index(class_index)}_cv_results.p'), 'wb') as file:
+                           f'{target_names[class_index]}_cv_results.p'), 'wb') as file:
         pickle.dump(cv_result_df, file)
-    cv_result_df.to_csv(os.path.join(save_path, f'{_get_class_name_by_index(class_index)}_cv_results.csv'))
+    cv_result_df.to_csv(os.path.join(save_path, f'{target_names[class_index]}_cv_results.csv'))
 
     best_model = grid_search.best_estimator_  # No need for re-fitting the model, just use the best estimator
     # Save the best model to a file
-    with open(os.path.join(save_path, f'best_model_{_get_class_name_by_index(class_index)}.p'), 'wb') as file:
+    with open(os.path.join(save_path, f'best_model_{target_names[class_index]}.p'), 'wb') as file:
         pickle.dump(best_model, file)
 
     return best_model

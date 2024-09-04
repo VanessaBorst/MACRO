@@ -1,23 +1,27 @@
 {
-    "name": "Multibranch_MACRO_PTB-XL_100Hz_All",
-    "run_details": "convRedBlock_333_0.2_6_false_0.2_24",
+    "name": "MACRO_PTB-XL_100Hz_Superdiag",
+    "run_details": "_0.2-6_12_entmax15",
     "n_gpu": 1,
     "arch": {
-        "type": "FinalModelMultiBranch",
+        "type": "FinalModel",
         "args": {
-            "num_classes": 71,
+            "num_classes": 5,
             "apply_final_activation": false,
             "multi_label_training": true,
-            "branchNet_gru_units": 12,
-            "use_conv_reduction_block": true,
-            "conv_reduction_first_kernel_size": 3,
-            "conv_reduction_second_kernel_size": 3,
-            "conv_reduction_third_kernel_size": 3,
-            "branchNet_attention_dropout": 0.2,
-            "branchNet_heads": 6,
-            "branchNet_reduce_channels": false,
-            "multi_branch_attention_dropout": 0.2,
-            "multi_branch_heads": 24
+            "down_sample": "conv",
+            "vary_channels": true,
+            "pos_skip": "all",
+            "norm_type": "BN",
+            "norm_pos": "all",
+            "norm_before_act": true,
+            "use_pre_activation_design": true,
+            "use_pre_conv": true,
+            "pre_conv_kernel": 16,
+            "dropout_attention": 0.2,
+            "heads": 6,
+            "gru_units": 12,
+            "use_reduced_head_dims": true,
+            "attention_activation_function": "entmax15"
         }
     },
     "data_loader": {
@@ -28,14 +32,14 @@
             "data_dir": ""
         },
         "args": {
-            "data_dir": "data/PTB_XL/all_100/train",
+            "data_dir": "data/PTB_XL/superdiag_100/train",
             "batch_size": 64,
             "shuffle": true,
-            "validation_split": "data/PTB_XL/all_100/valid",
+            "validation_split": "data/PTB_XL/superdiag_100/valid",
             "num_workers": 4,
             "pin_memory": false
         },
-        "test_dir": "data/PTB_XL/all_100/test"
+        "test_dir": "data/PTB_XL/superdiag_100/test"
     },
     "optimizer": {
         "type": "Adam",
@@ -46,10 +50,8 @@
         }
     },
     "loss": {
-        "type": "multi_branch_BCE_with_logits",
-        "add_args": {
-            "lambda_balance": 1
-        }
+        "type": "BCE_with_logits",
+        "add_args": {}
     },
     "metrics": {
         "ml": {

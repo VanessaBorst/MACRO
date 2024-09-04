@@ -14,3 +14,4 @@ torchinfo==1.8.0
 torchmetrics==1.0.3
 tqdm==4.66.0
 wfdb==4.1.2
+imblearn==0.0

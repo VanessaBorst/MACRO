@@ -7,6 +7,8 @@ from sklearn.metrics import multilabel_confusion_matrix, \
 
 from torchmetrics import AUROC, Precision, Accuracy, Recall, ROC, F1Score
 
+from utils import extract_target_names_for_PTB_XL
+
 THRESHOLD = 0.5
 
 
@@ -227,7 +229,7 @@ def sk_classification_summary(output, target, logits, labels, output_dict, data_
     @param data_dir: Required to retrieve target_names.
     """
     if "PTB_XL" in data_dir:
-        target_names = ["CD", "HYP", "MI", "NORM", "STTC"]
+        target_names = extract_target_names_for_PTB_XL(data_dir)
     elif "CinC_CPSC" in data_dir:
         target_names = ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]
     else:
@@ -241,6 +243,9 @@ def sk_classification_summary(output, target, logits, labels, output_dict, data_
         assert pred.shape[0] == len(target)
         return classification_report(y_true=target, y_pred=pred, labels=labels, digits=3, target_names=target_names,
                                      output_dict=output_dict)
+
+
+
 
 
 # ----------------------------------- TORCHMETRICS -----------------------------------------------

@@ -71,6 +71,8 @@ def train_ML_models_on_cross_fold_data(main_path, strategy=None, use_logits=Fals
         "The given strategy is not supported for training ML models!"
     assert not reduced_individual_features or individual_features, \
         "Reduced individual features can only be used if individual features are used!"
+    # Not completely clean, only works if folder in config is named in a way containing PTB-XL!
+    assert "PTB-XL" not in main_path, "This script is not yet adapated to work with PTB-XL! Use it for CPSC!"
 
     strategy_name = strategy if not use_logits else strategy + " with logits"
     strategy_name = strategy_name + "_individual_features" if individual_features else strategy_name
@@ -104,24 +106,9 @@ def train_ML_models_on_cross_fold_data(main_path, strategy=None, use_logits=Fals
 
         # Load the detached outputs to train the LASSO model
         detached_storage_path = os.path.join(config.save_dir.parent.parent.parent, "output_logging", "Fold_" + str(k + 1))
-        with open(os.path.join(detached_storage_path, f"train_det_outputs.p"), 'rb') as file:
-            det_outputs_train = pickle.load(file)
-        with open(os.path.join(detached_storage_path, f"train_det_targets.p"), 'rb') as file:
-            det_targets_train = pickle.load(file)
-        with open(os.path.join(detached_storage_path, f"train_det_single_lead_outputs.p"), 'rb') as file:
-            det_single_lead_outputs_train = pickle.load(file)
-        with open(os.path.join(detached_storage_path, "valid_det_outputs.p"), 'rb') as file:
-            det_outputs_valid = pickle.load(file)
-        with open(os.path.join(detached_storage_path, "valid_det_targets.p"), 'rb') as file:
-            det_targets_valid = pickle.load(file)
-        with open(os.path.join(detached_storage_path, "valid_det_single_lead_outputs.p"), 'rb') as file:
-            det_single_lead_outputs_valid = pickle.load(file)
-        with open(os.path.join(detached_storage_path, "test_det_outputs.p"), 'rb') as file:
-            det_outputs_test = pickle.load(file)
-        with open(os.path.join(detached_storage_path, "test_det_targets.p"), 'rb') as file:
-            det_targets_test = pickle.load(file)
-        with open(os.path.join(detached_storage_path, "test_det_single_lead_outputs.p"), 'rb') as file:
-            det_single_lead_outputs_test = pickle.load(file)
+        det_outputs_test, det_outputs_train, det_outputs_valid, \
+            det_single_lead_outputs_test, det_single_lead_outputs_train, det_single_lead_outputs_valid, \
+            det_targets_test, det_targets_train, det_targets_valid = retrieve_detached_data(detached_storage_path)
 
         # Train the ML models
         predicted_train = get_all_predictions_as_probs(det_outputs_train, det_single_lead_outputs_train) \
@@ -198,10 +185,36 @@ def train_ML_models_on_cross_fold_data(main_path, strategy=None, use_logits=Fals
     print(f"Finished additional run of cross-fold-validation to train {strategy_name} models")
 
 
+def retrieve_detached_data(detached_storage_path):
+    with open(os.path.join(detached_storage_path, f"train_det_outputs.p"), 'rb') as file:
+        det_outputs_train = pickle.load(file)
+    with open(os.path.join(detached_storage_path, f"train_det_targets.p"), 'rb') as file:
+        det_targets_train = pickle.load(file)
+    with open(os.path.join(detached_storage_path, f"train_det_single_lead_outputs.p"), 'rb') as file:
+        det_single_lead_outputs_train = pickle.load(file)
+    with open(os.path.join(detached_storage_path, "valid_det_outputs.p"), 'rb') as file:
+        det_outputs_valid = pickle.load(file)
+    with open(os.path.join(detached_storage_path, "valid_det_targets.p"), 'rb') as file:
+        det_targets_valid = pickle.load(file)
+    with open(os.path.join(detached_storage_path, "valid_det_single_lead_outputs.p"), 'rb') as file:
+        det_single_lead_outputs_valid = pickle.load(file)
+    with open(os.path.join(detached_storage_path, "test_det_outputs.p"), 'rb') as file:
+        det_outputs_test = pickle.load(file)
+    with open(os.path.join(detached_storage_path, "test_det_targets.p"), 'rb') as file:
+        det_targets_test = pickle.load(file)
+    with open(os.path.join(detached_storage_path, "test_det_single_lead_outputs.p"), 'rb') as file:
+        det_single_lead_outputs_test = pickle.load(file)
+
+    return det_outputs_test, det_outputs_train, det_outputs_valid, \
+        det_single_lead_outputs_test, det_single_lead_outputs_train, det_single_lead_outputs_valid, \
+        det_targets_test, det_targets_train, det_targets_valid
+
 
 def _evaluate_trained_ML_models_on_cross_fold_data(path):
     strategy_name = path.split("/")[-1]
     main_path = os.path.join(*path.split("/")[:-2])
+    # Not completely clean, only works if folder in config is named in a way containing PTB-XL!
+    assert "PTB-XL" not in main_path, "This script is not yet adapated to work with PTB-XL! Use it for CPSC!"
     config = load_config_and_setup_paths(main_path, sub_dir=os.path.join("ML models",strategy_name))
 
     base_config, base_log_dir, base_save_dir, data_dir, dataset, fold_data, total_num_folds = setup_cross_fold(config)

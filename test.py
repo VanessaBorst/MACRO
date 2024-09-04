@@ -336,7 +336,7 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
         used_dataset = config["data_loader"]["test_dir"].split("/")[1]
     else:
         # TODO: Check
-        raise NotImplementedError("This should be validated")
+        # raise NotImplementedError("This should be validated")
         data_dir = config["data_loader"]["cross_valid"]["data_dir"]
         used_dataset = config["data_loader"]["cross_valid"]["data_dir"].split("/")[1]
 

@@ -3,9 +3,11 @@ import torch
 from sklearn.metrics import confusion_matrix, multilabel_confusion_matrix, \
     accuracy_score, top_k_accuracy_score, roc_auc_score, f1_score, balanced_accuracy_score, classification_report
 
-
 from torchmetrics import Precision, Accuracy, Recall, ROC, F1Score
 from torchmetrics.classification.auroc import AUROC
+
+from utils import extract_target_names_for_PTB_XL
+
 
 # ----------------------------------- SKlearn Metric -----------------------------------------------
 # For details, see https://scikit-learn.org/stable/modules/classes.html#module-sklearn.metrics
@@ -199,7 +201,7 @@ def sk_classification_summary(output, target, logits, labels, output_dict, data_
         @param data_dir: Required to retrieve target_names.
     """
     if "PTB_XL" in data_dir:
-        target_names = ["CD", "HYP", "MI", "NORM", "STTC"]
+        target_names = extract_target_names_for_PTB_XL(data_dir)
     elif "CinC_CPSC" in data_dir:
         target_names = ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]
     else:
@@ -306,7 +308,6 @@ def torch_roc(output, target, logits, labels):
         # returns a tuple (fpr, tpr, thresholds)
         auroc = ROC(task='multiclass', num_classes=len(labels))
         return auroc(probs, target)
-
 
 
 def _torch_f1(output, target, logits, labels, average):
@@ -427,6 +428,3 @@ def weighted_torch_recall(output, target, logits, labels):
 def macro_torch_recall(output, target, logits, labels):
     """See documentation for _torch_recall """
     return _torch_recall(output, target, logits, labels, average='macro')
-
-
-

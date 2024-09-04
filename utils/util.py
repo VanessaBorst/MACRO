@@ -120,3 +120,43 @@ def fullprint(*args, **kwargs):
   numpy.set_printoptions(threshold=numpy.inf)
   pprint(*args, **kwargs)
   numpy.set_printoptions(**opt)
+
+
+def extract_target_names_for_PTB_XL(data_dir):
+    assert "PTB_XL" in data_dir, "This method is intended for PTB-XL only!"
+    ctype = data_dir.split("/")[2].split("_")[0]
+    match ctype:
+        case "all":
+            target_names = ['1AVB', '2AVB', '3AVB', 'ABQRS', 'AFIB', 'AFLT', 'ALMI', 'AMI',
+                            'ANEUR', 'ASMI', 'BIGU', 'CLBBB', 'CRBBB', 'DIG', 'EL', 'HVOLT',
+                            'ILBBB', 'ILMI', 'IMI', 'INJAL', 'INJAS', 'INJIL', 'INJIN',
+                            'INJLA', 'INVT', 'IPLMI', 'IPMI', 'IRBBB', 'ISCAL', 'ISCAN',
+                            'ISCAS', 'ISCIL', 'ISCIN', 'ISCLA', 'ISC_', 'IVCD', 'LAFB',
+                            'LAO/LAE', 'LMI', 'LNGQT', 'LOWT', 'LPFB', 'LPR', 'LVH', 'LVOLT',
+                            'NDT', 'NORM', 'NST_', 'NT_', 'PAC', 'PACE', 'PMI', 'PRC(S)',
+                            'PSVT', 'PVC', 'QWAVE', 'RAO/RAE', 'RVH', 'SARRH', 'SBRAD',
+                            'SEHYP', 'SR', 'STACH', 'STD_', 'STE_', 'SVARR', 'SVTAC', 'TAB_',
+                            'TRIGU', 'VCLVH', 'WPW']
+        case "diag":
+            target_names = ['1AVB', '2AVB', '3AVB', 'ALMI', 'AMI', 'ANEUR', 'ASMI', 'CLBBB',
+                            'CRBBB', 'DIG', 'EL', 'ILBBB', 'ILMI', 'IMI', 'INJAL', 'INJAS',
+                            'INJIL', 'INJIN', 'INJLA', 'IPLMI', 'IPMI', 'IRBBB', 'ISCAL',
+                            'ISCAN', 'ISCAS', 'ISCIL', 'ISCIN', 'ISCLA', 'ISC_', 'IVCD',
+                            'LAFB', 'LAO/LAE', 'LMI', 'LNGQT', 'LPFB', 'LVH', 'NDT', 'NORM',
+                            'NST_', 'PMI', 'RAO/RAE', 'RVH', 'SEHYP', 'WPW']
+        case "form":
+            target_names = ['ABQRS', 'DIG', 'HVOLT', 'INVT', 'LNGQT', 'LOWT', 'LPR', 'LVOLT', 'NDT', 'NST_', 'NT_',
+                            'PAC',
+                            'PRC(S)', 'PVC', 'QWAVE', 'STD_', 'STE_', 'TAB_', 'VCLVH']
+        case "rhythm":
+            target_names = ['AFIB', 'AFLT', 'BIGU', 'PACE', 'PSVT', 'SARRH', 'SBRAD', 'SR', 'STACH', 'SVARR',
+                            'SVTAC', 'TRIGU']
+        case "subdiag":
+            target_names = ['AMI', 'CLBBB', 'CRBBB', 'ILBBB', 'IMI', 'IRBBB', 'ISCA', 'ISCI', 'ISC_', 'IVCD',
+                            'LAFB/LPFB', 'LAO/LAE', 'LMI', 'LVH', 'NORM', 'NST_', 'PMI', 'RAO/RAE', 'RVH',
+                            'SEHYP', 'STTC', 'WPW', '_AVB']
+        case "superdiag":
+            target_names = ['CD', 'HYP', 'MI', 'NORM', 'STTC']
+        case _:
+            raise ValueError("Data Dir does not match any known Ctype")
+    return target_names
