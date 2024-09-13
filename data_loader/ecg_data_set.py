@@ -13,7 +13,7 @@ from utils import get_project_root, ensure_dir
 def _save_record_names_to_txt(mode, record_names, suffix):
     project_root = get_project_root()
     ensure_dir(os.path.join(project_root, 'data_loader', 'log'))
-    with open(os.path.join(project_root, 'data_loader', 'log', f'Record_names_{mode}_{suffix}.txt'),"w+") as txt_file:
+    with open(os.path.join(project_root, 'data_loader', 'log', f'Record_names_{mode}_{suffix}.txt'), "w+") as txt_file:
         for line in sorted(record_names):
             txt_file.write("".join(line) + "\n")
 
@@ -57,11 +57,9 @@ class ECGDataset(Dataset):
         # Ensure that the record is not containing any unknown class label
         assert all(label in self.class_labels for label in meta["classes_encoded"])
 
-
         return record.values.astype("float32"), \
-               str(meta["classes_encoded"]), meta["classes_encoded"][0], \
-               meta["classes_one_hot"].values, record_name
-
+            str(meta["classes_encoded"]), meta["classes_encoded"][0], \
+            meta["classes_one_hot"].values, record_name
 
     def get_ml_pos_weights(self, idx_list, mode=None, cross_valid_active=False):
         """
@@ -81,9 +79,13 @@ class ECGDataset(Dataset):
             # (not used for final eval)
             mode = "valid"
 
-        dataset = self._input_dir.split("/")[1]
+        if str(get_project_root()) in self._input_dir:
+            relative_path = os.path.relpath(self._input_dir, get_project_root())
+        else:
+            relative_path = self._input_dir
+        dataset = relative_path.split("/")[1]
         suffix = f"{dataset}" if dataset == "CinC_CPSC" \
-            else f"{dataset}_{self._input_dir.split('/')[2].split('_')[0]}"
+            else f"{dataset}_{relative_path.split('/')[2].split('_')[0]}"
 
         file_name = os.path.join(get_project_root(), f"data_loader/log/pos_weights_ml_{mode}_{suffix}.p")
 
@@ -163,9 +165,15 @@ class ECGDataset(Dataset):
             # (not used for final eval)
             mode = "valid"
 
-        dataset = self._input_dir.split("/")[1]
+        if str(get_project_root()) in self._input_dir:
+            relative_path = os.path.relpath(self._input_dir, get_project_root())
+        else:
+            relative_path = self._input_dir
+        dataset = relative_path.split("/")[1]
         suffix = f"{dataset}" if dataset == "CinC_CPSC" \
-            else f"{dataset}_{self._input_dir.split('/')[2].split('_')[0]}"
+            else f"{dataset}_{relative_path.split('/')[2].split('_')[0]}"
+
+        print(f"Using suffix {suffix}")
 
         file_name = f"data_loader/log/class_freqs_ml_{mode}_{suffix}.p" if multi_label_training \
             else f"data_loader/log/class_freqs_sl_{mode}_{suffix}.p"
@@ -226,9 +234,19 @@ class ECGDataset(Dataset):
     def _consistency_check_data_split(self, idx_list, mode, suffix):
         with open(os.path.join(get_project_root(), f"data_loader/log/Record_names_{mode}_{suffix}.txt"), "r") as file:
             records_for_mode = [line.rstrip() for line in file]
-            desired_records = []
+            current_records = []
             for idx in idx_list:
                 _, _, _, _, record_name = self.__getitem__(idx)
-                desired_records.append(record_name)
-            assert sorted(desired_records) == sorted(records_for_mode), "Data Split Error! Check this again!"
+                current_records.append(record_name)
+
+        # with open(os.path.join(get_project_root(), f"data_loader/log/DEBUG_{mode}_{suffix}.txt"), "w") as txt_file:
+        #     txt_file.write(f"Check called for {f'data_loader/log/Record_names_{mode}_{suffix}.txt'}" + "\n")
+        #     txt_file.write("CURRENT RECORDS:" + "\n")
+        #     for line in sorted(current_records):
+        #         txt_file.write("".join(line) + "\n")
+        #     txt_file.write("\n" + "\n" + "\n" + "DESIRED RECORDS:" + "\n")
+        #     for line in sorted(records_for_mode):
+        #         txt_file.write("".join(line) + "\n")
+
+        assert sorted(current_records) == sorted(records_for_mode), "Data Split Error! Check this again!"
 

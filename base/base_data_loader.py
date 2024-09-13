@@ -49,8 +49,10 @@ class BaseDataLoader(DataLoader):
         if isinstance(validation_split, Dataset):
             self.single_run_valid_set_provided = True
             self.valid_n_samples = len(validation_split)
+            print(f"Dedicated Valid Set Provided: {validation_split} of length {self.valid_n_samples}")
             assert not cross_valid, "This should never happen. If it does, something went wrong!"
         else:
+            print("No Dedicated Valid Set Provided")
             self.single_run_valid_set_provided = False
 
         if not cross_valid:

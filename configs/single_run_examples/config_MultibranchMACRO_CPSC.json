@@ -1,11 +1,11 @@
 {
-    "name": "Multibranch_MACRO_PTB-XL_100Hz_Superdiag",
+    "name": "Multibranch_MACRO_CPSC",
     "run_details": "convRedBlock_333_0.2_6_false_0.2_24",
     "n_gpu": 1,
     "arch": {
         "type": "FinalModelMultiBranch",
         "args": {
-            "num_classes": 5,
+            "num_classes": 9,
             "apply_final_activation": false,
             "multi_label_training": true,
             "branchNet_gru_units": 12,
@@ -28,14 +28,14 @@
             "data_dir": ""
         },
         "args": {
-            "data_dir": "data/PTB_XL/superdiag_100/train",
+            "data_dir": "data/CinC_CPSC/train/preprocessed/250Hz/60s",
             "batch_size": 64,
             "shuffle": true,
-            "validation_split": "data/PTB_XL/superdiag_100/valid",
+            "validation_split": 0.25,
             "num_workers": 4,
             "pin_memory": false
         },
-        "test_dir": "data/PTB_XL/superdiag_100/test"
+        "test_dir": "data/CinC_CPSC/test/preprocessed/250Hz/60s"
     },
     "optimizer": {
         "type": "Adam",

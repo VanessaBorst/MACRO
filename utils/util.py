@@ -146,8 +146,7 @@ def extract_target_names_for_PTB_XL(data_dir):
                             'NST_', 'PMI', 'RAO/RAE', 'RVH', 'SEHYP', 'WPW']
         case "form":
             target_names = ['ABQRS', 'DIG', 'HVOLT', 'INVT', 'LNGQT', 'LOWT', 'LPR', 'LVOLT', 'NDT', 'NST_', 'NT_',
-                            'PAC',
-                            'PRC(S)', 'PVC', 'QWAVE', 'STD_', 'STE_', 'TAB_', 'VCLVH']
+                            'PAC', 'PRC(S)', 'PVC', 'QWAVE', 'STD_', 'STE_', 'TAB_', 'VCLVH']
         case "rhythm":
             target_names = ['AFIB', 'AFLT', 'BIGU', 'PACE', 'PSVT', 'SARRH', 'SBRAD', 'SR', 'STACH', 'SVARR',
                             'SVTAC', 'TRIGU']

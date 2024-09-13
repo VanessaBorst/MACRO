@@ -141,21 +141,6 @@ def retrieve_detached_single_run_tensors_for_further_evaluation(main_path):
 
 
 
-# def prepare_result_data_structures(total_num_folds, include_valid_results=False):
-#     class_wise_metrics = ["precision", "recall", "f1-score", "torch_roc_auc", "torch_accuracy", "support"]
-#     folds = ['fold_' + str(i) for i in range(1, total_num_folds + 1)]
-#     iterables = [folds, class_wise_metrics]
-#     multi_index = pd.MultiIndex.from_product(iterables, names=["fold", "metric"])
-#     if include_valid_results:
-#         valid_results = pd.DataFrame(columns=folds)
-#     test_results_class_wise = pd.DataFrame(columns=['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',
-#                                                     'macro avg', 'weighted avg'], index=multi_index)
-#     test_results_single_metrics = pd.DataFrame(columns=['loss', 'sk_subset_accuracy'])
-#     if not include_valid_results:
-#         return class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics
-#     else:
-#         return class_wise_metrics, folds, test_results_class_wise, test_results_single_metrics, valid_results
-
 
 def load_config_and_setup_paths(main_path, sub_dir=None):
     # Load the main config

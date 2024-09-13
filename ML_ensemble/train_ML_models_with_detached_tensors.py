@@ -1,6 +1,8 @@
 import argparse
 import copy
 import pickle
+
+import numpy as np
 import pandas as pd
 from pathlib import Path
 
@@ -214,7 +216,7 @@ def _evaluate_trained_ML_models_on_cross_fold_data(path):
     strategy_name = path.split("/")[-1]
     main_path = os.path.join(*path.split("/")[:-2])
     # Not completely clean, only works if folder in config is named in a way containing PTB-XL!
-    assert "PTB-XL" not in main_path, "This script is not yet adapated to work with PTB-XL! Use it for CPSC!"
+    assert "PTB-XL" not in path, "This script is not yet adapated to work with PTB-XL! Use it for CPSC!"
     config = load_config_and_setup_paths(main_path, sub_dir=os.path.join("ML models",strategy_name))
 
     base_config, base_log_dir, base_save_dir, data_dir, dataset, fold_data, total_num_folds = setup_cross_fold(config)
@@ -292,6 +294,69 @@ def _evaluate_trained_ML_models_on_cross_fold_data(path):
                                              escape=False)
     print(f"Finished additional run of cross-fold-validation to train {strategy_name} models")
 
+
+# Example call: -p "/home/vab30xh/projects/2024-macro-final/savedVM/models/Multibranch_MACRO_CV/0201_104057_ml_bs64convRedBlock_333_0.2_6_false_0.2_24"
+def _retrieve_preds_from_trained_ML_models_on_cross_fold_data(main_path, target_names):
+    # Not completely clean, only works if folder in config is named in a way containing PTB-XL!
+    assert "PTB-XL" not in main_path, "This script is not yet adapated to work with PTB-XL! Use it for CPSC!"
+
+    for strategy_name in ["gradient_boosting_BCE_final",
+                       "gradient_boosting_individual_features",
+                       "gradient_boosting_individual_features_reduced"]:
+        config = load_config_and_setup_paths(main_path, sub_dir=os.path.join("ML models",strategy_name))
+
+        base_config, base_log_dir, base_save_dir, data_dir, dataset, fold_data, total_num_folds = setup_cross_fold(config)
+
+        valid_fold_index = total_num_folds - 2
+        test_fold_index = total_num_folds - 1
+
+        for k in range(total_num_folds):
+            # Adapt the log and save paths for the current fold
+            config.save_dir = Path(os.path.join(base_save_dir, "Fold_" + str(k + 1)))
+            config.log_dir = Path(os.path.join(base_log_dir, "Fold_" + str(k + 1)))
+            ensure_dir(config.save_dir)
+            ensure_dir(config.log_dir)
+            update_logging_setup_for_tune_or_cross_valid(config.log_dir)
+
+            y_preds = []
+            y_pred_probs = []
+
+            for class_index in range(0, len(target_names)):
+
+                # Load the test set and the classifier from the files
+                with open(os.path.join(config.save_dir, f'X_test_{target_names[class_index]}.p'), 'rb') as file:
+                    X_test = pickle.load(file)
+                with open(os.path.join(config.save_dir, f'y_test_{target_names[class_index]}.p'), 'rb') as file:
+                    y_test = pickle.load(file)
+                with open(os.path.join(config.save_dir, f'best_model_{target_names[class_index]}.p'), 'rb') as file:
+                    classifier = pickle.load(file)
+
+                y_pred = classifier.predict(X_test)
+                y_pred_prob = classifier.predict_proba(X_test)[:, 1]
+
+
+                y_preds.append(y_pred)
+                y_pred_probs.append(y_pred_prob)
+
+
+            # Stack the predictions and prediction probabilities
+            y_preds = np.stack(y_preds, axis=1)
+            y_pred_probs = np.stack(y_pred_probs, axis=1)
+
+            # Save the predictions across all classes to a file!
+            with open(os.path.join(config.save_dir, 'y_preds_all_classes.p'), 'wb') as file:
+                pickle.dump(y_preds, file)
+            with open(os.path.join(config.save_dir, 'y_pred_probs_all_classes.p'), 'wb') as file:
+                pickle.dump(y_pred_probs, file)
+
+            # Update the indices and reset the config (including resume!)
+            valid_fold_index = (valid_fold_index + 1) % total_num_folds
+            test_fold_index = (test_fold_index + 1) % total_num_folds
+            config = copy.deepcopy(base_config)
+
+    print(f"Finished additional run of cross-fold-validation to store the ML predictions")
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='MACRO Paper: Strategy-based Evaluation')
     parser.add_argument('-p', '--path', default=None, type=str,
@@ -306,6 +371,9 @@ if __name__ == '__main__':
                         help='Use the reduced individual features per class for the training of the ML models '
                              'but omit the multibranch features')
     args = parser.parse_args()
-    #_evaluate_trained_ML_models_on_cross_fold_data(args.path)
+    # _retrieve_preds_from_trained_ML_models_on_cross_fold_data(args.path,
+    #                                                           target_names=["IAVB", "AF", "LBBB", "PAC", "RBBB",
+    #                                                                         "SNR", "STD", "STE", "VEB"])
+    # _evaluate_trained_ML_models_on_cross_fold_data(args.path)
     train_ML_models_on_cross_fold_data(args.path, args.strategy, args.use_logits,
                                        args.individual_features, args.reduced_individual_features)

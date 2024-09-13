@@ -14,7 +14,8 @@ class ECGDataLoader(BaseDataLoader):
         # self.data_dir = data_dir
         if isinstance(validation_split, str):
             # If a dedicated validation split is given (PTB-XL), treat it separately
-            assert os.path.exists(os.path.dirname(validation_split)), "The provided validation folder does not exist!"
+            assert os.path.exists(validation_split), \
+                f"The provided validation folder {validation_split} does not exist!"
             self.valid_dataset = ECGDataset(validation_split)
 
         # Set the training (or test) dataset
