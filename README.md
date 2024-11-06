@@ -36,7 +36,7 @@ For the hyperparameter study, we employed a fixed train-valid-test split with ra
 while for the final evaluations, including the comparison with the state-of-the-art methods and ablation studies, 
 we used a 10-fold cross-validation strategy.
 
-Our preprocessed data can be downloaded from [FigShare](https://doi.org/10.6084/m9.figshare.25532869.v2) 
+Our preprocessed data can be downloaded from [FigShare](https://doi.org/10.6084/m9.figshare.25532869.v3) 
 and should be placed in the `data` directory at project root level while maintaining the folder structure. 
 In case of using the fixed train-valid-test split, 
 the validation set is automatically created from the training set during the training process.
@@ -55,7 +55,7 @@ In addition, the diagnostic category can be divided into 24 sub- and 5 coarse-gr
 For our experiments, we utilize the super-diagnostic labels for classification and the **recommended train-valid-test** 
 splits, sampled at 100 Hz. We select only samples with at least one label in the super-diagnostic category, 
 without applying any further preprocessing - the resulting dataset can be downloaded from 
-[FigShare](https://doi.org/10.6084/m9.figshare.25532869.v2) or created manually by downloading the raw dataset from the
+[FigShare](https://doi.org/10.6084/m9.figshare.25532869.v3) or created manually by downloading the raw dataset from the
 [PhysioNet/PTB-XL](https://physionet.org/content/ptb-xl/1.0.3/) website and running the `preprocesssing/preprocess_ptblxl.py` script.
 
 ## Device Preparation
