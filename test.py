@@ -13,7 +13,7 @@ import os
 
 import global_config
 import torch
-
+import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
@@ -331,84 +331,99 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
                                                                 logits=_param_dict["logits"],
                                                                 labels=_param_dict["labels"])
 
-    fig, axs = plt.subplots(3, 3, figsize=(18, 10))
-    axis_0 = 0
-    axis_1 = 0
-    line_width = 2
-    target_names = ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]
-    desired_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE']
-    class_shares = {'SNR': ' (12.5%)',
-                    'AF': ' (16.6%)',
-                    'I-AVB': ' (9.8%)',
-                    'LBBB': ' (3.2%)',
-                    'RBBB': ' (25.2%)',
-                    'PAC': ' (8.4%)',
-                    'PVC': ' (9.5%)',
-                    'STD': ' (11.8%)',
-                    'STE': ' (3.0%)'}
-    for i in range(0, 9):
-        desired_class = desired_order[i]
-        idx = target_names.index(desired_class)
-        fpr_class_i = fpr[idx].numpy()
-        tpr_class_i = tpr[idx].numpy()
-        # Scale values by a factor of 1000 to better match the cpsc raw values
-        axs[axis_0, axis_1].plot(fpr_class_i, tpr_class_i, color='darkorange', lw=line_width,
-                                 label='ROC curve (AUC = %0.3f)' % roc_auc_scores[idx])
-        axs[axis_0, axis_1].plot([0, 1], [0, 1], color='navy', lw=line_width, linestyle='--')
-        axs[axis_0, axis_1].tick_params(axis='both', which='major', labelsize=20)
-        axs[axis_0, axis_1].set_yticks([0.25, 0.5, 0.75, 1])
-
-        if axis_0 == 2:
-            axs[axis_0, axis_1].set_xlabel('False Positive Rate', fontsize=20)
-        if axis_1 == 0:
-            axs[axis_0, axis_1].set_ylabel('True Positive Rate', fontsize=20)
-
-        axs[axis_0, axis_1].set_xlim([0.0, 1.0])
-        axs[axis_0, axis_1].set_ylim([0.0, 1.05])
-        axs[axis_0, axis_1].legend(loc="lower right", fontsize=20)
-
-        class_name = str(target_names[idx]).replace('IAVB', 'I-AVB').replace('VEB', 'PVC')
-        axs[axis_0, axis_1].set_title('Class ' + class_name + class_shares[class_name], fontsize=20)
-        # Also save the single plots per class
-        file_name = 'roc_curve_' + target_names[idx] + '.pdf'
-        # 'ROC curve for class ' + str(target_names[idx]) + str())
-        extent = axs[axis_0, axis_1].get_window_extent().transformed(fig.dpi_scale_trans.inverted())
-        # Pad the saved area by 30% in the x-direction and 35% in the y-direction
-        fig.savefig(config.test_output_dir / file_name, bbox_inches=extent.expanded(1.3, 1.35))
-        axis_1 = (axis_1 + 1) % 3
-        if axis_1 == 0:
-            axis_0 += 1
-    plt.tight_layout(pad=2, h_pad=3, w_pad=1.5)
-    plt.savefig(config.test_output_dir / "roc_curves_with_shares.pdf")
-
-    # ------------ Confusion matrices ------------------------
-    # Dump the confusion matrices into a pickle file and write figures of them to file
-    # 1) Update the confusion matrices maintained by the ClassificationTracker
-    if not multi_label_training:
-        upd_cm = overall_confusion_matrix_sk(output=det_outputs,
-                                             target=det_targets,
-                                             log_probs=_param_dict['log_probs'],
-                                             logits=_param_dict['logits'],
-                                             labels=_param_dict['labels'])
-        cm_tracker.update_cm(upd_cm)
-        upd_class_wise_cms = class_wise_confusion_matrices_single_label_sk(output=det_outputs,
-                                                                           target=det_targets,
-                                                                           log_probs=_param_dict['log_probs'],
-                                                                           logits=_param_dict['logits'],
-                                                                           labels=_param_dict['labels'])
+    if not cv_active:
+        data_dir = config["data_loader"]["test_dir"]
+        used_dataset = config["data_loader"]["test_dir"].split("/")[1]
     else:
-        upd_class_wise_cms = class_wise_confusion_matrices_multi_label_sk(output=det_outputs,
-                                                                          target=det_targets,
-                                                                          logits=_param_dict['logits'],
-                                                                          labels=_param_dict['labels'])
-    cm_tracker.update_class_wise_cms(upd_class_wise_cms)
-    # 2) Explicitly write a plot of the confusion matrices to a file
-    cm_tracker.save_result_cms_to_file(config.test_output_dir)
-    # Moreover, save them as pickle
-    path_name = os.path.join(config.test_output_dir, "cms_test_model.p")
-    with open(path_name, 'wb') as cm_file:
-        all_cms = [cm_tracker.cm, cm_tracker.class_wise_cms]
-        pickle.dump(all_cms, cm_file)
+        # TODO: Check
+        # raise NotImplementedError("This should be validated")
+        data_dir = config["data_loader"]["cross_valid"]["data_dir"]
+        used_dataset = config["data_loader"]["cross_valid"]["data_dir"].split("/")[1]
+
+    if used_dataset=="CinC_CPSC":
+        fig, axs = plt.subplots(3, 3, figsize=(18, 10))
+        axis_0 = 0
+        axis_1 = 0
+        line_width = 2
+        target_names = ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]
+        desired_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE']
+        class_shares = {'SNR': ' (12.5%)',
+                        'AF': ' (16.6%)',
+                        'I-AVB': ' (9.8%)',
+                        'LBBB': ' (3.2%)',
+                        'RBBB': ' (25.2%)',
+                        'PAC': ' (8.4%)',
+                        'PVC': ' (9.5%)',
+                        'STD': ' (11.8%)',
+                        'STE': ' (3.0%)'}
+        for i in range(0, 9):
+            desired_class = desired_order[i]
+            idx = target_names.index(desired_class)
+            fpr_class_i = fpr[idx].numpy()
+            tpr_class_i = tpr[idx].numpy()
+            # Scale values by a factor of 1000 to better match the cpsc raw values
+            axs[axis_0, axis_1].plot(fpr_class_i, tpr_class_i, color='darkorange', lw=line_width,
+                                     label='ROC curve (AUC = %0.3f)' % roc_auc_scores[idx])
+            axs[axis_0, axis_1].plot([0, 1], [0, 1], color='navy', lw=line_width, linestyle='--')
+            axs[axis_0, axis_1].tick_params(axis='both', which='major', labelsize=20)
+            axs[axis_0, axis_1].set_yticks([0.25, 0.5, 0.75, 1])
+
+            if axis_0 == 2:
+                axs[axis_0, axis_1].set_xlabel('False Positive Rate', fontsize=20)
+            if axis_1 == 0:
+                axs[axis_0, axis_1].set_ylabel('True Positive Rate', fontsize=20)
+
+            axs[axis_0, axis_1].set_xlim([0.0, 1.0])
+            axs[axis_0, axis_1].set_ylim([0.0, 1.05])
+            axs[axis_0, axis_1].legend(loc="lower right", fontsize=20)
+
+            class_name = str(target_names[idx]).replace('IAVB', 'I-AVB').replace('VEB', 'PVC')
+            axs[axis_0, axis_1].set_title('Class ' + class_name + class_shares[class_name], fontsize=20)
+            # Also save the single plots per class
+            file_name = 'roc_curve_' + target_names[idx] + '.pdf'
+            # 'ROC curve for class ' + str(target_names[idx]) + str())
+            extent = axs[axis_0, axis_1].get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+            # Pad the saved area by 30% in the x-direction and 35% in the y-direction
+            fig.savefig(config.test_output_dir / file_name, bbox_inches=extent.expanded(1.3, 1.35))
+            axis_1 = (axis_1 + 1) % 3
+            if axis_1 == 0:
+                axis_0 += 1
+        plt.tight_layout(pad=2, h_pad=3, w_pad=1.5)
+        plt.savefig(config.test_output_dir / "roc_curves_with_shares.pdf")
+
+        # ------------ Confusion matrices ------------------------
+        # Dump the confusion matrices into a pickle file and write figures of them to file
+        # 1) Update the confusion matrices maintained by the ClassificationTracker
+        if not multi_label_training:
+            upd_cm = overall_confusion_matrix_sk(output=det_outputs,
+                                                 target=det_targets,
+                                                 log_probs=_param_dict['log_probs'],
+                                                 logits=_param_dict['logits'],
+                                                 labels=_param_dict['labels'])
+            cm_tracker.update_cm(upd_cm)
+            upd_class_wise_cms = class_wise_confusion_matrices_single_label_sk(output=det_outputs,
+                                                                               target=det_targets,
+                                                                               log_probs=_param_dict['log_probs'],
+                                                                               logits=_param_dict['logits'],
+                                                                               labels=_param_dict['labels'])
+        else:
+            upd_class_wise_cms = class_wise_confusion_matrices_multi_label_sk(output=det_outputs,
+                                                                              target=det_targets,
+                                                                              logits=_param_dict['logits'],
+                                                                              labels=_param_dict['labels'])
+        cm_tracker.update_class_wise_cms(upd_class_wise_cms)
+        # 2) Explicitly write a plot of the confusion matrices to a file
+        cm_tracker.save_result_cms_to_file(config.test_output_dir)
+        # Moreover, save them as pickle
+        path_name = os.path.join(config.test_output_dir, "cms_test_model.p")
+        with open(path_name, 'wb') as cm_file:
+            all_cms = [cm_tracker.cm, cm_tracker.class_wise_cms]
+            pickle.dump(all_cms, cm_file)
+    else:
+        # PTB XL
+        pass
+
+
 
 
     # ------------------- Predicted Scores and Classes -------------------
@@ -460,28 +475,38 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
         summary_dict = multi_label_metrics.sk_classification_summary(output=det_outputs, target=det_targets,
                                                                      logits=_param_dict["logits"],
                                                                      labels=_param_dict["labels"],
-                                                                     output_dict=True)
+                                                                     output_dict=True,
+                                                                     data_dir=data_dir)
     else:
         summary_dict = single_label_metrics.sk_classification_summary(output=det_outputs, target=det_targets,
                                                                       log_probs=_param_dict["log_probs"],
                                                                       logits=_param_dict["logits"],
                                                                       labels=_param_dict["labels"],
-                                                                      output_dict=True)
+                                                                      output_dict=True,
+                                                                      data_dir=data_dir)
 
     # ------------------------------------Final Test Steps ---------------------------------------------
+    num_classes = det_outputs.shape[1]
     df_sklearn_summary = pd.DataFrame.from_dict(summary_dict)
     df_metric_results = metric_tracker.result(include_epoch_metrics=True)
 
-    df_class_wise_results = pd.DataFrame(
-        columns=['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'macro avg', 'weighted avg'])
-    df_class_wise_results = pd.concat([df_class_wise_results, df_sklearn_summary[
-        ['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'macro avg', 'weighted avg']]])
+    if used_dataset=="CinC_CPSC":
+        df_class_wise_results = pd.DataFrame(
+            columns=['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'macro avg', 'weighted avg'])
+        df_class_wise_results = pd.concat([df_class_wise_results, df_sklearn_summary[
+            ['IAVB', 'AF', 'LBBB', 'PAC', 'RBBB', 'SNR', 'STD', 'STE', 'VEB', 'macro avg', 'weighted avg']]])
+    else:
+        # PTB XL
+        columns = df_sklearn_summary.columns.values
+        mask = np.isin(columns, ['micro avg', 'samples avg'])
+        filtered_cols =  np.delete(columns, np.where(mask)[0])
+        df_class_wise_results = pd.DataFrame(columns=filtered_cols)
+        df_class_wise_results = pd.concat([df_class_wise_results, df_sklearn_summary[filtered_cols]])
 
     df_class_wise_metrics = df_metric_results.loc[df_metric_results.index.str.startswith(
         ('class_wise', 'weighted', 'macro'))]['mean'].to_frame()
     df_class_wise_metrics.index = df_class_wise_metrics.index.set_names('metric')
     df_class_wise_metrics.reset_index(inplace=True)
-    # df_class_wise_metrics['metric'] = df_class_wise_metrics['metric'].apply(lambda x: str(x).replace("class_wise_", "").replace("_class", ""))
 
     metric_names = [met.__name__.replace("class_wise_", "") for met in metrics_epoch_class_wise]
     for metric_name in metric_names:
@@ -491,7 +516,7 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
         cols = df_temp.columns.tolist()
         # Reorder the dataframe
         desired_order = []
-        for i in range(0, 9):
+        for i in range(0, num_classes):
             desired_order.append('class_wise_' + metric_name + '_class_' + str(i))
         if 'macro_' + metric_name in cols:
             desired_order.append('macro_' + metric_name)
@@ -508,8 +533,9 @@ def test_model(config, tune_config=None, cv_active=False, cv_data_dir=None,
     df_class_wise_results.loc['support'] = df_class_wise_results.loc['support'].apply(int)
 
     # Reorder the class columns of the dataframe to match the one used in the
-    desired_col_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE', 'macro avg', 'weighted avg']
-    df_class_wise_results = df_class_wise_results[desired_col_order]
+    if used_dataset=="CinC_CPSC":
+        desired_col_order = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE', 'macro avg', 'weighted avg']
+        df_class_wise_results = df_class_wise_results[desired_col_order]
 
     df_single_metric_results = df_metric_results.loc[~df_metric_results.index.str.startswith(
         ('class_wise', 'weighted', 'macro'))]['mean'].to_frame().transpose()

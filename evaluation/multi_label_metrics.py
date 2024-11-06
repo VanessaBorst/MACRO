@@ -7,6 +7,8 @@ from sklearn.metrics import multilabel_confusion_matrix, \
 
 from torchmetrics import AUROC, Precision, Accuracy, Recall, ROC, F1Score
 
+from utils import extract_target_names_for_PTB_XL
+
 THRESHOLD = 0.5
 
 
@@ -220,13 +222,19 @@ def class_wise_confusion_matrices_multi_label_sk(output, target, logits, labels)
         return df_class_wise_cms
 
 
-def sk_classification_summary(output, target, logits, labels, output_dict,
-                              target_names=["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]):
+def sk_classification_summary(output, target, logits, labels, output_dict, data_dir):
     """
     Compute the classification report
     @param output_dict: If True, return output as dict.
-    @param target_names: Optional display names matching the labels (same order).
+    @param data_dir: Required to retrieve target_names.
     """
+    if "PTB_XL" in data_dir:
+        target_names = extract_target_names_for_PTB_XL(data_dir)
+    elif "CinC_CPSC" in data_dir:
+        target_names = ["IAVB", "AF", "LBBB", "PAC", "RBBB", "SNR", "STD", "STE", "VEB"]
+    else:
+        raise ValueError("Information for the used dataset is not available")
+
     with torch.no_grad():
         if not logits:
             pred = _convert_sigmoid_probs_to_prediction(output)
@@ -235,6 +243,9 @@ def sk_classification_summary(output, target, logits, labels, output_dict,
         assert pred.shape[0] == len(target)
         return classification_report(y_true=target, y_pred=pred, labels=labels, digits=3, target_names=target_names,
                                      output_dict=output_dict)
+
+
+
 
 
 # ----------------------------------- TORCHMETRICS -----------------------------------------------

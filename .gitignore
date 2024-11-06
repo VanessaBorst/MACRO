@@ -7,6 +7,7 @@ saved/
 saved_old/
 savedVM/
 savedVM_v2/
+figures/
 .idea/
 /playground/plots/
 *.p

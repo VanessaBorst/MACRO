@@ -6,6 +6,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 from torch.utils.data.sampler import SubsetRandomSampler
+from torch.utils.data import Dataset
 
 import global_config
 from utils import get_project_root, ensure_dir
@@ -43,6 +44,17 @@ class BaseDataLoader(DataLoader):
 
         generator.manual_seed(global_config.SEED)
 
+        # If a dedicated validation split is given (PTB-XL) as path, treat it separately
+        # Attention: This has nothing to do with cross-validation, where the validation set is passed with valid_idx
+        if isinstance(validation_split, Dataset):
+            self.single_run_valid_set_provided = True
+            self.valid_n_samples = len(validation_split)
+            print(f"Dedicated Valid Set Provided: {validation_split} of length {self.valid_n_samples}")
+            assert not cross_valid, "This should never happen. If it does, something went wrong!"
+        else:
+            print("No Dedicated Valid Set Provided")
+            self.single_run_valid_set_provided = False
+
         if not cross_valid:
             self.validation_split = validation_split
             self.shuffle = shuffle
@@ -52,7 +64,6 @@ class BaseDataLoader(DataLoader):
             self.n_samples = len(dataset)
 
             self.sampler, self.valid_sampler = self._split_sampler(self.validation_split)
-
 
         else:
             if cv_train_mode:
@@ -119,22 +130,39 @@ class BaseDataLoader(DataLoader):
         super().__init__(sampler=self.sampler, pin_memory=pin_memory, **self.init_kwargs)
 
     def _split_sampler(self, split):
-        if split == 0.0:
-            return None, None
+        if self.single_run_valid_set_provided:
+            # Use the defined split
+            idx_full_train = np.arange(self.n_samples)
+            idx_full_valid = np.arange(self.valid_n_samples)
 
-        idx_full = np.arange(self.n_samples)
+            if self.shuffle:
+                np.random.shuffle(idx_full_train)
+                np.random.shuffle(idx_full_valid)
 
-        np.random.shuffle(idx_full)
+            train_idx = idx_full_train
+            valid_idx = idx_full_valid
 
-        if isinstance(split, int):
-            assert split > 0
-            assert split < self.n_samples, "validation set size is configured to be larger than entire dataset."
-            len_valid = split
         else:
-            len_valid = int(self.n_samples * split)
+            if split == 0.0:
+                return None, None
 
-        valid_idx = idx_full[0:len_valid]
-        train_idx = np.delete(idx_full, np.arange(0, len_valid))
+            idx_full = np.arange(self.n_samples)
+
+            if self.shuffle:
+                np.random.shuffle(idx_full)
+
+
+            if isinstance(split, int):
+                assert split > 0
+                assert split < self.n_samples, "validation set size is configured to be larger than entire dataset."
+                len_valid = split
+            else:
+                len_valid = int(self.n_samples * split)
+
+            valid_idx = idx_full[0:len_valid]
+            train_idx = np.delete(idx_full, np.arange(0, len_valid))
+
+            self.n_samples = len(train_idx)
 
         # For certain unlucky combinations of batch size (bs) and the length of the training set it can happen
         # that training fails with an exception like the following:
@@ -152,7 +180,6 @@ class BaseDataLoader(DataLoader):
 
         # turn off shuffle option which is mutually exclusive with sampler
         self.shuffle = False
-        self.n_samples = len(train_idx)
 
         return train_sampler, valid_sampler
 
@@ -160,4 +187,9 @@ class BaseDataLoader(DataLoader):
         if self.valid_sampler is None:
             return None
         else:
-            return DataLoader(sampler=self.valid_sampler, **self.init_kwargs)
+            if self.single_run_valid_set_provided:
+                return DataLoader(dataset=self.validation_split,
+                                  sampler=self.valid_sampler,
+                                  **{k: v for k, v in self.init_kwargs.items() if k != 'dataset'})
+            else:
+                return DataLoader(sampler=self.valid_sampler, **self.init_kwargs)

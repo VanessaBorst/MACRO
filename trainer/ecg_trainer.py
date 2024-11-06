@@ -66,11 +66,16 @@ class ECGTrainer(BaseTrainer):
                                            writer=self.writer)
 
         # Store potential parameters needed for metrics
-        val_class_weights = self.data_loader.dataset.get_inverse_class_frequency(
+
+        # If a dedicated valid set was provided, the underlying ECG-Dataset differs, if not it is identical to the
+        # Train Dataset => Use valid_data_loader.dataset here, to be sure to handle both cases correctly!
+        # Since the valid_data_loader has no "valid sampler" attribute, stick to data_loader.valid_sampler, which
+        # contains the needed idx for both cases
+        val_class_weights = self.valid_data_loader.dataset.get_inverse_class_frequency(
             idx_list=self.data_loader.valid_sampler.indices, multi_label_training=self.multi_label_training,
             mode='valid', cross_valid_active=cross_valid_active)
 
-        val_pos_weights = self.data_loader.dataset.get_ml_pos_weights(
+        val_pos_weights = self.valid_data_loader.dataset.get_ml_pos_weights(
             idx_list=self.data_loader.valid_sampler.indices, mode='valid', cross_valid_active=cross_valid_active)
 
         self._param_dict = {
@@ -99,7 +104,7 @@ class ECGTrainer(BaseTrainer):
         self.train_cms = ConfusionMatrixTracker(*self.data_loader.dataset.class_labels,
                                                 writer=self.writer, multi_label_training=self.multi_label_training)
         # The ECGDataset is the same for data_loader and valid_loader as it is realized with SubSamplers
-        self.valid_cms = ConfusionMatrixTracker(*self.data_loader.dataset.class_labels, writer=self.writer,
+        self.valid_cms = ConfusionMatrixTracker(*self.valid_data_loader.dataset.class_labels, writer=self.writer,
                                                 multi_label_training=self.multi_label_training)
 
     def _train_epoch(self, epoch):
@@ -470,7 +475,17 @@ class ECGTrainer(BaseTrainer):
 
         # ------------------- Predicted Scores and Classes -------------------
         # Create a summary for each call, dump the dict and return the string
-        summary_str = self._create_report_summary(det_outputs=det_outputs, det_targets=det_targets, epoch=epoch)
+        # Retrieve the nested paths for cross_valid and args data_dir
+        cross_valid_data_dir = self.config.config.get("data_loader", {}).get("cross_valid", {}).get("data_dir", "")
+        args_data_dir = self.config.config.get("data_loader", {}).get("args", {}).get("data_dir", "")
+        if cross_valid_data_dir:
+            specified_data_dir = cross_valid_data_dir
+        elif args_data_dir:
+            specified_data_dir = args_data_dir
+        else:
+            raise ValueError("A data dir must be specified for either CV or normal training!")
+        summary_str = self._create_report_summary(det_outputs=det_outputs, det_targets=det_targets, epoch=epoch,
+                                                  data_dir=specified_data_dir)
         return summary_str
 
     def _do_cm_updates(self, cm_tracker, output, target):
@@ -510,18 +525,20 @@ class ECGTrainer(BaseTrainer):
             # with open(os.path.join(self.config.log_dir, "cms" + str(epoch) + ".p"), "rb") as file:
             #     test = pickle.load(file)
 
-    def _create_report_summary(self, det_outputs, det_targets, epoch):
+    def _create_report_summary(self, det_outputs, det_targets, epoch, data_dir):
         if self.multi_label_training:
             summary_dict = multi_label_metrics.sk_classification_summary(output=det_outputs, target=det_targets,
                                                                          logits=self._param_dict["logits"],
                                                                          labels=self._param_dict["labels"],
-                                                                         output_dict=True)
+                                                                         output_dict=True,
+                                                                         data_dir=data_dir)
         else:
             summary_dict = single_label_metrics.sk_classification_summary(output=det_outputs, target=det_targets,
                                                                           log_probs=self._param_dict["log_probs"],
                                                                           logits=self._param_dict["logits"],
                                                                           labels=self._param_dict["labels"],
-                                                                          output_dict=True)
+                                                                          output_dict=True,
+                                                                          data_dir=data_dir)
 
         return "Summary Report for Epoch " + str(epoch) + ":\n" + pd.DataFrame(summary_dict).to_string()
 

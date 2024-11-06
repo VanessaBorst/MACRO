@@ -37,17 +37,29 @@ def _bold_formatter(x, value, num_decimals=2):
 # the path to the tune run, the hyperparameters that were considered, a specification of integer parameters and
 # those with single precision, and the desired column order in the summary.
 # The script will then summarize the results of the hyperparameter tuning in a condensed form.
-path_to_tune = 'savedVM/models/Multibranch_MACRO_ParamStudy/0130_135327_ml_bs64_noConvRedBlock'
-hyper_params = ['branchNet_attention_dropout', 'branchNet_heads',
-                'multi_branch_attention_dropout', 'multi_branch_heads']
-integer_vals = ['branchNet_heads', 'multi_branch_heads', 'Epochs']
-single_precision = ['branchNet_attention_dropout', 'multi_branch_attention_dropout']
-desired_col_order = ['branchNet_attention_dropout', 'branchNet_heads',
-                     'multi_branch_attention_dropout', 'multi_branch_heads',
+# path_to_tune = 'savedVM/models/Multibranch_MACRO_ParamStudy/0130_135327_ml_bs64_noConvRedBlock'
+# hyper_params = ['branchNet_attention_dropout', 'branchNet_heads',
+#                 'multi_branch_attention_dropout', 'multi_branch_heads']
+# integer_vals = ['branchNet_heads', 'multi_branch_heads', 'Epochs']
+# single_precision = ['branchNet_attention_dropout', 'multi_branch_attention_dropout']
+# desired_col_order = ['branchNet_attention_dropout', 'branchNet_heads',
+#                      'multi_branch_attention_dropout', 'multi_branch_heads',
+#                      'm-F1', 'm-ROC-AUC', 'm-Acc',
+#                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc',
+#                      'MR', 'Epochs', 'Params',
+#                      'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',]
+
+path_to_tune = 'savedVM/models/FinalModel_MACRO_ParamStudy_PTB_XL_Superdiag/0906_170745_ml_bs64_12gru-entmax15/'
+class_list = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE'] if "PTB_XL" not in path_to_tune \
+    else ['CD', 'HYP', 'MI', 'NORM', 'STTC']
+hyper_params = ['dropout_attention', 'heads']
+integer_vals = ['heads','Epochs']
+single_precision = ['dropout_attention']
+desired_col_order = ['dropout_attention', 'heads',
                      'm-F1', 'm-ROC-AUC', 'm-Acc',
                      'W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc',
                      'MR', 'Epochs', 'Params',
-                     'SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE',]
+                     *class_list]
 
 
 include_class_wise_f1 = True
@@ -59,7 +71,7 @@ use_abbrevs = True
 
 ############################ Script #########################################
 
-cols_class_wise_f1 = ['SNR', 'AF', 'IAVB', 'LBBB', 'RBBB', 'PAC', 'VEB', 'STD', 'STE']
+cols_class_wise_f1 = class_list
 cols_weighted_avg = ['W-AVG_F1', 'W-AVG_ROC', 'W-AVG_Acc']
 cols_macro_avg = ['m-F1', 'm-ROC-AUC', 'm-Acc']
 col_details = ['Epochs', 'Params']
@@ -197,7 +209,7 @@ for tune_run in os.listdir(path_to_tune):
         num_params = _extract_num_params(tune_path)
 
         with open(os.path.join(tune_path, "progress.csv"), "r") as file:
-            with open(os.path.join(tune_path, "../..", "config.json")) as config_file:
+            with open(os.path.join(tune_path, "..", "config.json")) as config_file:
                 config = json.load(config_file)
                 try:
                     early_stop = config.get('trainer').get('early_stop')

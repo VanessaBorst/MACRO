@@ -1,11 +1,12 @@
 SEED = 123
-CUDA_VISIBLE_DEVICES = "MIG-11c29e81-e611-50b5-b5ef-609c0a0fe58b"
+CUDA_VISIBLE_DEVICES = "MIG-a1208c4e-caad-5519-9d69-6b0998c74b9f"
 TUNE_TEMP_DIR = "/home/vab30xh/"
 
 
 ####### Configuration of Warning Messages #######
 import sys
 import re
+
 def suppress_warnings():
     """
     Suppress specific warnings

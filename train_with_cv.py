@@ -50,6 +50,8 @@ def run_cross_validation(config):
     total_num_folds = config["data_loader"]["cross_valid"]["k_fold"]
     data_dir = config["data_loader"]["cross_valid"]["data_dir"]
 
+    assert "PTB_XL" not in data_dir, "Cross validation not yet implemented for PTB-XL!"
+
     # Update data dir in Dataloader ARGs!
     config["data_loader"]["args"]["data_dir"] = data_dir
     dataset = ECGDataset(data_dir)

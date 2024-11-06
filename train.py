@@ -24,6 +24,7 @@ from utils import prepare_device, get_project_root, ensure_dir
 import os
 import torch
 
+global_config.suppress_warnings()
 os.environ["CUDA_VISIBLE_DEVICES"] = global_config.CUDA_VISIBLE_DEVICES
 TUNE_TEMP_DIR = global_config.TUNE_TEMP_DIR
 
@@ -60,8 +61,8 @@ def tuning_params(name):
     elif name == "FinalModel":
         return {
             "dropout_attention": tune.grid_search([0.2, 0.3, 0.4]),
-            "heads": tune.grid_search([6, 8, 12]),
-            "gru_units": tune.grid_search([12, 24]),
+            "heads": tune.grid_search([6, 8, 12])
+            #"gru_units": tune.grid_search([12, 24]),
         }
     elif name == "FinalModelMultiBranch":
         return {
@@ -115,8 +116,13 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
     data_dir = main_config['data_loader']['args']['data_dir']
     full_data_dir = os.path.join(str(get_project_root()), data_dir)
 
+    validation_split = main_config['data_loader']['args']['validation_split']
+    if isinstance(validation_split, str):
+        validation_split = os.path.join(str(get_project_root()), validation_split)
 
     def train_fn(config, checkpoint_dir=None):
+        global_config.suppress_warnings()
+
         # Without this, the valid split varies from worker to worker!
         np.random.seed(global_config.SEED)
         torch.manual_seed(global_config.SEED)
@@ -130,8 +136,12 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
         # torch.backends.cudnn.deterministic = True
         # torch.backends.cudnn.benchmark = False
 
-        data_loader = main_config.init_obj('data_loader', module_data_loader, data_dir=full_data_dir)
+        data_loader = main_config.init_obj('data_loader', module_data_loader,
+                                           data_dir=full_data_dir, validation_split=validation_split)
         valid_data_loader = data_loader.split_validation()
+
+        print(f"Len Dataloader {len(data_loader.dataset)}")
+        print(f"Len Validloader {len(valid_data_loader.dataset)}")
 
         # Check data splitting by record name -> should be equal across all workers and tune runs
         valid_records = []
@@ -141,14 +151,20 @@ def hyper_study(main_config, tune_config, num_tune_samples=1):
 
         project_root = get_project_root()
         ensure_dir(os.path.join(project_root, 'data_loader', 'tune_log'))
-        if Path(os.path.join(project_root, 'data_loader', 'tune_log', f'valid_records_tune_train_fn.txt')).is_file():
+
+        dataset = data_dir.split("/")[1]
+        print(f"Tune run on dataset {dataset}")
+        suffix = f"{dataset}" if dataset == "CinC_CPSC" \
+            else f"{dataset}_{data_dir.split('/')[2].split('_')[0]}"
+
+        if Path(os.path.join(project_root, 'data_loader', 'tune_log', f'valid_records_tune_train_fn_{suffix}.txt')).is_file():
             # If the file already exists, check if the records are the same
-            with open(os.path.join(project_root, 'data_loader', 'tune_log', f'valid_records_tune_train_fn.txt'),
+            with open(os.path.join(project_root, 'data_loader', 'tune_log', f'valid_records_tune_train_fn_{suffix}.txt'),
                       "r") as txt_file:
                 lines = txt_file.read().splitlines()
                 assert valid_records == lines, "Data Split Error! Check this again!"
         else:
-            with open(os.path.join(project_root, 'data_loader', 'tune_log', f'valid_records_tune_train_fn.txt'),
+            with open(os.path.join(project_root, 'data_loader', 'tune_log', f'valid_records_tune_train_fn_{suffix}.txt'),
                       "w+") as txt_file:
                 for line in valid_records:
                     txt_file.write("".join(line) + "\n")
@@ -366,6 +382,18 @@ def train_model(config, tune_config=None, train_dl=None, valid_dl=None, checkpoi
     else:
         model = config.init_obj('arch', module_arch, **tune_config)
     logger.info(model)
+
+    if config.config.get("resume", None) is not None:
+        # Load the model from the checkpoint
+        logger.info('Loading checkpoint: {} ...'.format(config.config.get("resume")))
+        checkpoint = torch.load(config.config["resume"],
+                            map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+        state_dict = checkpoint['state_dict']
+        desired_dict = model.state_dict()
+        pre_train_dict={k:v for k,v in state_dict.items() if k in desired_dict.keys()
+                        and not k.endswith(("_fcn.weight","_fcn.bias"))}
+        desired_dict.update(pre_train_dict)
+        model.load_state_dict(desired_dict)
 
     # prepare for (multi-device) GPU training
     device, device_ids = prepare_device(config['n_gpu'])

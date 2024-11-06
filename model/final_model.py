@@ -350,6 +350,24 @@ if __name__ == "__main__":
         attention_activation_function="entmax15")
 
     # print(str(model))
-    summary(model, input_size=(2, 12, 15000), col_names=["input_size", "output_size", "kernel_size", "num_params"])
-    summary(model, input_size=(2, 12, 15000), col_names=["input_size", "output_size", "kernel_size", "num_params"],
-            depth=1)
+    # summary(model, input_size=(2, 12, 15000), col_names=["input_size", "output_size", "kernel_size", "num_params"])
+    # summary(model, input_size=(2, 12, 15000), col_names=["input_size", "output_size", "kernel_size", "num_params"], depth=1)
+
+    branchNet = FinalModel(apply_final_activation=False,
+                            multi_label_training=True,
+                            input_channel=1,
+                            num_classes=9,
+                            # CNN-related parameters (almost all as in the default config)
+                            pos_skip="all",
+                            # GRU and MHA-related parameters
+                            gru_units=12,
+                            heads=6,
+                            dropout_attention=0.2,
+                            # The following parameters are fixed for the paper
+                            use_reduced_head_dims=True,
+                            attention_activation_function="entmax15",
+                            # Multibranch-specific parameters
+                            act_as_branch_net=True,
+                            vary_channels_lighter_version=False)
+
+    summary(branchNet, input_size=(2, 1, 15000), col_names=["input_size", "output_size", "kernel_size", "num_params"])
