@@ -34,7 +34,7 @@ For the hyperparameter study, we employed a fixed train-valid-test split with ra
 while for the final evaluations, including the comparison with the state-of-the-art methods and ablation studies, 
 we used a 10-fold cross-validation strategy.
 
-Our preprocessed data can be downloaded from [FigShare](https://figshare.com/articles/dataset/Preprocessed_CPSC_Data/25532869?file=45731247) 
+Our preprocessed data can be downloaded from [FigShare](https://doi.org/10.6084/m9.figshare.25532869.v2) 
 and should be placed in the `data` directory at project root level while maintaining the folder structure. 
 In case of using the fixed train-valid-test split, 
 the validation set is automatically created from the training set during the training process.
