@@ -2,11 +2,13 @@
 
 Official PyTorch implementation of the paper "MACRO: A Multi-Head Attentional Convolutional
 Recurrent Network for the Classification of Co-Occurring Diseases in 12-Lead ECGs", 
-which was accepted at the [IEEE-EMBS International Conference on Biomedical and Health Informatics 2024](https://bhi.embs.org/2024/).
+which was accepted at the IEEE-EMBS International Conference on Biomedical and Health Informatics 2024 
+([BHI'24](https://bhi.embs.org/2024/)).
+
 The full paper can be downloaded from [OpenReview](https://openreview.net/pdf?id=toAq9UFmS9).
 Supplementary material with further analysis is available [here](https://openreview.net/attachment?id=toAq9UFmS9&name=supplementary_material).
 
-If you find this repository useful, please acknowledge our work by citing our BHI2024 paper:
+If you find this repository useful, please acknowledge our work by citing our BHI'24 paper:
 
     @inproceedings{borst2024MACRO,
     title={{MACRO}: A Multi-Head Attentional Convolutional Recurrent Network for the Classification of Co-Occurring Diseases in 12-Lead {ECGs}},
